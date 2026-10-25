@@ -10,16 +10,24 @@ import ToastService from "primevue/toastservice";
 import { initTheme, MangoPreset, mergeUiMessages, vTooltip } from "@mango-write/ui";
 import { surveysMessages } from "@mango-write/surveys/vue";
 
+import { standaloneMessages } from "./locale";
 import App from "./App.vue";
 import { router } from "./router";
 import "./styles.css";
 
 initTheme();
 
+let savedLocale = "zh-CN";
+try { savedLocale = localStorage.getItem("surveys:locale") === "en-US" ? "en-US" : "zh-CN"; } catch {}
+document.documentElement.lang = savedLocale;
 const i18n = createI18n({
   legacy: false,
-  locale: "zh-CN",
-  messages: { "zh-CN": surveysMessages["zh-CN"] },
+  locale: savedLocale,
+  fallbackLocale: "zh-CN",
+  messages: {
+    "zh-CN": { ...surveysMessages["zh-CN"], standalone: standaloneMessages["zh-CN"] },
+    "en-US": { ...surveysMessages["en-US"], standalone: standaloneMessages["en-US"] },
+  },
 });
 mergeUiMessages(i18n);
 

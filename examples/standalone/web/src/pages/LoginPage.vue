@@ -1,7 +1,7 @@
 <script setup lang="ts">
-// 独立站登录页：单管理员密码 → POST /api/admin/login，成功后靠 HttpOnly
-// 会话 cookie（前端不持任何 token）。文案 zh-CN 硬编码：本页是独立站自有的
-// 装配件，不进问卷包的文案表。
+// 独立站登录页：单{{ t("standalone.password") }} → POST /api/admin/login，成功后靠 HttpOnly
+// 会话 cookie（前端不持任何 token）。
+import { useI18n } from "vue-i18n";
 import { ref } from "vue";
 import { surveysBrandLogo } from "../../../../../src/brand.js";
 import { useRoute, useRouter } from "vue-router";
@@ -11,6 +11,7 @@ import Message from "primevue/message";
 
 import { markSignedIn } from "../session";
 
+const { t } = useI18n();
 const route = useRoute();
 const router = useRouter();
 
@@ -59,13 +60,13 @@ async function submit(): Promise<void> {
     >
       <div class="login-brand" v-html="surveysBrandLogo" />
       <h1 class="tw:m-0" style="font-size: 18px; font-weight: 600; color: var(--color-text-primary);">
-        问卷管理登录
+        {{ t("standalone.loginTitle") }}
       </h1>
       <p class="tw:m-0" style="font-size: 12.5px; color: var(--color-text-secondary);">
-        输入管理员密码，进入问卷工作台。
+        {{ t("standalone.loginHint") }}
       </p>
       <label class="tw:flex tw:flex-col tw:gap-2">
-        <span style="font-size: 13px; color: var(--color-text-primary);">管理员密码</span>
+        <span style="font-size: 13px; color: var(--color-text-primary);">{{ t("standalone.password") }}</span>
         <InputText
           v-model="password"
           type="password"
@@ -75,9 +76,9 @@ async function submit(): Promise<void> {
         />
       </label>
       <Message v-if="failed" severity="error" :closable="false">
-        密码错误或会话已失效，请重试。
+        {{ t("standalone.loginError") }}
       </Message>
-      <Button type="submit" label="登录" :loading="busy" fluid />
+      <Button type="submit" :label="t('standalone.login')" :loading="busy" fluid />
     </form>
   </main>
 </template>

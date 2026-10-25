@@ -204,10 +204,6 @@ function changeRows(group: SurveyReviewPlanGroup): ReviewChangeRow[] {
 <template>
   <section class="research-assistant" :aria-label="t('surveys.assistant.title')">
     <header class="assistant-header">
-      <div>
-        <h2>{{ t("surveys.assistant.title") }}</h2>
-        <p>{{ t("surveys.assistant.subtitle") }}</p>
-      </div>
       <Button
         v-if="hasCopilot"
         :label="t('surveys.assistant.review')"
@@ -218,7 +214,9 @@ function changeRows(group: SurveyReviewPlanGroup): ReviewChangeRow[] {
         @click="emit('review')"
       />
     </header>
-    <details :open="!design">
+    <details class="research-context">
+      <summary>{{ t("surveys.inlineReview.context") }}</summary>
+    <details>
       <summary>{{ t("surveys.assistant.design") }}</summary>
       <template v-if="design">
         <div class="design-fields">
@@ -285,7 +283,11 @@ function changeRows(group: SurveyReviewPlanGroup): ReviewChangeRow[] {
         <p v-if="design.pretest" class="assistant-note">{{ t("surveys.assistant.trialRecorded") }}</p>
       </template>
     </details>
-    <div v-if="report && plan" class="review-results" aria-live="polite">
+    </details>
+    <p v-if="report" class="assistant-note">{{ report.summary }}</p>
+    <Message v-if="stale" severity="warn" :closable="false">{{ t("surveys.assistant.stale") }}</Message>
+    <details v-if="report && plan" class="review-results" aria-live="polite">
+      <summary>{{ t("surveys.inlineReview.details") }}</summary>
       <div v-if="plan.groups.length" class="review-summary">
         <strong>{{ t("surveys.assistant.planSummary", { n: plan.groups.length }) }}</strong>
         <span class="assistant-note">{{ report.summary }}</span>
@@ -364,19 +366,23 @@ function changeRows(group: SurveyReviewPlanGroup): ReviewChangeRow[] {
         </article>
       </details>
       <p class="assistant-note">{{ t("surveys.assistant.evidenceNote") }}</p>
-    </div>
+    </details>
   </section>
 </template>
 
 <style scoped>
-.research-assistant { flex: none; width: 100%; border: 1px solid var(--color-border-subtle); border-radius: var(--radius-lg, 12px); padding: 1rem; margin-bottom: 1rem; background: var(--color-surface-base); }
+.research-assistant { flex: none; align-self: center; width: 100%; max-width: 46rem; display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .5rem 1rem; margin-bottom: .5rem; }
+.assistant-header { grid-column: 2; grid-row: 1; }
+.research-context { grid-column: 1; grid-row: 1; align-self: center; }
+.research-context[open] { grid-column: 1 / -1; grid-row: 2; }
+.review-results, .research-assistant > .assistant-note, .research-assistant > .p-message { grid-column: 1 / -1; }
 .assistant-header, .finding-title, .finding-actions { display: flex; gap: .65rem; align-items: center; flex-wrap: wrap; }
-.assistant-header { justify-content: space-between; margin-bottom: .8rem; }
+.assistant-header { justify-content: space-between; margin-bottom: 0; }
 h2 { font-size: 1rem; margin: 0; }
 p { margin: .4rem 0; line-height: 1.6; }
 .assistant-header p, .assistant-note, .finding-actions a { color: var(--color-text-tertiary); font-size: .8rem; }
 summary { cursor: pointer; font-weight: 600; padding: .35rem 0; }
-.design-fields { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; margin: .7rem 0; }
+.design-fields { display: grid; grid-template-columns: 1fr; gap: .7rem; margin: .7rem 0; }
 .design-fields label { display: flex; flex-direction: column; gap: .5rem; min-width: 0; font-size: .85rem; }
 .design-fields label:first-child, .design-fields label:last-child { grid-column: 1 / -1; }
 .constructs > div { padding: .5rem 0; border-top: 1px solid var(--color-border-subtle); }

@@ -870,6 +870,7 @@ defineExpose({ locateIssue });
             @drag-start="onCardDragStart"
             @drag-end="onDragEnd"
           />
+          <slot name="question-review" :question-id="q.id" />
           <div
             v-if="!disabled"
             class="add-zone"

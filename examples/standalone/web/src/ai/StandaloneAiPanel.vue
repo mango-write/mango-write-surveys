@@ -3,6 +3,7 @@
 // /api/ai/generate（生成 + 幂等建卷一次完成）→ 成功后经宿主 copilot 桥把
 // survey_create 交付帧交给当前页面处理（导航进工作区，与主站同一条链）。
 // 提交失败保留 operationId：网络重试复用同一操作身份，服务端不会重复建卷。
+import { useI18n } from "vue-i18n";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import Textarea from "primevue/textarea";
@@ -11,6 +12,7 @@ import type { ToolSurveyDelivery } from "@mango-write/surveys/vue";
 
 import type { StandaloneAiState } from "./standalone-copilot";
 
+const { t } = useI18n();
 const props = defineProps<{ state: StandaloneAiState }>();
 const emit = defineEmits<{ delivery: [delivery: ToolSurveyDelivery] }>();
 
@@ -25,7 +27,7 @@ async function generate() {
   const title = props.state.title.trim();
   const brief = props.state.brief.trim();
   if (!title || !brief) {
-    props.state.error = "请填写问卷标题与需求简述。";
+    props.state.error = t("standalone.aiRequired");
     return;
   }
   props.state.busy = true;
@@ -46,15 +48,15 @@ async function generate() {
     } | null;
     if (!response.ok) {
       if (response.status === 503) {
-        props.state.error = "AI 未配置：请在服务端设置 SURVEYS_AI_URL / _API_KEY / _MODEL。";
+        props.state.error = t("standalone.aiUnavailable");
         operationId = null;
       } else {
-        props.state.error = value?.detail ?? "生成失败，请调整描述后重试（重试不会重复建卷）。";
+        props.state.error = value?.detail ?? t("standalone.aiFailed");
       }
       return;
     }
     if (!value?.surveyId) {
-      props.state.error = "生成失败，请重试。";
+      props.state.error = t("standalone.aiFailed");
       return;
     }
     operationId = null;
@@ -66,7 +68,7 @@ async function generate() {
       title,
     });
   } catch {
-    props.state.error = "网络错误，可直接重试（不会重复建卷）。";
+    props.state.error = t("standalone.networkError");
   } finally {
     props.state.busy = false;
   }
@@ -74,37 +76,36 @@ async function generate() {
 </script>
 
 <template>
-  <div v-if="state.open" class="ai-panel" role="dialog" aria-label="AI 生成问卷">
+  <div v-if="state.open" class="ai-panel" role="dialog" :aria-label="t('standalone.aiTitle')">
     <header class="ai-panel__head">
-      <span>AI 生成问卷</span>
+      <span>{{ t("standalone.aiTitle") }}</span>
       <Button
         icon="pi pi-times"
         text
         severity="secondary"
-        size="small"
-        aria-label="关闭"
+        :aria-label="t('standalone.close')"
         :disabled="state.busy"
         @click="close"
       />
     </header>
     <label class="ai-panel__field">
-      <span>问卷标题</span>
-      <InputText v-model="state.title" :disabled="state.busy" placeholder="如：科研工具使用习惯调查" />
+      <span>{{ t("standalone.surveyTitle") }}</span>
+      <InputText v-model="state.title" :disabled="state.busy" :placeholder="t('standalone.titleExample')" fluid />
     </label>
     <label class="ai-panel__field">
-      <span>需求简述</span>
+      <span>{{ t("standalone.brief") }}</span>
       <Textarea
         v-model="state.brief"
         :disabled="state.busy"
         rows="6"
         auto-resize
-        placeholder="研究主题、目标人群、期望题量、是否需要知情同意说明…"
+        :placeholder="t('standalone.briefExample')" fluid
       />
     </label>
     <p v-if="state.error" class="ai-panel__error">{{ state.error }}</p>
     <footer class="ai-panel__foot">
       <Button
-        label="生成"
+        :label="t('standalone.generate')"
         :loading="state.busy"
         @click="generate"
       />

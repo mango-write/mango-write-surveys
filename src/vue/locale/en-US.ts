@@ -1,4 +1,6 @@
 export default {
+  navigation: {"list": "Surveys", "all": "View all surveys", "loading": "Loading surveys…", "empty": "No surveys yet. Create one above."},
+  inlineReview: {"removed": "This review proposes removing this question. Check related logic and measurement needs before accepting.","helper": "Improve this survey","title": "Suggested change", "preview": "Preview after changes", "accept": "Accept this review", "linked": "Related changes apply together. Use Undo to restore.", "details": "All suggestions and sources", "context": "Research context and pretest"},
   assistant: {
     "questionIndex": "Question {n}",
     "unmapped": "Mapping needs updating",

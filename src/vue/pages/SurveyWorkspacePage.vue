@@ -9,7 +9,7 @@
 // 草稿上重放 ops（与手工编辑同一历史栈，撤销同源），survey_create 帧导航。
 // 导航出口一律 host.navigate；vue-router 只用于读路由参数与离开守卫。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { onBeforeRouteLeave, useRoute, useRouter } from "vue-router";
+import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationNormalized } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useConfirm } from "primevue/useconfirm";
 import Button from "primevue/button";
@@ -47,6 +47,8 @@ import SurveyOutlinePanel from "../components/SurveyOutlinePanel.vue";
 import SurveyVersionsPanel from "../components/SurveyVersionsPanel.vue";
 import SurveyDistributePanel from "../components/SurveyDistributePanel.vue";
 import SurveyPreviewOverlay from "../components/SurveyPreviewOverlay.vue";
+import SurveyNavigator from "../components/SurveyNavigator.vue";
+import SurveyInlineReview from "../components/SurveyInlineReview.vue";
 import SurveyResearchAssistant from "../components/SurveyResearchAssistant.vue";
 import {
   takeAiCreatedSurveyHandoff,
@@ -78,6 +80,7 @@ const stage = ref<Stage>(
 );
 const selectedQuestionId = ref("");
 const previewOpen = ref(false);
+const mobileNavigationOpen = ref(false);
 const canvasRef = ref<InstanceType<typeof SurveyDesignCanvas> | null>(null);
 
 const surveyId = computed(() =>
@@ -89,10 +92,10 @@ useSurveysLayoutPrefs({
   leftRailWidth: 300,
   rightRailWidth: 360,
 });
-const leftTabs: SurveyShellTab[] = [
+const leftTabs = computed<SurveyShellTab[]>(() => [
   { id: "outline", label: t("surveys.outlineTab"), icon: List },
   { id: "versions", label: t("surveys.versionsTab"), icon: History },
-];
+]);
 
 // ── 草稿状态：历史栈 + 自动保存 ──────────────────────────────────────────
 const history = useSurveyDraftHistory({
@@ -181,6 +184,7 @@ const reviewApplying = ref(false);
 const reviewPlan = computed(() => reviewReport.value
   ? buildSurveyReviewPlan(definition.value, reviewReport.value.findings)
   : null);
+const reviewAddedQuestions = computed(() => reviewPlan.value?.candidateDefinition?.questions.filter(q => !definition.value.questions.some(original => original.id === q.id)) ?? []);
 const reviewStale = computed(() => !!reviewReport.value && (
   reviewReport.value.baseDraftVersion !== draftVersion.value || !["idle", "saved"].includes(autosave.status.value)
 ));
@@ -222,7 +226,6 @@ async function applyReviewPlan() {
       return;
     }
     reviewReport.value = null;
-    await askResearch("review");
   } finally {
     reviewApplying.value = false;
   }
@@ -414,6 +417,7 @@ function errorMessage(cause: unknown) {
 let generation = 0;
 async function load() {
   const own = ++generation;
+  forceLeave = false;
   reviewReport.value = null;
   loading.value = true;
   error.value = "";
@@ -552,6 +556,7 @@ function onPageHide() {
   autosave.flushBeacon();
 }
 watch(surveyId, () => {
+  mobileNavigationOpen.value = false;
   stage.value = typeof route.query.run === "string" ? "analysis" : "design";
   selectedQuestionId.value = "";
   void load();
@@ -564,8 +569,8 @@ watch(stage, (value) => {
 
 // ── 离开保护：有未落盘内容先落盘后放行；落不了盘（失败/冲突）才拦 ────────
 let forceLeave = false;
-onBeforeRouteLeave(async (to) => {
-  if (forceLeave || !autosave.hasUnsaved()) return true;
+async function guardNavigation(to: RouteLocationNormalized) {
+  if (forceLeave || (!autosave.hasUnsaved() && autosave.status.value !== "saving")) return true;
   const flushed = await autosave.flush();
   if (flushed) return true;
   confirm.require({
@@ -577,7 +582,9 @@ onBeforeRouteLeave(async (to) => {
     },
   });
   return false;
-});
+}
+onBeforeRouteLeave(guardNavigation);
+onBeforeRouteUpdate((to, from) => to.params.surveyId === from.params.surveyId ? true : guardNavigation(to));
 function onBeforeUnload(event: BeforeUnloadEvent) {
   if (!autosave.hasUnsaved() && autosave.status.value !== "saving") return;
   event.preventDefault();
@@ -586,10 +593,13 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
 </script>
 <template>
   <div class="survey-workbench">
-    <SurveyWorkbenchShell :tabs="stage === 'analysis' ? [] : leftTabs">
+    <SurveyWorkbenchShell :tabs="leftTabs">
       <template #left="{ activeTab }">
+        <Button class="mobile-survey-toggle" :label="t('surveys.navigation.list')" :icon="mobileNavigationOpen ? 'pi pi-chevron-up' : 'pi pi-bars'" :aria-expanded="mobileNavigationOpen" text severity="secondary" @click="mobileNavigationOpen = !mobileNavigationOpen" />
+        <div class="survey-left-content" :class="{ 'is-open': mobileNavigationOpen }">
+        <SurveyNavigator :current-id="surveyId" :current-title="definition.title" />
         <SurveyOutlinePanel
-          v-if="activeTab === 'outline' && survey"
+          v-if="activeTab === 'outline' && survey && stage === 'design'"
           :definition="definition"
           :selected-id="selectedQuestionId"
           @select="selectedQuestionId = $event"
@@ -606,6 +616,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
           @close="closeSurvey"
           @remove="removeSurvey"
         />
+        </div>
       </template>
       <template #center>
         <main class="survey-stage">
@@ -805,9 +816,16 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
                 :survey-id="surveyId"
                 @select="selectedQuestionId = $event"
                 @change="(next, label) => commitDefinition(next, label)"
-              />
+              >
+                <template #question-review="{ questionId }">
+                  <SurveyInlineReview v-if="reviewReport && reviewPlan" :question-id="questionId" :definition="definition" :report="reviewReport" :plan="reviewPlan" :disabled="!survey.canWrite || reviewStale || reviewBusy || reviewApplying" @apply="applyReviewPlan" />
+                </template>
+              </SurveyDesignCanvas>
+              <div v-if="stage === 'design' && reviewReport && reviewPlan && reviewAddedQuestions.length" class="review-additions">
+                <SurveyInlineReview v-for="question in reviewAddedQuestions" :key="question.id" :question-id="question.id" :definition="definition" :report="reviewReport" :plan="reviewPlan" :disabled="!survey.canWrite || reviewStale || reviewBusy || reviewApplying" @apply="applyReviewPlan" />
+              </div>
               <SurveyDistributePanel
-                v-else-if="stage === 'distribute'"
+                v-if="stage === 'distribute'"
                 :slug="survey.slug"
                 :status="survey.status"
                 :completed-count="survey.completedCount"
@@ -822,7 +840,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
                 @close="closeSurvey"
               />
               <SurveyDataAnalysis
-                v-else
+                v-else-if="stage === 'data' || stage === 'analysis'"
                 :key="survey.id"
                 :survey="survey"
                 :mode="stage === 'data' ? 'data' : 'analysis'"
@@ -843,6 +861,14 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
   </div>
 </template>
 <style scoped>
+.mobile-survey-toggle { display: none; }
+@media (max-width: 767.98px) {
+  .mobile-survey-toggle { display: flex; width: 100%; justify-content: space-between; }
+  .survey-left-content { display: none; max-height: 45vh; overflow-y: auto; }
+  .survey-left-content.is-open { display: block; }
+}
+
+.review-additions { width: 100%; max-width: 46rem; align-self: center; }
 .survey-workbench {
   height: 100%;
   min-height: 0;

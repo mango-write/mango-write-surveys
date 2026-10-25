@@ -79,6 +79,7 @@ function makeHost(
         const method = init?.method ?? "GET";
         const body = (init?.body ?? {}) as PatchBody;
         const segments = path.split("/").filter(Boolean);
+        if (method === "GET" && path === "/api/surveys") return { items: [] };
         if (method === "GET") return mocks.get(segments.at(-1)!);
         if (method === "PATCH")
           return mocks.save(
@@ -652,6 +653,22 @@ describe("SurveyWorkspacePage 发布确认与离开保护（issue #217）", () =
     expect(router.currentRoute.value.name).toBe("u.surveys.list");
   });
 
+  it("切换问卷先保存当前卷，保存失败则留在原卷", async () => {
+    const { router, wrapper } = await mountWorkspaceViaRouterView();
+    vi.useFakeTimers();
+    await changeDefinition(wrapper);
+    mocks.save.mockRejectedValue(new SurveysApiError(500, "server", null));
+    confirmMocks.require.mockImplementation(() => {});
+    await router.push("/u/surveys/s-2");
+    expect(router.currentRoute.value.params.surveyId).toBe("s-1");
+    expect(mocks.save.mock.calls.at(-1)![0]).toBe("00000000-0000-4000-8000-000000000001");
+    mocks.save.mockResolvedValue(detail({ currentRevisionId: null }));
+    await router.push("/u/surveys/s-2");
+    await flushPromises();
+    expect(router.currentRoute.value.params.surveyId).toBe("s-2");
+    wrapper.unmount();
+  });
+
   it("没有未保存修改时离开不打扰", async () => {
     const { router } = await mountWorkspaceViaRouterView();
     vi.useFakeTimers();
@@ -1052,7 +1069,7 @@ describe("问卷诊断修订的工作台闭环", () => {
     ],
   });
 
-  it("整批应用只产生一个保存与撤销步骤，落盘后清掉旧方案并重新检查", async () => {
+  it("整批应用只产生一个保存与撤销步骤，落盘后清掉旧方案且不自动发起新检查", async () => {
     const { wrapper, copilotRegister } = await mountWorkspace("/u/surveys/s-1", "outline", { copilot: true });
     const handlers = copilotRegister!.mock.calls[0]![0];
     handlers.onSurveyDeliveryFrame(review());

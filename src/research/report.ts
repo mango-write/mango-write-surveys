@@ -5,6 +5,7 @@ import { surveysBrandLogo } from "../brand.js";
 import { csvCell } from "../server/serialize.js";
 
 import { buildResearchChartSpecs } from "./chart-spec.js";
+import { describeResearchTable, discussResearchResult, summarizeResearchResult } from "./report-narrative.js";
 import { researchReportStyles } from "./report-theme.js";
 import {
   escapeHtml,
@@ -112,7 +113,7 @@ function renderAnalysisSections(run: ResearchRunRecord, charts: ReturnType<typeo
       used.add(chartIndex);
       return [chart];
     });
-    return `<section class="analysis-section" data-table-id="${escapeHtml(table.id)}"><div class="section-heading"><span class="section-index">${String(index + 1).padStart(2, "0")}</span><h2>${escapeHtml(table.title)}</h2></div><p class="section-intro">${escapeHtml(tableReading[table.id] ?? "图中呈现本结果的数值关系，完整字段与精确保留值以下表为准。")}</p>${matches.map(renderChartFigure).join("")}<p class="table-caption">完整结果表 · ${table.rows.length} 行</p>${renderResearchTable(table)}</section>`;
+    return `<section class="analysis-section" data-table-id="${escapeHtml(table.id)}"><div class="section-heading"><span class="section-index">${String(index + 1).padStart(2, "0")}</span><h2>${escapeHtml(table.title)}</h2></div><p class="section-intro">${escapeHtml(tableReading[table.id] ?? "图中呈现本结果的数值关系，完整字段与精确保留值以下表为准。")}</p>${matches.map(renderChartFigure).join("")}${describeResearchTable(table).map(text => `<p class="result-reading">${escapeHtml(text)}</p>`).join("")}<p class="table-caption">完整结果表 · ${table.rows.length} 行</p>${renderResearchTable(table)}</section>`;
   });
   charts.forEach((chart, index) => {
     if (used.has(index)) return;
@@ -148,7 +149,10 @@ export function renderResearchReportHtml(input: {
 <header><div class="brandbar"><span class="brand-logo">${surveysBrandLogo}</span><span class="brandproduct">Surveys</span><span class="brandnote">Research report</span></div><section class="hero"><div class="hero-top"><span class="eyebrow">${escapeHtml(analysisNames[run.recipe.type])} · 固定运行</span><span class="source-badge${synthetic ? " synthetic" : ""}">${sourceLabel}</span></div><h1>${escapeHtml(dataset.name)}</h1><p class="hero-source">${escapeHtml(dataset.source.title)}</p><p class="source-boundary">${escapeHtml(sourceBoundary)}</p></section></header>
 <section class="metrics" aria-label="样本与数据概览"><div class="metric"><span class="metric-label">本分析有效 n</span><strong class="metric-value">${run.result.effectiveN}</strong><span class="metric-detail">完整病例分析</span></div><div class="metric"><span class="metric-label">缺失行</span><strong class="metric-value">${run.result.missingRows}</strong><span class="metric-detail">未填零、未插补</span></div><div class="metric"><span class="metric-label">数据集原始行</span><strong class="metric-value">${dataset.rowCount}</strong><span class="metric-detail">不含原始行内容</span></div><div class="metric${dataset.duplicateRowCount > 0 ? " warning" : ""}"><span class="metric-label">完全重复记录</span><strong class="metric-value">${dataset.duplicateRowCount}</strong><span class="metric-detail">披露但不删除</span></div></section>
 ${dataset.duplicateRowCount > 0 ? `<aside class="notice"><strong>数据质量提示</strong><span>${escapeHtml(duplicateRowWarning(dataset.duplicateRowCount))}请结合采集过程判断其影响。</span></aside>` : ""}
+<section class="analysis-section narrative-summary"><h2>摘要与核心发现</h2><p>本报告对「${escapeHtml(dataset.name)}」执行${escapeHtml(analysisNames[run.recipe.type])}，围绕本次配置的变量关系与测量特征开展分析。${synthetic ? "以下为合成数据流程示例，不产生实质性研究结论。" : "分析对象为所登记的公开数据；研究人群与采集背景以原始来源为准。"}</p><p>本分析有效 n=${run.result.effectiveN}，缺失行 ${run.result.missingRows}；${dataset.duplicateRowCount ? `另有 ${dataset.duplicateRowCount} 条完全重复记录保留在数据中，因此数据行数不能直接视为独立参与者人数。` : "数据行数不直接等同于独立参与者人数。"}</p>${renderTextList(summarizeResearchResult(run.result))}</section>
+<section class="analysis-section"><h2>数据与分析方法</h2><p>${escapeHtml(run.result.method)}</p><p>变量计分、反向处理和模型配置见结果表与复核附录。缺失按各模型完整病例处理，未填零或插补；不同模型的有效样本可能不同。</p></section>
 ${renderAnalysisSections(run, charts)}
+<section class="analysis-section"><h2>讨论与总结</h2><p>${escapeHtml(discussResearchResult(run.result))}</p><p>${synthetic ? "本次分析验证了从输入数据到统计结果与图表的完整流程。合成数据不支持对真实人群作结论。" : "本次结果提供了当前数据与配置下的测量或关联证据；图表旁的解读均对应可复核的结果表。结论适用范围取决于原始样本、测量质量与模型设定。"}</p><p>关于原因与机制：本次统计结果不能区分反向关系、遗漏混杂或选择偏差的影响，不能单独据此做因果归因。区间包含零不等于证明没有效应，区间不含零也不等于效应具有实际重要性。</p>${run.result.limitations.length ? renderTextList(run.result.limitations) : ""}<p>后续建议：核对采样来源与重复记录，结合理论评估效应的实际意义；如需主张机制或推广到其他人群，应增加独立样本验证及能够识别时间顺序与混杂的研究设计。</p></section>
 <aside class="appendix" aria-labelledby="review-title"><div class="section-heading"><span class="section-index">A</span><h2 id="review-title">复核附录</h2></div><p class="section-intro">保留方法、解释边界与可复现标识，供审阅和再次运行核对。</p>
 <section class="appendix-block"><h3>方法</h3><p>${escapeHtml(run.result.method)}</p></section>
 ${warnings.length ? `<section class="appendix-block"><h3>警告</h3>${renderTextList(warnings)}</section>` : ""}

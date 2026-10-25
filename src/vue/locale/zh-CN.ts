@@ -1,4 +1,6 @@
 export default {
+  navigation: {"list": "问卷列表", "all": "查看全部问卷", "loading": "正在加载问卷…", "empty": "还没有问卷，点击上方新建。"},
+  inlineReview: {"removed": "本轮建议删除这道题；采纳前请核对关联条件与测量需求。","helper": "帮我完善","title": "修改建议", "preview": "修改后预览", "accept": "采纳本轮修改", "linked": "关联修改将一起应用，可通过顶部撤销恢复。", "details": "全部建议与依据", "context": "研究背景与预测试"},
   assistant: {
     "questionIndex": "第 {n} 题",
     "unmapped": "映射待更新",
