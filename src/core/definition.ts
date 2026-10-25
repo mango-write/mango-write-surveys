@@ -25,6 +25,9 @@ export const SURVEY_LIMITS = {
   maxConstructs: 20,
   maxConstructLabelLength: 200,
   maxConstructDefinitionLength: 1000,
+  maxAnalysisModels: 10,
+  maxAnalysisCovariates: 10,
+  maxAnalysisFactorCount: 20,
   maxTimeBudgetMinutes: 600,
 } as const;
 
@@ -37,6 +40,25 @@ const idSchema = z
     (id) => !Object.hasOwn(Object.prototype, id),
     "保留标识符不可作为研究字段",
   );
+
+// 变量字典 id（矩阵题为 questionId.rowId，带一个点号）：反题登记与分析模型
+// 引用都按变量身份写，不能沿用题目 idSchema。
+const variableIdSchema = z
+  .string()
+  .min(1)
+  .max(160)
+  .regex(/^[A-Za-z0-9_.-]+$/)
+  .refine(
+    (id) => !Object.hasOwn(Object.prototype, id),
+    "保留标识符不可作为研究字段",
+  );
+
+// 分析模型引用：construct:<构念 id> 或 variable:<变量 id>（与 research recipe 同口径）。
+const analysisRefSchema = z
+  .string()
+  .min(1)
+  .max(200)
+  .regex(/^(construct|variable):[A-Za-z0-9_.-]+$/);
 
 export const SurveyConditionSchema = z.object({
   questionId: idSchema,
@@ -305,12 +327,20 @@ export type SurveyQuestionType = z.infer<typeof SurveyQuestionTypeSchema>;
 const designText = z.string().max(SURVEY_LIMITS.maxDesignTextLength);
 const designNote = z.string().max(SURVEY_LIMITS.maxDesignNoteLength);
 
+export const SurveyResearchScoringSchema = z.object({
+  method: z.enum(["mean", "sum"]),
+  reverseVariableIds: z.array(variableIdSchema).max(SURVEY_LIMITS.maxQuestions),
+  minValid: z.number().int().min(1).max(SURVEY_LIMITS.maxQuestions),
+});
+export type SurveyResearchScoring = z.infer<typeof SurveyResearchScoringSchema>;
+
 export const SurveyResearchConstructSchema = z.object({
   id: idSchema,
   label: z.string().min(1).max(SURVEY_LIMITS.maxConstructLabelLength),
   definition: z.string().min(1).max(SURVEY_LIMITS.maxConstructDefinitionLength),
   // 空数组 = 该维度尚无题目覆盖；validateSurveyDesign 报 design_construct_unmapped。
   questionIds: z.array(idSchema).max(SURVEY_LIMITS.maxQuestions),
+  scoring: SurveyResearchScoringSchema.optional(),
 });
 export type SurveyResearchConstruct = z.infer<typeof SurveyResearchConstructSchema>;
 
@@ -322,6 +352,42 @@ export const SurveyResearchPretestSchema = z.object({
 });
 export type SurveyResearchPretest = z.infer<typeof SurveyResearchPretestSchema>;
 
+// 结构化分析计划（#224）：analysisPlan 散文之外的可执行模型。moderatedMediation
+// 的 x/m/y/w 与协变量按 construct:/variable: 引用设计内的构念或变量字典条目；
+// efa 挂在一个构念上。引用闭合由 validateSurveyDesign 校验（构念/变量必须存在、
+// x/m/y/w 互异、协变量不重叠）。旧定义没有该字段（可选）。
+const bootstrapSchema = z.strictObject({
+  resamples: z.number().int().min(100).max(5000).default(1000),
+  seed: z.number().int().min(0).max(0xffffffff).default(20260902),
+});
+
+export const SurveyAnalysisModelSchema = z.discriminatedUnion("kind", [
+  z.strictObject({
+    id: idSchema,
+    kind: z.literal("moderatedMediation"),
+    x: analysisRefSchema,
+    m: analysisRefSchema,
+    y: analysisRefSchema,
+    w: analysisRefSchema,
+    covariates: z.array(analysisRefSchema).max(SURVEY_LIMITS.maxAnalysisCovariates).default([]),
+    bootstrap: bootstrapSchema.default({ resamples: 1000, seed: 20260902 }),
+    // 同一计划内附带的探索性因子检查（主轴 EFA）；与结果方程的因果表述无关。
+    efa: z
+      .strictObject({
+        constructId: idSchema,
+        factorCount: z.number().int().min(1).max(SURVEY_LIMITS.maxAnalysisFactorCount),
+      })
+      .optional(),
+  }),
+  z.strictObject({
+    id: idSchema,
+    kind: z.literal("efa"),
+    constructId: idSchema,
+    factorCount: z.number().int().min(1).max(SURVEY_LIMITS.maxAnalysisFactorCount),
+  }),
+]);
+export type SurveyAnalysisModel = z.infer<typeof SurveyAnalysisModelSchema>;
+
 export const SurveyResearchDesignSchema = z.object({
   // 未知事实留空串而不是编造：人群/招募/许可不了解时写进 pendingDecisions。
   researchQuestion: designText,
@@ -331,6 +397,7 @@ export const SurveyResearchDesignSchema = z.object({
   timeBudgetMinutes: z.number().int().min(1).max(SURVEY_LIMITS.maxTimeBudgetMinutes),
   constructs: z.array(SurveyResearchConstructSchema).max(SURVEY_LIMITS.maxConstructs),
   analysisPlan: designText,
+  analysisModels: z.array(SurveyAnalysisModelSchema).max(SURVEY_LIMITS.maxAnalysisModels).optional(),
   assumptions: z.array(designNote).max(SURVEY_LIMITS.maxDesignNotes),
   pendingDecisions: z.array(designNote).max(SURVEY_LIMITS.maxDesignNotes),
   pretest: SurveyResearchPretestSchema.optional(),

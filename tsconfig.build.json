@@ -10,6 +10,12 @@
     "moduleResolution": "NodeNext",
     "types": ["node"]
   },
-  "include": ["src/core/**/*.ts", "src/contracts/**/*.ts"],
+  "include": [
+    "src/core/**/*.ts",
+    "src/contracts/**/*.ts",
+    "src/research/**/*.ts",
+    "src/server/**/*.ts",
+    "src/adapters/**/*.ts"
+  ],
   "exclude": ["src/**/*.test.ts", "src/core/test-fixtures.ts"]
 }

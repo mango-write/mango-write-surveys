@@ -10,6 +10,7 @@ import {
   createSurveysCollection,
   createSurveysMedia,
   createSurveysService,
+  createResearchService,
 } from "@mango-write/surveys/server";
 import {
   createStandaloneSurveysPorts,
@@ -28,8 +29,7 @@ if (!DATABASE_URL || !MEDIA_DIR || !ADMIN_PASSWORD) {
   process.exit(1);
 }
 const PORT = Number(process.env.PORT ?? 3100);
-// AI 建卷（issue #223 §6 验收）：SURVEYS_AI_URL/_API_KEY/_MODEL 配齐才启用；
-// 未配置时 /api/ai/generate 返回 503，前端面板如实显示。
+// AI 建卷与审查共用 SURVEYS_AI_URL/_API_KEY/_MODEL；未配置时端点返回 503。
 const aiModel =
   process.env.SURVEYS_AI_URL && process.env.SURVEYS_AI_API_KEY && process.env.SURVEYS_AI_MODEL
     ? createOpenAiModel({
@@ -50,6 +50,10 @@ const app = buildStandaloneApp({
     service: createSurveysService(ports),
     collection: createSurveysCollection(ports),
     media: createSurveysMedia(ports),
+    actorOf: () => standaloneAdminActor(),
+  },
+  research: {
+    service: createResearchService(ports),
     actorOf: () => standaloneAdminActor(),
   },
   webDistDir: fileURLToPath(new URL("../web/dist", import.meta.url)),

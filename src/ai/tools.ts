@@ -76,8 +76,13 @@ export interface SurveyAiTools {
 export const RESEARCH_DESIGN_HINT =
   "definition.researchDesign（可选但生成时必须给）：{researchQuestion,population,recruitment," +
   "purpose:'describe'|'compare'|'measure',timeBudgetMinutes,constructs:[{id,label,definition,questionIds:[题 id]}]," +
-  "analysisPlan,assumptions:[字符串],pendingDecisions:[字符串]}。" +
+  "analysisPlan,analysisModels:[结构化模型],assumptions:[字符串],pendingDecisions:[字符串]}。" +
   "constructs 是「维度 → 题目」映射，题干必须真的能测这个概念；没有题目覆盖的维度会被校验报 design_construct_unmapped。" +
+  "analysisModels 把分析计划落成可执行模型（真实研究计划必须给，纯描述性问卷可省略）：" +
+  "{kind:'moderatedMediation',id,x,m,y,w,covariates?:['construct:<构念 id>'|'variable:<变量 id>'],bootstrap?:{resamples,seed},efa?:{constructId,factorCount}} " +
+  "（x=自变量、m=中介、y=结果、w=调节；协变量只放真的想控制的变量，如性别/年龄）或 {kind:'efa',id,constructId,factorCount}。" +
+  "引用按 construct:<构念 id> / variable:<变量字典 id> 写（矩阵题是 questionId.rowId）；x/m/y/w 必须互异、协变量不得与它们重复；" +
+  "因子数、被试量这类没有依据的数字不编造——留空并写进 pendingDecisions。" +
   "人群、招募渠道、许可与既有验证状态不了解时写进 pendingDecisions（或留空并在 analysisPlan/assumptions 说明），不要编造；" +
   "已有问卷补设计用 survey_edit 的 set_meta.researchDesign（null = 清除）。" +
   "可选 pretest:{participantCount,notes,recordedAt} 是作者自报的试填记录，引用它不等于做完独立核验或量表验证。";

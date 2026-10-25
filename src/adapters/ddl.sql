@@ -81,3 +81,51 @@ CREATE INDEX IF NOT EXISTS survey_files_survey_idx
   ON survey_files (survey_id);
 CREATE INDEX IF NOT EXISTS survey_files_sha_idx
   ON survey_files (file_sha256);
+
+CREATE TABLE IF NOT EXISTS survey_research_datasets (
+  id                         uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  survey_id                  uuid NOT NULL,
+  revision_id                uuid NOT NULL,
+  name                       text NOT NULL,
+  source_json                jsonb NOT NULL,
+  source_sha256              text NOT NULL,
+  parser_version             text NOT NULL,
+  row_count                  integer NOT NULL,
+  duplicate_row_count        integer NOT NULL DEFAULT 0,
+  mapping_json               jsonb NOT NULL,
+  columns_json               jsonb NOT NULL,
+  normalized_rows_json       jsonb NOT NULL,
+  normalized_row_hashes_json jsonb NOT NULL,
+  rows_hash                  text NOT NULL,
+  input_hash                 text NOT NULL,
+  created_at                 timestamptz(6) NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS survey_research_datasets_input_key
+  ON survey_research_datasets (survey_id, revision_id, input_hash);
+CREATE INDEX IF NOT EXISTS survey_research_datasets_survey_created_idx
+  ON survey_research_datasets (survey_id, created_at);
+
+-- 已初始化过的库补列（CREATE TABLE IF NOT EXISTS 不会改已存在的表）。
+ALTER TABLE survey_research_datasets
+  ADD COLUMN IF NOT EXISTS duplicate_row_count integer NOT NULL DEFAULT 0;
+
+CREATE TABLE IF NOT EXISTS survey_research_runs (
+  id             uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  survey_id      uuid NOT NULL,
+  revision_id    uuid NOT NULL,
+  dataset_id     uuid NOT NULL,
+  source_kind    text NOT NULL,
+  source_sha256  text NOT NULL,
+  recipe_json    jsonb NOT NULL,
+  engine_version text NOT NULL,
+  input_hash     text NOT NULL,
+  result_hash    text NOT NULL,
+  result_json    jsonb NOT NULL,
+  created_at     timestamptz(6) NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS survey_research_runs_input_key
+  ON survey_research_runs (survey_id, input_hash);
+CREATE INDEX IF NOT EXISTS survey_research_runs_survey_created_idx
+  ON survey_research_runs (survey_id, created_at);

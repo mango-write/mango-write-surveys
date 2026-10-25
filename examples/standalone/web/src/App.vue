@@ -7,7 +7,11 @@ import { useRoute } from "vue-router";
 import Toast from "primevue/toast";
 import ConfirmDialog from "primevue/confirmdialog";
 import { useToast } from "primevue/usetoast";
-import { SurveysHostKey } from "@mango-write/surveys/vue";
+import {
+  SurveysHostKey,
+  SurveysResearchPanelKey,
+  SurveyResearchPanel,
+} from "@mango-write/surveys/vue";
 
 import { createWebHost } from "./host";
 import { router } from "./router";
@@ -16,6 +20,8 @@ import { createStandaloneCopilot } from "./ai/standalone-copilot";
 
 const copilot = createStandaloneCopilot();
 provide(SurveysHostKey, createWebHost(router, useToast(), copilot.host));
+// 研究分析面板（数据来源 → 研究计划 → 固定运行结果）由本站注入工作台数据段。
+provide(SurveysResearchPanelKey, SurveyResearchPanel);
 const route = useRoute();
 const sourceUrl = import.meta.env.VITE_SURVEYS_SOURCE_URL ||
   "https://github.com/mango-write/mango-write-surveys/tree/v0.1.0";

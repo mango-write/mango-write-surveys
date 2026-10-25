@@ -18,6 +18,11 @@
       "default": "./dist/contracts/index.js"
     },
     "./server": "./src/server/index.ts",
+    "./research": {
+      "mango-source": "./src/research/index.ts",
+      "types": "./dist/research/index.d.ts",
+      "default": "./dist/research/index.js"
+    },
     "./ai": "./src/ai/index.ts",
     "./vue": "./src/vue/index.ts",
     "./adapters": "./src/adapters/index.ts",
@@ -34,6 +39,7 @@
     "dompurify": "^3.4.17",
     "hono": "^4.13.13",
     "jsdom": "^30.0.1",
+    "ml-matrix": "6.15.1",
     "postgres": "^3.4.5",
     "qrcode": "^1.5.4",
     "zod": "^4.4.3"
@@ -41,11 +47,11 @@
   "peerDependencies": {
     "@tiptap/starter-kit": "^3.29.2",
     "@tiptap/vue-3": "^3.29.2",
+    "lucide-vue-next": "^1.0.0",
+    "primevue": "^4.2.5",
     "vue": "^3.5.34",
     "vue-i18n": "^11.4.7",
-    "vue-router": "^4.4.5",
-    "primevue": "^4.2.5",
-    "lucide-vue-next": "^1.0.0"
+    "vue-router": "^4.4.5"
   },
   "devDependencies": {
     "@tiptap/starter-kit": "^3.29.2",

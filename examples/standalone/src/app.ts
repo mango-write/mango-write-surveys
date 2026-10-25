@@ -15,16 +15,24 @@ import {
 } from "@mango-write/surveys/ai";
 import type { SurveysRouterDeps } from "@mango-write/surveys/server";
 import {
+  createResearchRoutes,
   createSurveysManageRoutes,
   createSurveysPublicRoutes,
+  type ResearchRouterDeps,
 } from "@mango-write/surveys/server";
+
+import { reviewStandaloneSurvey } from "./ai-review";
 
 export interface StandaloneAppConfig {
   adminPassword: string;
-  /** AI 建卷模型；null 时 /api/ai/generate 一律 503。 */
+  /** AI 建卷与审查模型；null 时两个 AI 端点一律 503。 */
   aiModel: SurveyModelPort | null;
   aiTimeoutMs: number;
+  aiReviewLimit?: number;
+  aiReviewWindowMs?: number;
   routerDeps: SurveysRouterDeps;
+  /** 研究数据面（数据集导入/固定运行/报告导出）：与 surveys 管理面同一道管理员闸。 */
+  research: Pick<ResearchRouterDeps, "service" | "actorOf">;
   /** web/dist 绝对路径；缺省或不存在时跳过静态托管（API 仍可用）。 */
   webDistDir?: string;
 }
@@ -86,12 +94,59 @@ export function buildStandaloneApp(config: StandaloneAppConfig): Hono {
   app.route("/api/surveys", createSurveysManageRoutes(config.routerDeps));
   app.route("/api/survey-public", createSurveysPublicRoutes(config.routerDeps));
 
-  // AI 建卷（issue #223 §6 验收）：SURVEYS_AI_URL/_API_KEY/_MODEL 配齐才启用；
-  // 未配置返回 503，前端面板如实显示。建卷带 operationId 幂等——同一次提交的
-  // 网络重试不会建出两份问卷。鉴权与 surveys 管理面同款 exact + wildcard 两条：
-  // Hono 的 app.use 不带通配只匹配字面路径，/api/ai/generate 必须由通配那条盖住。
+  // 研究数据面与 surveys 管理面同一道管理员会话闸（匿名一律 401，不触达存储）。
+  app.use("/api/research", requireAdmin);
+  app.use("/api/research/*", requireAdmin);
+  app.route("/api/research", createResearchRoutes(config.research));
+
+  // 建卷带 operationId 幂等；AI 鉴权与 surveys 管理面相同。Hono 的 app.use
+  // 不带通配只匹配字面路径，子路径必须由通配那条盖住。
   app.use("/api/ai", requireAdmin);
   app.use("/api/ai/*", requireAdmin);
+  const reviewStartedAt: number[] = [];
+  app.post("/api/ai/review", async (c) => {
+    if (!config.aiModel) return c.json({ error: "ai_not_configured" }, 503);
+    const body = (await c.req.json().catch(() => null)) as {
+      surveyId?: unknown;
+      operationId?: unknown;
+      prompt?: unknown;
+    } | null;
+    const surveyId = typeof body?.surveyId === "string" ? body.surveyId : "";
+    const operationId = typeof body?.operationId === "string" ? body.operationId : "";
+    const prompt = typeof body?.prompt === "string" ? body.prompt.trim() : "";
+    if (
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(surveyId) ||
+      operationId.length < 6 || operationId.length > 64 || !prompt || prompt.length > 2000
+    ) {
+      return c.json({ error: "bad_request" }, 400);
+    }
+    const now = Date.now();
+    const windowMs = config.aiReviewWindowMs ?? 60_000;
+    const limit = config.aiReviewLimit ?? 5;
+    while (reviewStartedAt[0] !== undefined && reviewStartedAt[0] <= now - windowMs) {
+      reviewStartedAt.shift();
+    }
+    if (reviewStartedAt.length >= limit) {
+      return c.json({ error: "rate_limited", retryAfterMs: windowMs - (now - reviewStartedAt[0]!) }, 429);
+    }
+    reviewStartedAt.push(now);
+    const result = await reviewStandaloneSurvey(
+      config.routerDeps.service,
+      config.aiModel,
+      { actor: config.routerDeps.actorOf(c), surveyId, operationId, prompt },
+      { signal: c.req.raw.signal, timeoutMs: config.aiTimeoutMs },
+    );
+    if (!result.ok) {
+      const status = result.code === "model_failed" || result.code === "invalid_model_response"
+        ? 502
+        : result.code === "read_failed"
+          ? 404
+          : result.detail.includes("stale_read") ? 409 : 422;
+      return c.json({ error: result.code, detail: result.detail }, status);
+    }
+    return c.json(result.delivery);
+  });
+
   app.post("/api/ai/generate", async (c) => {
     if (!config.aiModel) return c.json({ error: "ai_not_configured" }, 503);
     const body = (await c.req.json().catch(() => null)) as {

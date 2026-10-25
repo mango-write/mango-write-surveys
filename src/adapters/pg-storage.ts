@@ -14,6 +14,17 @@ import type {
   SurveyRevisionMeta,
   SurveyRevisionRecord,
 } from "../ports.js";
+import type {
+  ResearchDatasetRecord,
+  ResearchRunRecord,
+  ResearchStoragePort,
+} from "../research/types.js";
+import type {
+  ResearchColumnMapping,
+  SurveyResearchRecipe,
+  SurveyResearchResult,
+  ResearchSource,
+} from "../contracts/index.js";
 import { SURVEY_MAX_RESPONSES } from "../server/limits.js";
 import { newSurveySlug } from "../server/serialize.js";
 
@@ -232,7 +243,79 @@ function makeLock(tx: postgres.TransactionSql, surveyId: string): SurveysLock {
   };
 }
 
-export interface StandaloneSurveysStorage extends SurveysStoragePort {
+interface ResearchDatasetRow {
+  id: string;
+  survey_id: string;
+  revision_id: string;
+  name: string;
+  source_json: ResearchSource;
+  source_sha256: string;
+  parser_version: string;
+  row_count: number;
+  duplicate_row_count: number;
+  mapping_json: ResearchColumnMapping[];
+  columns_json: string[];
+  normalized_rows_json: Array<Record<string, number | null>>;
+  normalized_row_hashes_json: string[];
+  rows_hash: string;
+  input_hash: string;
+  created_at: Date;
+}
+
+interface ResearchRunRow {
+  id: string;
+  survey_id: string;
+  revision_id: string;
+  dataset_id: string;
+  source_kind: "public" | "synthetic";
+  source_sha256: string;
+  recipe_json: SurveyResearchRecipe;
+  engine_version: string;
+  input_hash: string;
+  result_hash: string;
+  result_json: SurveyResearchResult;
+  created_at: Date;
+}
+
+function toResearchDataset(row: ResearchDatasetRow): ResearchDatasetRecord {
+  return {
+    id: row.id,
+    surveyId: row.survey_id,
+    revisionId: row.revision_id,
+    name: row.name,
+    source: row.source_json,
+    sourceSha256: row.source_sha256,
+    parserVersion: row.parser_version,
+    rowCount: row.row_count,
+    duplicateRowCount: row.duplicate_row_count,
+    mapping: row.mapping_json,
+    columns: row.columns_json,
+    normalizedRows: row.normalized_rows_json,
+    normalizedRowHashes: row.normalized_row_hashes_json,
+    rowsHash: row.rows_hash,
+    inputHash: row.input_hash,
+    createdAt: row.created_at,
+  };
+}
+
+function toResearchRun(row: ResearchRunRow): ResearchRunRecord {
+  return {
+    id: row.id,
+    surveyId: row.survey_id,
+    revisionId: row.revision_id,
+    datasetId: row.dataset_id,
+    sourceKind: row.source_kind,
+    sourceSha256: row.source_sha256,
+    recipe: row.recipe_json,
+    engineVersion: row.engine_version,
+    inputHash: row.input_hash,
+    resultHash: row.result_hash,
+    result: row.result_json,
+    createdAt: row.created_at,
+  };
+}
+
+export interface StandaloneSurveysStorage extends SurveysStoragePort, ResearchStoragePort {
   /** 选项图字节回收前的绑定复查（独立站无 source_files 池，绑定行即引用计数）。 */
   hasMediaBinding(sha256: string): Promise<boolean>;
   close(): Promise<void>;
@@ -374,6 +457,65 @@ export function createPgStorage(databaseUrl: string): StandaloneSurveysStorage {
       const rows = await sql<{ present: boolean }[]>`
         SELECT EXISTS(SELECT 1 FROM survey_files WHERE file_sha256 = ${sha256}) AS present`;
       return rows[0]?.present ?? false;
+    },
+    async findResearchDatasetByInput(surveyId, revisionId, inputHash) {
+      const rows = await sql<ResearchDatasetRow[]>`
+        SELECT * FROM survey_research_datasets
+        WHERE survey_id = ${surveyId} AND revision_id = ${revisionId} AND input_hash = ${inputHash}`;
+      return rows[0] ? toResearchDataset(rows[0]) : null;
+    },
+    async findResearchDataset(surveyId, datasetId) {
+      const rows = await sql<ResearchDatasetRow[]>`
+        SELECT * FROM survey_research_datasets WHERE survey_id = ${surveyId} AND id = ${datasetId}`;
+      return rows[0] ? toResearchDataset(rows[0]) : null;
+    },
+    async listResearchDatasets(surveyId) {
+      const rows = await sql<ResearchDatasetRow[]>`
+        SELECT * FROM survey_research_datasets WHERE survey_id = ${surveyId} ORDER BY created_at DESC, id`;
+      return rows.map(toResearchDataset);
+    },
+    async insertResearchDataset(record) {
+      const inserted = await sql<{ id: string }[]>`
+        INSERT INTO survey_research_datasets
+          (id, survey_id, revision_id, name, source_json, source_sha256, parser_version, row_count,
+           duplicate_row_count, mapping_json, columns_json, normalized_rows_json, normalized_row_hashes_json,
+           rows_hash, input_hash, created_at)
+        VALUES (${record.id}, ${record.surveyId}, ${record.revisionId}, ${record.name},
+          ${sql.json(record.source as postgres.JSONValue)}, ${record.sourceSha256}, ${record.parserVersion},
+          ${record.rowCount}, ${record.duplicateRowCount}, ${sql.json(record.mapping as postgres.JSONValue)},
+          ${sql.json(record.columns as postgres.JSONValue)}, ${sql.json(record.normalizedRows as postgres.JSONValue)},
+          ${sql.json(record.normalizedRowHashes as postgres.JSONValue)}, ${record.rowsHash}, ${record.inputHash}, ${record.createdAt})
+        ON CONFLICT (survey_id, revision_id, input_hash) DO NOTHING RETURNING id`;
+      if (inserted[0]) return record;
+      return (await this.findResearchDatasetByInput(record.surveyId, record.revisionId, record.inputHash))!;
+    },
+    async findResearchRunByInput(surveyId, inputHash) {
+      const rows = await sql<ResearchRunRow[]>`
+        SELECT * FROM survey_research_runs WHERE survey_id = ${surveyId} AND input_hash = ${inputHash}`;
+      return rows[0] ? toResearchRun(rows[0]) : null;
+    },
+    async findResearchRun(surveyId, runId) {
+      const rows = await sql<ResearchRunRow[]>`
+        SELECT * FROM survey_research_runs WHERE survey_id = ${surveyId} AND id = ${runId}`;
+      return rows[0] ? toResearchRun(rows[0]) : null;
+    },
+    async listResearchRuns(surveyId) {
+      const rows = await sql<ResearchRunRow[]>`
+        SELECT * FROM survey_research_runs WHERE survey_id = ${surveyId} ORDER BY created_at DESC, id`;
+      return rows.map(toResearchRun);
+    },
+    async insertResearchRun(record) {
+      const inserted = await sql<{ id: string }[]>`
+        INSERT INTO survey_research_runs
+          (id, survey_id, revision_id, dataset_id, source_kind, source_sha256, recipe_json,
+           engine_version, input_hash, result_hash, result_json, created_at)
+        VALUES (${record.id}, ${record.surveyId}, ${record.revisionId}, ${record.datasetId},
+          ${record.sourceKind}, ${record.sourceSha256}, ${sql.json(record.recipe as postgres.JSONValue)},
+          ${record.engineVersion}, ${record.inputHash}, ${record.resultHash},
+          ${sql.json(record.result as postgres.JSONValue)}, ${record.createdAt})
+        ON CONFLICT (survey_id, input_hash) DO NOTHING RETURNING id`;
+      if (inserted[0]) return record;
+      return (await this.findResearchRunByInput(record.surveyId, record.inputHash))!;
     },
     close: () => sql.end({ timeout: 5 }),
   };

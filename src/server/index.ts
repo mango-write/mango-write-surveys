@@ -55,3 +55,12 @@ export {
   SURVEY_IMAGE_MIMES,
 } from "./upload-validation.js";
 export { surveyRateLimit, resetSurveyRateLimitForTests } from "./rate-limit.js";
+export {
+  createResearchService,
+  type ResearchService,
+  type ResearchServicePorts,
+} from "./research-service.js";
+export {
+  createResearchRoutes,
+  type ResearchRouterDeps,
+} from "./research-routes.js";

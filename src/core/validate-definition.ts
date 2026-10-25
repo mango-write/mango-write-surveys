@@ -5,6 +5,7 @@ import {
   type SurveyIssue,
   type SurveyQuestion,
 } from "./definition.js";
+import { surveyVariables } from "./variables.js";
 
 function schemaIssues(error: import("zod").ZodError): SurveyIssue[] {
   return error.issues.map((i) => ({
@@ -397,6 +398,69 @@ export function validateSurveyDesign(
         path: `researchDesign.constructs.${i}.questionIds`,
         code: "design_construct_unmapped",
         message: `维度「${construct.label}」还没有对应题目`,
+      });
+  });
+  const variableIds = new Set(surveyVariables(definition).map((variable) => variable.id));
+  const refIssue = (ref: string, path: string): void => {
+    const [kind, id] = ref.split(":") as [string, string];
+    const known = kind === "construct" ? constructIds.has(id) : variableIds.has(id);
+    if (!known)
+      issues.push({
+        path,
+        code: "design_unknown_reference",
+        message: `分析模型引用了不存在的${kind === "construct" ? "构念" : "变量"}：${ref}`,
+      });
+  };
+  const modelIds = new Set<string>();
+  design.analysisModels?.forEach((model, i) => {
+    const at = `researchDesign.analysisModels.${i}`;
+    if (modelIds.has(model.id))
+      issues.push({ path: `${at}.id`, code: "duplicate_id", message: `分析模型 id 重复：${model.id}` });
+    modelIds.add(model.id);
+    if (model.kind === "efa") {
+      if (!constructIds.has(model.constructId))
+        issues.push({
+          path: `${at}.constructId`,
+          code: "design_unknown_reference",
+          message: `分析模型引用了不存在的构念：construct:${model.constructId}`,
+        });
+      return;
+    }
+    const roles: Array<[string, string]> = [
+      ["x", model.x],
+      ["m", model.m],
+      ["y", model.y],
+      ["w", model.w],
+    ];
+    roles.forEach(([role, ref]) => refIssue(ref, `${at}.${role}`));
+    if (new Set(roles.map(([, ref]) => ref)).size !== roles.length)
+      issues.push({
+        path: at,
+        code: "design_role_overlap",
+        message: "moderatedMediation 的 x/m/y/w 必须互异",
+      });
+    const covariateSeen = new Set<string>();
+    model.covariates.forEach((ref, j) => {
+      refIssue(ref, `${at}.covariates.${j}`);
+      if (roles.some(([, roleRef]) => roleRef === ref))
+        issues.push({
+          path: `${at}.covariates.${j}`,
+          code: "design_role_overlap",
+          message: `协变量 ${ref} 与 x/m/y/w 重复`,
+        });
+      if (covariateSeen.has(ref))
+        issues.push({
+          path: `${at}.covariates.${j}`,
+          code: "duplicate_id",
+          message: `协变量重复：${ref}`,
+        });
+      covariateSeen.add(ref);
+    });
+    if (model.efa && !constructIds.has(model.efa.constructId))
+      issues.push({
+        path: `${at}.efa.constructId`,
+        code: "design_unknown_reference",
+        message: `分析模型引用了不存在的构念：construct:${model.efa.constructId}`,
       });
   });
   return issues;

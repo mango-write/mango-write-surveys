@@ -2,7 +2,13 @@
 // 错误面统一为 SurveysApiError；公开作答面同源反代，凭证策略由宿主 transport
 // 按 /api/survey-public 前缀自理（主站：omit + no-store）。
 import type {
+  CreateResearchRunInput,
   PublicSurvey,
+  ResearchDatasetDetail,
+  ResearchDatasetImportInput,
+  ResearchDatasetSummary,
+  ResearchRunDetail,
+  ResearchRunSummary,
   SurveyAnswers,
   SurveyCodebook,
   SurveyDefinition,
@@ -91,6 +97,57 @@ export function createSurveysApi(host: SurveysWebHost) {
     ): Promise<void> {
       if (!host.transport.download) throw new SurveysApiError(0, "download_unsupported", null);
       await host.transport.download(this.exportUrl(surveyId, revisionId), filename);
+    },
+    // ── 研究分析（固定运行）：权威契约见 ../contracts（SurveyResearchRecipe 等），
+    // 面板组件只经这组方法访问 /api/research/*，不在组件里拼路径。
+    research: {
+      createDataset: (input: ResearchDatasetImportInput) =>
+        call<ResearchDatasetSummary>(host, "/api/research/datasets", {
+          method: "POST",
+          body: input,
+        }),
+      listDatasets: (surveyId: string) =>
+        call<{ items: ResearchDatasetSummary[] }>(
+          host,
+          `/api/research/surveys/${surveyId}/datasets`,
+        ),
+      getDataset: (surveyId: string, datasetId: string) =>
+        call<ResearchDatasetDetail>(
+          host,
+          `/api/research/surveys/${surveyId}/datasets/${datasetId}`,
+        ),
+      listRuns: (surveyId: string) =>
+        call<{ items: ResearchRunSummary[] }>(
+          host,
+          `/api/research/surveys/${surveyId}/runs`,
+        ),
+      createRun: (surveyId: string, input: CreateResearchRunInput) =>
+        call<ResearchRunSummary>(host, `/api/research/surveys/${surveyId}/runs`, {
+          method: "POST",
+          body: input,
+        }),
+      getRun: (surveyId: string, runId: string) =>
+        call<ResearchRunDetail>(
+          host,
+          `/api/research/surveys/${surveyId}/runs/${runId}`,
+        ),
+      runFileUrl: (
+        surveyId: string,
+        runId: string,
+        file: "report.html" | "result.json" | "result.csv",
+      ) => `/api/research/surveys/${surveyId}/runs/${runId}/${file}`,
+      downloadRunFile: async (
+        surveyId: string,
+        runId: string,
+        file: "result.json" | "result.csv",
+        filename: string,
+      ): Promise<void> => {
+        if (!host.transport.download) throw new SurveysApiError(0, "download_unsupported", null);
+        await host.transport.download(
+          `/api/research/surveys/${surveyId}/runs/${runId}/${file}`,
+          filename,
+        );
+      },
     },
   };
 }

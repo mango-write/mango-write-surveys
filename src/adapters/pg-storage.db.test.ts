@@ -268,6 +268,47 @@ suite(`surveys standalone adapters (DB)`, () => {
     expect(await ports.media.get(first.sha256)).toBeNull();
   });
 
+  it("research dataset roundtrip keeps duplicate_row_count and input-hash idempotency", async () => {
+    const { id: surveyId } = await ports.storage.create({
+      userId: "admin",
+      teamId: null,
+      title: "研究数据",
+      definition: definition("研究数据"),
+    });
+    const candidate = {
+      id: randomUUID(),
+      surveyId,
+      revisionId: randomUUID(),
+      name: "公开数据导入",
+      source: { kind: "synthetic" as const, title: "合成数据", note: "DB 冒烟" },
+      sourceSha256: "a".repeat(64),
+      parserVersion: "research-parser-v1",
+      rowCount: 42,
+      duplicateRowCount: 2,
+      mapping: [{ variableId: "gender", column: "gender" }],
+      columns: ["gender"],
+      normalizedRows: [{ gender: 1 }, { gender: 2 }],
+      normalizedRowHashes: ["b".repeat(64), "c".repeat(64)],
+      rowsHash: "d".repeat(64),
+      inputHash: "e".repeat(64),
+      createdAt: new Date(),
+    };
+    const inserted = await ports.storage.insertResearchDataset(candidate);
+    expect(inserted.id).toBe(candidate.id);
+    const found = await ports.storage.findResearchDataset(surveyId, candidate.id);
+    expect(found?.duplicateRowCount).toBe(2);
+    expect(found?.rowCount).toBe(42);
+    expect(found?.normalizedRowHashes).toEqual(candidate.normalizedRowHashes);
+
+    // 同 inputHash 重插：ON CONFLICT DO NOTHING 后回既有行，不报错不重复。
+    const again = await ports.storage.insertResearchDataset(candidate);
+    expect(again.id).toBe(candidate.id);
+    expect(
+      (await ports.storage.findResearchDatasetByInput(surveyId, candidate.revisionId, candidate.inputHash))?.id,
+    ).toBe(candidate.id);
+    expect(await ports.storage.listResearchDatasets(surveyId)).toHaveLength(1);
+  });
+
   it("simple-auth grants the admin everything and gates collection on survey liveness", async () => {
     const { id } = await ports.storage.create({
       userId: "admin",

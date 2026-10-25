@@ -3,6 +3,7 @@
 import { z } from "zod";
 
 import {
+  SurveyAnalysisModelSchema,
   SurveyAnswersSchema,
   SurveyDefinitionSchema,
   SurveyIssueSchema,
@@ -14,6 +15,7 @@ const IdSchema = z.string().regex(z.regexes.guid);
 
 export {
   SURVEY_LIMITS,
+  SurveyAnalysisModelSchema,
   SurveyAnswersSchema,
   SurveyAnswerValueSchema,
   SurveyConditionSchema,
@@ -50,6 +52,7 @@ export {
 } from "../core/index.js";
 export type {
   SurveyAnswers,
+  SurveyAnalysisModel,
   SurveyAnswerValue,
   SurveyCondition,
   SurveyDateQuestion,
@@ -312,3 +315,162 @@ export const SurveyCodebookSchema = z.object({
   ),
 });
 export type SurveyCodebook = z.infer<typeof SurveyCodebookSchema>;
+
+const Sha256Schema = z.string().regex(/^[0-9a-f]{64}$/);
+const ResearchRefSchema = z
+  .string()
+  .regex(/^(construct|variable):[A-Za-z0-9_.-]+$/);
+
+export const ResearchSourceSchema = z.discriminatedUnion("kind", [
+  z.strictObject({
+    kind: z.literal("public"),
+    title: z.string().trim().min(1).max(500),
+    citation: z.string().trim().min(1).max(2000),
+    url: z.string().url().max(2048),
+    license: z.string().trim().min(1).max(200),
+    note: z.string().trim().min(1).max(2000),
+  }),
+  z.strictObject({
+    kind: z.literal("synthetic"),
+    title: z.string().trim().min(1).max(500),
+    citation: z.string().trim().min(1).max(2000).optional(),
+    url: z.string().url().max(2048).optional(),
+    license: z.string().trim().min(1).max(200).optional(),
+    note: z.string().trim().min(1).max(2000),
+  }),
+]);
+export type ResearchSource = z.infer<typeof ResearchSourceSchema>;
+
+export const ResearchColumnMappingSchema = z.strictObject({
+  variableId: z.string().min(1).max(160),
+  column: z.string().min(1).max(500),
+});
+export type ResearchColumnMapping = z.infer<typeof ResearchColumnMappingSchema>;
+
+export const ResearchDatasetImportInputSchema = z.strictObject({
+  surveyId: IdSchema,
+  revisionId: IdSchema,
+  name: z.string().trim().min(1).max(200),
+  csv: z.string().min(1).max(6_000_000),
+  mapping: z.array(ResearchColumnMappingSchema).min(1).max(500),
+  source: ResearchSourceSchema,
+});
+export type ResearchDatasetImportInput = z.infer<
+  typeof ResearchDatasetImportInputSchema
+>;
+
+export const ResearchDatasetSummarySchema = z.object({
+  id: IdSchema,
+  surveyId: IdSchema,
+  revisionId: IdSchema,
+  name: z.string(),
+  source: ResearchSourceSchema,
+  sourceSha256: Sha256Schema,
+  parserVersion: z.string(),
+  rowCount: z.number().int().nonnegative(),
+  /** 完全重复记录条数（映射列规范化后逐列相等）；只披露，导入与运行都不删除。 */
+  duplicateRowCount: z.number().int().nonnegative(),
+  mapping: z.array(ResearchColumnMappingSchema),
+  inputHash: Sha256Schema,
+  createdAt: IsoDateTimeSchema,
+});
+export type ResearchDatasetSummary = z.infer<typeof ResearchDatasetSummarySchema>;
+
+export const ResearchDatasetDetailSchema = ResearchDatasetSummarySchema.extend({
+  rowsHash: Sha256Schema,
+  columns: z.array(z.string()),
+  normalizedRowHashes: z.array(Sha256Schema),
+  missingByVariable: z.record(z.string(), z.number().int().nonnegative()),
+});
+export type ResearchDatasetDetail = z.infer<typeof ResearchDatasetDetailSchema>;
+
+const BootstrapSchema = z.strictObject({
+  resamples: z.number().int().min(100).max(5000).default(1000),
+  seed: z.number().int().min(0).max(0xffffffff).default(20260902),
+});
+
+export const SurveyResearchRecipeSchema = z.discriminatedUnion("type", [
+  z.strictObject({
+    type: z.literal("reliability"),
+    constructIds: z.array(z.string().min(1)).min(1).max(20),
+  }),
+  z.strictObject({
+    type: z.literal("efa"),
+    constructIds: z.array(z.string().min(1)).min(1).max(20),
+    factorCount: z.number().int().min(1).max(20),
+  }),
+  z.strictObject({
+    type: z.literal("ols"),
+    outcome: ResearchRefSchema,
+    predictors: z.array(ResearchRefSchema).min(1).max(30),
+  }),
+  z.strictObject({
+    type: z.literal("moderatedMediation"),
+    x: ResearchRefSchema,
+    m: ResearchRefSchema,
+    y: ResearchRefSchema,
+    w: ResearchRefSchema,
+    covariates: z.array(ResearchRefSchema).max(10).default([]),
+    bootstrap: BootstrapSchema.default({ resamples: 1000, seed: 20260902 }),
+  }),
+]);
+export type SurveyResearchRecipe = z.infer<typeof SurveyResearchRecipeSchema>;
+
+export const SurveyResearchTableSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  columns: z.array(z.object({ key: z.string(), label: z.string() })),
+  rows: z.array(z.record(z.string(), z.union([z.string(), z.number(), z.null()]))),
+});
+export type SurveyResearchTable = z.infer<typeof SurveyResearchTableSchema>;
+
+export const SurveyResearchResultSchema = z.object({
+  method: z.string(),
+  effectiveN: z.number().int().nonnegative(),
+  missingRows: z.number().int().nonnegative(),
+  tables: z.array(SurveyResearchTableSchema),
+  warnings: z.array(z.string()),
+  limitations: z.array(z.string()),
+  chart: z.null(),
+});
+export type SurveyResearchResult = z.infer<typeof SurveyResearchResultSchema>;
+
+export const ResearchRunSummarySchema = z.object({
+  id: IdSchema,
+  surveyId: IdSchema,
+  revisionId: IdSchema,
+  datasetId: IdSchema,
+  sourceKind: z.enum(["public", "synthetic"]),
+  sourceSha256: Sha256Schema,
+  recipe: SurveyResearchRecipeSchema,
+  engineVersion: z.string(),
+  inputHash: Sha256Schema,
+  resultHash: Sha256Schema,
+  createdAt: IsoDateTimeSchema,
+});
+export type ResearchRunSummary = z.infer<typeof ResearchRunSummarySchema>;
+
+export const ResearchRunDetailSchema = ResearchRunSummarySchema.extend({
+  result: SurveyResearchResultSchema,
+});
+export type ResearchRunDetail = z.infer<typeof ResearchRunDetailSchema>;
+
+// 设计内分析模型 id（core 的 idSchema 口径，非 uuid）；modelId 与 recipe 二选一。
+const ResearchModelIdSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[A-Za-z0-9_-]+$/)
+  .refine((id) => !Object.hasOwn(Object.prototype, id), "保留标识符不可作为研究字段");
+
+export const CreateResearchRunInputSchema = z
+  .strictObject({
+    datasetId: IdSchema,
+    recipe: SurveyResearchRecipeSchema.optional(),
+    modelId: ResearchModelIdSchema.optional(),
+  })
+  .refine((input) => Boolean(input.recipe) !== Boolean(input.modelId), {
+    message: "recipe 与 modelId 必须且只能提供一个",
+    path: ["modelId"],
+  });
+export type CreateResearchRunInput = z.infer<typeof CreateResearchRunInputSchema>;

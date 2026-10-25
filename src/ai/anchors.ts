@@ -14,7 +14,7 @@ export async function loadSurveyAnchorLine(
     const survey = await service.requireSurveyAccess(userId, surveyId, "read");
     return (
       `本会话锚定问卷「${survey.title}」（surveyId: ${surveyId}，状态 ${survey.status}）。` +
-      `动手前先用 survey_read 读完整定义、researchDesign 与标准索引；研究设计缺失时先问清研究问题/人群/用途，` +
+      `动手前先用 survey_read 读完整定义、researchDesign 与标准索引；研究设计（含 analysisModels 结构化模型）缺失时先问清研究问题/人群/用途，` +
       `用 survey_edit 的 set_meta.researchDesign 补上（未知事实进 pendingDecisions，不编造人群、许可或验证状态）。` +
       `诊断：按标准区分「确定的问题 / 有依据的风险 / 待验证」，再用 survey_review 登记结构化诊断并给出可应用的建议；` +
       `AI 方法审查只是内部代理证据，不是真人预测试或效度验证，不得说问卷已验证或已通过。` +
@@ -28,7 +28,7 @@ export async function loadSurveyAnchorLine(
 /** surveys 模块级会话（问卷列表页右栏）的锚定行：只管出卷，无锚定资源。 */
 export const SURVEYS_MODULE_ANCHOR_LINE =
   `本会话是问卷模块的对话（问卷列表页）：可以从零生成新问卷——先问清研究问题、目标人群与用途（不清楚就写进 pendingDecisions，不要编造），` +
-  `definition 必须带 researchDesign（研究设计依据），survey_create 创建后自动在用户的工作区打开。` +
+  `definition 必须带 researchDesign（研究设计依据，真实研究计划还要带 analysisModels 结构化模型），survey_create 创建后自动在用户的工作区打开。` +
   `用户明确题数（如「8 题」）时在 survey_create 传 expectedQuestionCount 并让可答题数恰好相等（说明块不计入）；不符会在建卷前被拒，` +
   `按回执的实际题数补齐或删减后重试，不要少给；用户没给数字就不要猜题数。` +
   `修改与诊断已有问卷不在本会话：请让用户进对应问卷的工作台，那里才有 survey_read / survey_edit / survey_review。` +
