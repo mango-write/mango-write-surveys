@@ -1,0 +1,39 @@
+name: ci
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: mango_surveys_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # pg-storage DB 套件探测可用即真跑（缺省可见跳过，不静默）。
+      TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/mango_surveys_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      # @mango-write/ui 经 git+https 解析：公开仓直接可克隆；pnpm 安装 git 依赖
+      # 时跑其 prepare 自动产出 dist（publishConfig 在 pack 时生效）。
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm --filter @mango-write/surveys-standalone-example typecheck
+      - run: pnpm --filter @mango-write/surveys-standalone-example test
+      - run: pnpm --filter @mango-write/surveys-standalone-example web:build
+      - run: pnpm test

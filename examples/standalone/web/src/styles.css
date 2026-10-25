@@ -1,0 +1,25 @@
+/* 独立站前端入口样式：主题层全部在 @mango-write/ui（token/@theme/材质配方），
+ * 本文件只做装配。Tailwind v4 CSS-first；问卷包与 ui 包的组件源码在
+ * node_modules 里（默认不扫描），显式 @source 纳入（web/src → 两级到包根）。 */
+@import "tailwindcss" prefix(tw);
+@plugin "tailwindcss-primeui";
+@import "@mango-write/ui/theme.css";
+/* ui 组件 scoped 样式的合并产物（构建产物，经公开子路径消费）：主仓语境由
+ * build:packages 产出、独立仓由 git 依赖的 prepare 构建产出。 */
+@import "@mango-write/ui/components.css";
+
+@source "../../node_modules/@mango-write/ui/src";
+@source "../../node_modules/@mango-write/surveys/src/vue";
+
+html,
+body,
+#app {
+  min-height: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-size: 14px;
+  line-height: var(--line-height-body);
+}

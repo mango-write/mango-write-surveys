@@ -1,0 +1,83 @@
+{
+  "name": "@mango-write/surveys",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "packageManager": "pnpm@10.20.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./core": {
+      "mango-source": "./src/core/index.ts",
+      "types": "./dist/core/index.d.ts",
+      "default": "./dist/core/index.js"
+    },
+    "./contracts": {
+      "mango-source": "./src/contracts/index.ts",
+      "types": "./dist/contracts/index.d.ts",
+      "default": "./dist/contracts/index.js"
+    },
+    "./server": "./src/server/index.ts",
+    "./ai": "./src/ai/index.ts",
+    "./vue": "./src/vue/index.ts",
+    "./adapters": "./src/adapters/index.ts",
+    "./ports": "./src/ports.ts"
+  },
+  "scripts": {
+    "build": "tsc6 -p tsconfig.build.json",
+    "prepare": "tsc6 -p tsconfig.build.json",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#6e340e56733eb8c2b712cc8ffe5b26e1f1ff7312",
+    "dompurify": "^3.4.17",
+    "hono": "^4.13.13",
+    "jsdom": "^30.0.1",
+    "postgres": "^3.4.5",
+    "qrcode": "^1.5.4",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@tiptap/starter-kit": "^3.29.2",
+    "@tiptap/vue-3": "^3.29.2",
+    "vue": "^3.5.34",
+    "vue-i18n": "^11.4.7",
+    "vue-router": "^4.4.5",
+    "primevue": "^4.2.5",
+    "lucide-vue-next": "^1.0.0"
+  },
+  "devDependencies": {
+    "@tiptap/starter-kit": "^3.29.2",
+    "@tiptap/vue-3": "^3.29.2",
+    "@types/jsdom": "^30.0.0",
+    "@types/node": "^24.13.3",
+    "@types/qrcode": "^1.5.6",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/test-utils": "^2.4.11",
+    "happy-dom": "^20.11.1",
+    "lucide-vue-next": "^1.0.0",
+    "primevue": "^4.2.5",
+    "typescript": "npm:@typescript/typescript6@^6.0.2",
+    "vite": "^8.3.5",
+    "vitest": "^4.1.12",
+    "vue": "^3.5.34",
+    "vue-i18n": "^11.4.7",
+    "vue-router": "^4.4.5",
+    "vue-tsc": "^3.3.11"
+  },
+  "pnpm": {
+    "overrides": {
+      "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#6e340e56733eb8c2b712cc8ffe5b26e1f1ff7312"
+    }
+  },
+  "sideEffects": false,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mango-write/mango-write-surveys.git"
+  },
+  "bugs": {
+    "url": "https://github.com/mango-write/mango-write-surveys/issues"
+  },
+  "homepage": "https://github.com/mango-write/mango-write-surveys#readme"
+}

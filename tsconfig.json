@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    // @mango-write/ui 的 exports 默认 types 指 dist/index.d.ts（纯 TS 消费方不
+    // 需要 Vue 编译插件）；本仓（主仓 workspace 与独立仓两语境均可用）折回
+    // src 类型——独立仓的 ui git 依赖同样随包带 src，vue-tsc 可直接解析。
+    "customConditions": ["mango-source"],
+    "types": ["node", "vite/client"]
+  },
+  "include": ["src/**/*.ts", "src/**/*.vue"]
+}
