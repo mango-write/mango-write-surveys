@@ -1,5 +1,7 @@
 import { createRequire } from "node:module";
 
+import { surveysBrandLogo } from "../brand.js";
+
 import { csvCell } from "../server/serialize.js";
 
 import { buildResearchChartSpecs } from "./chart-spec.js";
@@ -143,7 +145,7 @@ export function renderResearchReportHtml(input: {
   ].filter((entry): entry is [string, string] => typeof entry[1] === "string" && entry[1].length > 0);
   return `<!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'"><title>${escapeHtml(dataset.name)} · MangoWrite Surveys 研究报告</title><style>${researchReportStyles}</style></head><body><main>
-<header><div class="brandbar"><span class="brandmark" aria-hidden="true">M</span><span class="brandname">MangoWrite<span class="brandproduct">Surveys</span></span><span class="brandnote">Research report</span></div><section class="hero"><div class="hero-top"><span class="eyebrow">${escapeHtml(analysisNames[run.recipe.type])} · 固定运行</span><span class="source-badge${synthetic ? " synthetic" : ""}">${sourceLabel}</span></div><h1>${escapeHtml(dataset.name)}</h1><p class="hero-source">${escapeHtml(dataset.source.title)}</p><p class="source-boundary">${escapeHtml(sourceBoundary)}</p></section></header>
+<header><div class="brandbar"><span class="brand-logo">${surveysBrandLogo}</span><span class="brandproduct">Surveys</span><span class="brandnote">Research report</span></div><section class="hero"><div class="hero-top"><span class="eyebrow">${escapeHtml(analysisNames[run.recipe.type])} · 固定运行</span><span class="source-badge${synthetic ? " synthetic" : ""}">${sourceLabel}</span></div><h1>${escapeHtml(dataset.name)}</h1><p class="hero-source">${escapeHtml(dataset.source.title)}</p><p class="source-boundary">${escapeHtml(sourceBoundary)}</p></section></header>
 <section class="metrics" aria-label="样本与数据概览"><div class="metric"><span class="metric-label">本分析有效 n</span><strong class="metric-value">${run.result.effectiveN}</strong><span class="metric-detail">完整病例分析</span></div><div class="metric"><span class="metric-label">缺失行</span><strong class="metric-value">${run.result.missingRows}</strong><span class="metric-detail">未填零、未插补</span></div><div class="metric"><span class="metric-label">数据集原始行</span><strong class="metric-value">${dataset.rowCount}</strong><span class="metric-detail">不含原始行内容</span></div><div class="metric${dataset.duplicateRowCount > 0 ? " warning" : ""}"><span class="metric-label">完全重复记录</span><strong class="metric-value">${dataset.duplicateRowCount}</strong><span class="metric-detail">披露但不删除</span></div></section>
 ${dataset.duplicateRowCount > 0 ? `<aside class="notice"><strong>数据质量提示</strong><span>${escapeHtml(duplicateRowWarning(dataset.duplicateRowCount))}请结合采集过程判断其影响。</span></aside>` : ""}
 ${renderAnalysisSections(run, charts)}

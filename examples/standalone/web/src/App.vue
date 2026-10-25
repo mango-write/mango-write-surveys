@@ -3,6 +3,7 @@
 // SurveysWebHost（useToast 需要组件上下文）后 provide 给包页面。AI 建卷
 // 面板挂 App 级（列表页与工作台都用得到），交付帧经 copilot 桥交给当前页。
 import { provide } from "vue";
+import { surveysBrandLogo } from "../../../../src/brand.js";
 import { useRoute } from "vue-router";
 import Toast from "primevue/toast";
 import ConfirmDialog from "primevue/confirmdialog";
@@ -33,6 +34,7 @@ const sourceUrl = import.meta.env.VITE_SURVEYS_SOURCE_URL ||
   <div class="standalone-app">
     <div class="standalone-route"><RouterView /></div>
     <footer class="standalone-license">
+      <span class="standalone-brand" v-html="surveysBrandLogo" />
       <span>© 2026 MangoWrite contributors</span>
       <a :href="sourceUrl" target="_blank" rel="noopener noreferrer">源代码</a>
       <a
@@ -65,7 +67,10 @@ const sourceUrl = import.meta.env.VITE_SURVEYS_SOURCE_URL ||
   height: 100%;
   box-sizing: border-box;
 }
+.standalone-brand { display: block; width: 108px; line-height: 0; }
+.standalone-brand :deep(svg) { width: 100%; height: auto; }
 .standalone-license {
+  align-items: center;
   flex-shrink: 0;
   display: flex;
   flex-wrap: wrap;

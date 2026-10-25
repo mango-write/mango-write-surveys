@@ -3,6 +3,7 @@
 // 会话 cookie（前端不持任何 token）。文案 zh-CN 硬编码：本页是独立站自有的
 // 装配件，不进问卷包的文案表。
 import { ref } from "vue";
+import { surveysBrandLogo } from "../../../../../src/brand.js";
 import { useRoute, useRouter } from "vue-router";
 import Button from "primevue/button";
 import InputText from "primevue/inputtext";
@@ -56,11 +57,12 @@ async function submit(): Promise<void> {
       style="background: var(--color-surface-base); border: 1px solid var(--color-border-subtle); border-radius: var(--radius-xl); padding: 28px; box-shadow: var(--shadow-lg);"
       @submit.prevent="submit"
     >
+      <div class="login-brand" v-html="surveysBrandLogo" />
       <h1 class="tw:m-0" style="font-size: 18px; font-weight: 600; color: var(--color-text-primary);">
         问卷管理登录
       </h1>
       <p class="tw:m-0" style="font-size: 12.5px; color: var(--color-text-secondary);">
-        输入管理员密码（环境变量 ADMIN_PASSWORD）进入问卷管理台。
+        输入管理员密码，进入问卷工作台。
       </p>
       <label class="tw:flex tw:flex-col tw:gap-2">
         <span style="font-size: 13px; color: var(--color-text-primary);">管理员密码</span>
@@ -79,3 +81,8 @@ async function submit(): Promise<void> {
     </form>
   </main>
 </template>
+
+<style scoped>
+.login-brand { width: 200px; max-width: 100%; line-height: 0; margin-bottom: 8px; }
+.login-brand :deep(svg) { width: 100%; height: auto; }
+</style>

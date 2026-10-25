@@ -177,6 +177,8 @@ describe("研究 HTML 报告", () => {
       expect(html).toContain('<svg width="960"');
       expect(html).toContain("<path");
       expect(html).toContain("MangoWrite");
+      expect(html).toContain('class="brand-logo"');
+      expect(html).toContain('aria-label="MangoWrite"');
       expect(html).toContain("复核附录");
       expect(html).toContain(researchRun.result.method);
       expect(html).toContain(researchRun.id);
