@@ -1042,13 +1042,17 @@ describe("问卷诊断修订的工作台闭环", () => {
   const review = (version = 2) => ({
     type: "survey_review" as const, surveyId: "s-1", operationId: "review-integration-1",
     baseDraftVersion: version, summary: "澄清时间范围",
-    findings: [{ id: "f1", checkId: "wording.timeframe", questionId: "q1", title: "明确时间",
-      severity: "major" as const, reason: "行为题需要时间范围", recommendation: "明确过去一学期",
-      suggestedOps: [{ op: "update_question" as const, questionId: "q1", patch: { title: "过去一学期的备注" } }],
-    }],
+    findings: [
+      { id: "f1", checkId: "wording.timeframe", questionId: "q1", title: "明确时间",
+        severity: "major" as const, reason: "行为题需要时间范围", recommendation: "明确过去一学期",
+        suggestedOps: [{ op: "update_question" as const, questionId: "q1", patch: { title: "过去一学期的备注" } }] },
+      { id: "f2", checkId: "wording.timeframe", questionId: "q1", title: "统一核心题口径",
+        severity: "major" as const, reason: "核心题需要完整回答", recommendation: "设为必答",
+        suggestedOps: [{ op: "update_question" as const, questionId: "q1", patch: { required: true } }] },
+    ],
   });
 
-  it("应用建议进入同一自动保存与撤销链，应用后诊断立即过期", async () => {
+  it("整批应用只产生一个保存与撤销步骤，落盘后清掉旧方案并重新检查", async () => {
     const { wrapper, copilotRegister } = await mountWorkspace("/u/surveys/s-1", "outline", { copilot: true });
     const handlers = copilotRegister!.mock.calls[0]![0];
     handlers.onSurveyDeliveryFrame(review());
@@ -1056,17 +1060,20 @@ describe("问卷诊断修订的工作台闭环", () => {
     vi.useFakeTimers();
     const panel = wrapper.findComponent(SurveyResearchAssistant);
     expect(panel.props("stale")).toBe(false);
-    panel.vm.$emit("apply", "f1");
+    expect(panel.props("plan")).toMatchObject({ status: "ready" });
+    panel.vm.$emit("apply");
     await flushPromises();
-    expect(panel.props("stale")).toBe(true);
+    expect(mocks.save).toHaveBeenCalledTimes(1);
+    expect(panel.props("report")).toBeNull();
     await vi.advanceTimersByTimeAsync(1500);
     await flushPromises();
-    expect(mocks.save).toHaveBeenCalled();
-    expect(mocks.save.mock.calls.at(-1)![2].questions[0].title).toBe("过去一学期的备注");
+    expect(mocks.save).toHaveBeenCalledTimes(1);
+    expect(mocks.save.mock.calls.at(-1)![2].questions[0]).toMatchObject({ title: "过去一学期的备注", required: true });
     await wrapper.find(`button[aria-label="${t("surveys.undo")}"]`).trigger("click");
     await vi.advanceTimersByTimeAsync(1500);
     await flushPromises();
-    expect(mocks.save.mock.calls.at(-1)![2].questions[0].title).toBe("备注");
+    expect(mocks.save).toHaveBeenCalledTimes(2);
+    expect(mocks.save.mock.calls.at(-1)![2].questions[0]).toMatchObject({ title: "备注", required: false });
     wrapper.unmount();
   });
 
@@ -1076,7 +1083,7 @@ describe("问卷诊断修订的工作台闭环", () => {
     await flushPromises();
     const panel = wrapper.findComponent(SurveyResearchAssistant);
     expect(panel.props("stale")).toBe(true);
-    panel.vm.$emit("apply", "f1");
+    panel.vm.$emit("apply");
     await flushPromises();
     expect(mocks.save).not.toHaveBeenCalled();
     wrapper.unmount();

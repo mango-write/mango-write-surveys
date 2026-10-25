@@ -23,6 +23,7 @@ import type {
 } from "../../contracts/index.js";
 import {
   applySurveyOps,
+  buildSurveyReviewPlan,
   canonicalSurveyJson,
   validateSurveyDefinition,
 } from "../../core/index.js";
@@ -176,6 +177,10 @@ const aiStaleDelivery = ref<SurveyEditDelivery | null>(null);
 type SurveyReviewDelivery = Extract<ToolSurveyDelivery, { type: "survey_review" }>;
 const reviewReport = ref<SurveyReviewDelivery | null>(null);
 const reviewBusy = ref(false);
+const reviewApplying = ref(false);
+const reviewPlan = computed(() => reviewReport.value
+  ? buildSurveyReviewPlan(definition.value, reviewReport.value.findings)
+  : null);
 const reviewStale = computed(() => !!reviewReport.value && (
   reviewReport.value.baseDraftVersion !== draftVersion.value || !["idle", "saved"].includes(autosave.status.value)
 ));
@@ -187,8 +192,8 @@ async function askResearch(kind: "review" | "design") {
   }
   const prompt = t(`surveys.assistant.${kind === "review" ? "reviewPrompt" : "designPrompt"}`);
   if (!host.copilot?.sendPrompt) {
-    host.copilot?.fillComposer(prompt);
-    host.copilot?.focusComposer();
+    host.copilot?.fillComposer?.(prompt);
+    host.copilot?.focusComposer?.();
     return;
   }
   reviewBusy.value = true;
@@ -200,18 +205,27 @@ async function askResearch(kind: "review" | "design") {
     reviewBusy.value = false;
   }
 }
-function applyReviewSuggestion(id: string) {
-  const report = reviewReport.value;
-  const finding = report?.findings.find((entry) => entry.id === id);
-  if (!report || !finding?.suggestedOps?.length || reviewStale.value || !survey.value?.canWrite) return;
-  const result = applySurveyOps(definition.value, finding.suggestedOps);
-  if (result.rejected.length || !result.applied.length) {
-    notify.warn(t("surveys.assistant.applyFailed"));
-    return;
+async function applyReviewPlan() {
+  const plan = reviewPlan.value;
+  if (!plan || plan.status !== "ready" || !plan.candidateDefinition || reviewStale.value ||
+    reviewApplying.value || !survey.value?.canWrite) return;
+  reviewApplying.value = true;
+  try {
+    history.commit(
+      { ...history.current.value, definition: plan.candidateDefinition },
+      { source: "assistant", label: reviewReport.value?.summary },
+    );
+    autosave.schedule();
+    notify.success(t("surveys.assistant.applied"));
+    if (!await autosave.flush()) {
+      notify.warn(t("surveys.assistant.saveFirst"));
+      return;
+    }
+    reviewReport.value = null;
+    await askResearch("review");
+  } finally {
+    reviewApplying.value = false;
   }
-  history.commit({ ...history.current.value, definition: result.definition }, { source: "assistant", label: finding.title });
-  autosave.schedule();
-  notify.success(t("surveys.assistant.applied"));
 }
 // AI 建卷落地提示（issue #217）：survey_create 帧载荷经一次性单槽带进工作区，
 // load 成功后取走展示——生成会话是 global scope，落进右岛的新 survey 会话是
@@ -761,16 +775,18 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
               <SurveyResearchAssistant
                 v-if="stage === 'design'"
                 :design="definition.researchDesign"
+                :definition="definition"
                 :questions="definition.questions"
                 :report="reviewReport"
+                :plan="reviewPlan"
                 :stale="reviewStale"
-                :busy="reviewBusy"
+                :busy="reviewBusy || reviewApplying"
                 :disabled="!survey.canWrite"
                 :has-copilot="!!host.copilot"
                 @update:design="commitDefinition({ ...definition, researchDesign: $event })"
                 @review="askResearch('review')"
                 @design-request="askResearch('design')"
-                @apply="applyReviewSuggestion"
+                @apply="applyReviewPlan"
                 @locate="selectedQuestionId = $event"
                 @preview="previewOpen = true"
               />
