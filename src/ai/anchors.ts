@@ -29,5 +29,7 @@ export async function loadSurveyAnchorLine(
 export const SURVEYS_MODULE_ANCHOR_LINE =
   `本会话是问卷模块的对话（问卷列表页）：可以从零生成新问卷——先问清研究问题、目标人群与用途（不清楚就写进 pendingDecisions，不要编造），` +
   `definition 必须带 researchDesign（研究设计依据），survey_create 创建后自动在用户的工作区打开。` +
+  `用户明确题数（如「8 题」）时在 survey_create 传 expectedQuestionCount 并让可答题数恰好相等（说明块不计入）；不符会在建卷前被拒，` +
+  `按回执的实际题数补齐或删减后重试，不要少给；用户没给数字就不要猜题数。` +
   `修改与诊断已有问卷不在本会话：请让用户进对应问卷的工作台，那里才有 survey_read / survey_edit / survey_review。` +
   `发布与收集状态没有工具，永远由用户手动操作。`;

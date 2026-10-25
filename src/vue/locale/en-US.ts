@@ -53,8 +53,9 @@ export default {
   "requestFailed": "The AI request did not complete. Check the conversation for details and retry.",
   "applied": "Changes applied and undoable. Copilot will check again after saving.",
   "applyFailed": "The batch could not be applied, so the survey is unchanged. Check again.",
-  "analysisPrompt": "Use research_read to inspect the current survey publication and data. Select supported descriptive, grouped or crosstab analysis to answer the research question, then compute and save a fixed run with research_analyze. Explain valid samples, missing values, filters and limitations. Do not exclude responses by default or invent significance or causality.",
+  "analysisPrompt": "Use research_read to inspect the current survey publication and data. Select supported descriptive, grouped or crosstab analysis to answer the research question, then compute and save a fixed run with research_analyze. Use the returned runId to call research_run_read and read back that same run before explaining valid samples, missing values, filters and limitations. Actually call all three tools. Do not exclude responses by default or invent significance or causality.",
   "analyze": "Analyze with Copilot",
+  "analysisNoRun": "Copilot did not create a fixed analysis this time. Check the conversation for the reason and retry.",
   "trial": "Invite respondents to try it",
   "trialHint": "Preview checks the flow without creating formal responses. Ask target respondents to explain the questions and record their feedback separately."
 },

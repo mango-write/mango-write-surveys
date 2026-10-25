@@ -215,6 +215,27 @@ describe("研究设计与诊断 — 真实 service facade 往返", () => {
     });
   });
 
+  it("题数不符在建卷前拒绝：不产生行，同一 operationId 修正后重试只建一份", async () => {
+    const { tools, actor, rows } = setup();
+    expect(definitionWithDesign.questions).toHaveLength(2);
+
+    const rejected = await tools.surveyCreate.run(
+      { title: definitionWithDesign.title, expectedQuestionCount: 3, definition: definitionWithDesign },
+      { actor, scopeSurveyId: null, operationId: "op-count-1" },
+    );
+    expect(rejected.ok).toBeUndefined();
+    expect(String(rejected.error)).toContain("题数不符");
+    expect(rows.size).toBe(0);
+
+    const retried = await tools.surveyCreate.run(
+      { title: definitionWithDesign.title, expectedQuestionCount: 2, definition: definitionWithDesign },
+      { actor, scopeSurveyId: null, operationId: "op-count-1" },
+    );
+    expect(retried.ok).toBe(true);
+    expect(rows.size).toBe(1);
+    expect(rows.get(String(retried.surveyId))!.draftVersion).toBe(2);
+  });
+
   it("set_meta 清除后落库：设计中不再有 researchDesign，定义仍可读", async () => {
     const { tools, service, actor, rows } = setup();
     const created = await tools.surveyCreate.run(

@@ -36,6 +36,23 @@ const baseDefinition = {
   pages: [{ id: "p1", title: "页", questionIds: ["q1"] }],
 };
 
+function definitionWithQuestions(count: number) {
+  const questions = Array.from({ length: count }, (_, index) => ({
+    id: `q${index + 1}`,
+    type: "text" as const,
+    title: `第 ${index + 1} 题`,
+    required: false,
+  }));
+  return {
+    version: 1 as const,
+    title: "题数约束问卷",
+    description: "",
+    consent: "",
+    questions,
+    pages: [{ id: "p1", title: "页", questionIds: questions.map((question) => question.id) }],
+  };
+}
+
 const researchDesignFixture = {
   researchQuestion: "研究者如何使用 AI 辅助写作？",
   population: "高校理工科博士生",
@@ -278,6 +295,90 @@ describe("survey_create run", () => {
     expect(result.hint).toContain("matrix_single");
     expect(service.createSurvey).not.toHaveBeenCalled();
   });
+
+  it("明确题数且定义匹配：照常创建", async () => {
+    service.createSurvey.mockResolvedValueOnce({ id: SURVEY_ID, draftVersion: 1 });
+    const result = await tools.surveyCreate.run(
+      { title: "八题问卷", expectedQuestionCount: 8, definition: definitionWithQuestions(8) },
+      { actor: ACTOR, scopeSurveyId: null, operationId: OP_ID },
+    );
+    expect(result.ok).toBe(true);
+    expect(result.questionCount).toBe(8);
+    expect(service.createSurvey).toHaveBeenCalledTimes(1);
+  });
+
+  it("少于明确题数：建卷前拒绝并给实际题数，不调用 service", async () => {
+    service.createSurvey.mockResolvedValueOnce({ id: SURVEY_ID, draftVersion: 1 });
+    const result = await tools.surveyCreate.run(
+      { title: "八题问卷", expectedQuestionCount: 8, definition: definitionWithQuestions(5) },
+      { actor: ACTOR, scopeSurveyId: null, operationId: OP_ID },
+    );
+    expect(result.ok).toBeUndefined();
+    expect(String(result.error)).toContain("题数不符");
+    expect(String(result.error)).toContain("只有 5 题");
+    expect(result.expectedQuestionCount).toBe(8);
+    expect(result.actualQuestionCount).toBe(5);
+    expect(String(result.hint)).toContain("重试");
+    expect(service.createSurvey).not.toHaveBeenCalled();
+    expect(service.updateSurvey).not.toHaveBeenCalled();
+  });
+
+  it("多于明确题数：同样在建卷前拒绝", async () => {
+    const result = await tools.surveyCreate.run(
+      { title: "八题问卷", expectedQuestionCount: 8, definition: definitionWithQuestions(9) },
+      { actor: ACTOR, scopeSurveyId: null, operationId: OP_ID },
+    );
+    expect(String(result.error)).toContain("题数不符");
+    expect(result.actualQuestionCount).toBe(9);
+    expect(service.createSurvey).not.toHaveBeenCalled();
+  });
+
+  it("未声明题数不设限：不做任何题数硬编码", async () => {
+    service.createSurvey.mockResolvedValueOnce({ id: SURVEY_ID, draftVersion: 1 });
+    const result = await tools.surveyCreate.run(
+      { title: "五题问卷", definition: definitionWithQuestions(5) },
+      { actor: ACTOR, scopeSurveyId: null, operationId: OP_ID },
+    );
+    expect(result.ok).toBe(true);
+    expect(result.questionCount).toBe(5);
+  });
+
+  it("说明块不是题目：不计入明确题数", async () => {
+    const base = definitionWithQuestions(3);
+    const definition = {
+      ...base,
+      questions: [
+        ...base.questions,
+        { id: "s1", type: "statement", title: "", required: false, body: "以下问题请按最近三个月作答。" },
+      ],
+      pages: [{ id: "p1", title: "页", questionIds: ["q1", "q2", "q3", "s1"] }],
+    };
+    service.createSurvey.mockResolvedValueOnce({ id: SURVEY_ID, draftVersion: 1 });
+    const matched = await tools.surveyCreate.run(
+      { title: "三题问卷", expectedQuestionCount: 3, definition },
+      { actor: ACTOR, scopeSurveyId: null, operationId: OP_ID },
+    );
+    expect(matched.ok).toBe(true);
+    expect(matched.questionCount).toBe(3);
+
+    const mismatched = await tools.surveyCreate.run(
+      { title: "四题问卷", expectedQuestionCount: 4, definition },
+      { actor: ACTOR, scopeSurveyId: null, operationId: OP_ID },
+    );
+    expect(String(mismatched.error)).toContain("题数不符");
+    expect(mismatched.actualQuestionCount).toBe(3);
+  });
+
+  it("expectedQuestionCount 非法（0 / 字符串 / 超上限）：错误可自愈，不建卷", async () => {
+    for (const expectedQuestionCount of [0, "8", 51]) {
+      const result = await tools.surveyCreate.run(
+        { title: "x", expectedQuestionCount, definition: definitionWithQuestions(1) },
+        { actor: ACTOR, scopeSurveyId: null, operationId: OP_ID },
+      );
+      expect(String(result.error)).toContain("expectedQuestionCount");
+    }
+    expect(service.createSurvey).not.toHaveBeenCalled();
+  });
 });
 
 describe("surveyDeliveryFromResult", () => {
@@ -385,7 +486,53 @@ describe("survey_review run", () => {
     expect(result.baseDraftVersion).toBe(3);
     expect((result.findings as unknown[])[0]).toMatchObject({ id: "f1", severity: "major" });
     expect(String(result.note)).toContain("内部代理证据");
+    // 回执口径 = 画布的整批候选（buildSurveyReviewPlan 一次确认整批应用），
+    // 不能引导用户逐条确认——那与宿主实际交付方式相反。
+    expect(String(result.note)).toContain("整批");
+    expect(String(result.note)).toContain("一次确认");
+    expect(String(result.note)).not.toContain("用户确认后才在画布生效");
     expect(service.updateSurvey).not.toHaveBeenCalled();
+  });
+
+  it("三组 suggestedOps 全部保留：整批候选依赖各条修订不被裁掉", async () => {
+    const findings = [
+      {
+        id: "f1",
+        checkId: "research_goal.vague_objective",
+        questionId: "q1",
+        title: "目标模糊",
+        severity: "major" as const,
+        reason: "r1",
+        recommendation: "c1",
+        suggestedOps: [{ op: "update_question", questionId: "q1", patch: { title: "你最近一次使用 AI 做什么？" } }],
+      },
+      {
+        id: "f2",
+        checkId: "sampling_recruitment.channel_bias",
+        title: "渠道偏差",
+        severity: "minor" as const,
+        reason: "r2",
+        recommendation: "c2",
+        suggestedOps: [{ op: "set_meta", description: "样本来自院系邮件列表，存在覆盖偏差。" }],
+      },
+      {
+        id: "f3",
+        checkId: "burden.total_questions",
+        title: "题量偏多",
+        severity: "minor" as const,
+        reason: "r3",
+        recommendation: "c3",
+        suggestedOps: [{ op: "set_meta", consent: "本次调查约 5 分钟，可随时退出。" }],
+      },
+    ];
+    const result = await tools.surveyReview.run(
+      { baseDraftVersion: 3, summary: "三组修订", findings },
+      SURVEY_CTX,
+    );
+    expect(result.ok).toBe(true);
+    const returned = result.findings as Array<{ id: string; suggestedOps?: unknown[] }>;
+    expect(returned.map((item) => item.id)).toEqual(["f1", "f2", "f3"]);
+    expect(returned.every((item) => item.suggestedOps?.length === 1)).toBe(true);
   });
 
   it("目录外发现仍保留，不伪造标准依据", async () => {

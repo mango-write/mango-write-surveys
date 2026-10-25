@@ -53,8 +53,9 @@ export default {
   "requestFailed": "AI 请求未完成，请在右侧对话查看原因后重试。",
   "applied": "修改已应用，可撤销；保存后将自动重新检查。",
   "applyFailed": "修改未能作为整批应用，问卷未改动。请重新检查。",
-  "analysisPrompt": "请用 research_read 读取当前问卷发布版本的数据概况，选择能回答研究问题的现有描述统计、分组或交叉分析，用 research_analyze 计算并保存固定运行。解释有效样本、缺失、筛选和限制，不默认排除答卷，不做无依据显著性或因果结论。",
+  "analysisPrompt": "请用 research_read 读取当前问卷发布版本的数据概况，选择能回答研究问题的现有描述统计、分组或交叉分析，用 research_analyze 计算并保存固定运行；再用 research_analyze 返回的 runId 调用 research_run_read 回读同一次运行，然后解释有效样本、缺失、筛选和限制。三个工具都要实际调用，不默认排除答卷，不做无依据显著性或因果结论。",
   "analyze": "让 Copilot 分析",
+  "analysisNoRun": "Copilot 本轮未生成固定分析，请在对话中查看原因后重试。",
   "trial": "邀请目标人群试填",
   "trialHint": "预览可检查流程。请另外请目标人群解释题意并记录反馈；预览不生成正式答卷。"
 },

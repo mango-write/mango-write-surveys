@@ -347,6 +347,14 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
           type: "string",
           description: `问卷标题，1–${SURVEY_LIMITS.maxTitleLength} 字。`,
         },
+        expectedQuestionCount: {
+          type: "integer",
+          minimum: 1,
+          maximum: SURVEY_LIMITS.maxQuestions,
+          description:
+            "仅当用户本轮明确说了题目数量（如「8 题」）时传入该数字；用户没给具体数字就省略，不要猜。" +
+            "definition 里的可答题数（statement 说明块不计入）必须与之完全相等：不符时本工具在建卷前拒绝并回报实际题数，请补齐或删减后重试。",
+        },
         definition: {
           type: "object",
           description:
@@ -385,6 +393,31 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
         };
       }
       const definition = parsed.data as SurveyDefinition;
+      const askableCount = definition.questions.filter((question) => question.type !== "statement").length;
+      // 用户明确题数时硬校验（#224）：真实模型曾把「8 题」交付成 5 题且无人察觉。
+      // 未申报就不设限——不知道题数时不猜、不按示例数字凑。
+      const expectedRaw = args["expectedQuestionCount"];
+      if (expectedRaw !== undefined && expectedRaw !== null) {
+        if (
+          typeof expectedRaw !== "number" ||
+          !Number.isInteger(expectedRaw) ||
+          expectedRaw < 1 ||
+          expectedRaw > SURVEY_LIMITS.maxQuestions
+        ) {
+          return {
+            error: `expectedQuestionCount 不合法（${String(expectedRaw)}）：传 1–${SURVEY_LIMITS.maxQuestions} 的整数，用户没明确题数就省略。`,
+          };
+        }
+        // 说明块不是题目（不收集答案），计入会把「7 题 + 1 段说明」蒙成 8 题。
+        if (askableCount !== expectedRaw) {
+          return {
+            error: `题数不符：用户要求 ${expectedRaw} 题，本次 definition 只有 ${askableCount} 题（说明块不计入）。问卷未创建。`,
+            expectedQuestionCount: expectedRaw,
+            actualQuestionCount: askableCount,
+            hint: `按用户要求调整到恰好 ${expectedRaw} 题后重试；本次没有建卷，重试不会留下多份问卷。`,
+          };
+        }
+      }
       const issues = [...validateSurveyDefinition(definition), ...validateSurveyDesign(definition)];
       try {
         const created = await service.createSurvey(ctx.actor, {
@@ -407,7 +440,7 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
           surveyId: created.id,
           operationId: ctx.operationId,
           title,
-          questionCount: definition.questions.length,
+          questionCount: askableCount,
           pageCount: definition.pages.length,
           ...(issues.length > 0 ? { issues, issuesNote: issuesBrief(issues) } : {}),
           note:
@@ -453,6 +486,7 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
             "checkId 必须是本次 survey_read 返回的标准索引里真实存在的 id；questionId 必须是定义里存在的题目 id。" +
             "severity 用 blocker/major/minor 的目录定义判断；reason 写判据与原文依据，recommendation 写怎么改。" +
             "suggestedOps 只放能安全自动应用的修订（全部会在当前草稿上校验可应用），无法自动修就只写 recommendation。" +
+            "各条 suggestedOps 由画布按共同原因合并成整批候选、一次确认后整批应用，无需逐条给出替代方案。" +
             "目录外发现省略 checkId，仍留在 findings 并写清依据与待核验限制，不编造目录依据。",
         },
       },
@@ -564,8 +598,10 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
           summary,
           findings,
           note:
-            "诊断已登记并展示在用户的问卷画布。建议尚未应用：用户确认后才在画布生效。" +
+            "诊断已登记并展示在用户的问卷画布：画布会把可自动修订的 suggestedOps 按共同原因合并成至多 3 组候选，" +
+            "用户一次确认即整批应用（不是逐条应用，也没有只应用一部分的中间态）；没有 suggestedOps 的条目只作人工待办。" +
             `${AGENT_REVIEW_DISCLAIMER}向用户转述结论与建议时不得声称问卷已验证、已通过或已发布；` +
+            "按组概括改动，不要把建议拆成逐条确认；" +
             "要把「确定的问题」「有依据的风险」「还缺证据的判断」说清楚。",
         };
       } catch (err) {
