@@ -1,15 +1,19 @@
-// 问卷 AI 工具三件套（issue #217/#223 §6）：survey_read（L0 读摘要定位 id）/
+// 问卷 AI 工具四件套（issue #217/#224）：survey_read（完整定义 + 标准索引）/
 // survey_edit（ops 批量改卷，host-applied：服务端只校验不落库，宿主页面应用并
-// 走撤销栈与自动保存）/ survey_create（新资源直写：建行 + 存草稿定义）。
+// 走撤销栈与自动保存）/ survey_create（新资源直写：建行 + 存草稿定义）/
+// survey_review（模型阅读后登记结构化诊断，不落库、不改卷、不冒充真人验证）。
 // AI 永不触碰发布与状态机——模块里没有这类工具，描述里也明说。工具契约是包自
 // 有的 SurveyAiToolSpec；宿主（主站 copilot、独立站）各自映射到自己的声明格式。
 // 交付载荷经 surveyDeliveryFromResult 摘出 UI 面：随 tool_step done 帧下发、
 // 只进 UI 不回灌模型。
 import { createHash } from "node:crypto";
+import { z } from "zod";
 
+import { SurveyReviewFindingSchema, type SurveyReviewFinding } from "../contracts/index.js";
 import {
   applySurveyOps,
   validateSurveyDefinition,
+  validateSurveyDesign,
   SURVEY_LIMITS,
   SurveyDefinitionSchema,
   type SurveyDefinition,
@@ -21,6 +25,12 @@ import {
 import { SurveyError } from "../server/errors.js";
 import { asDefinition, type SurveysService } from "../server/service.js";
 import type { SurveysActor } from "../ports.js";
+import {
+  AGENT_REVIEW_DISCLAIMER,
+  STANDARDS_CHECK_IDS,
+  compactStandardsDigest,
+  standardsCheckDetail,
+} from "./standards-hint.js";
 
 /** (userId, operationId) → 确定性 UUIDv5 形态 sha256（与主站
  *  deriveNativeClientRequestId 同一手法）：同一次 AI 建卷操作的重试恒得同一
@@ -58,7 +68,19 @@ export interface SurveyAiTools {
   surveyRead: SurveyAiToolSpec;
   surveyEdit: SurveyAiToolSpec;
   surveyCreate: SurveyAiToolSpec;
+  surveyReview: SurveyAiToolSpec;
 }
+
+// 研究设计依据（#224）：生成前先写清楚要回答什么、对谁、怎么分析。未知事实
+// 进 pendingDecisions/assumptions，不编造人群、许可与验证状态。
+export const RESEARCH_DESIGN_HINT =
+  "definition.researchDesign（可选但生成时必须给）：{researchQuestion,population,recruitment," +
+  "purpose:'describe'|'compare'|'measure',timeBudgetMinutes,constructs:[{id,label,definition,questionIds:[题 id]}]," +
+  "analysisPlan,assumptions:[字符串],pendingDecisions:[字符串]}。" +
+  "constructs 是「维度 → 题目」映射，题干必须真的能测这个概念；没有题目覆盖的维度会被校验报 design_construct_unmapped。" +
+  "人群、招募渠道、许可与既有验证状态不了解时写进 pendingDecisions（或留空并在 analysisPlan/assumptions 说明），不要编造；" +
+  "已有问卷补设计用 survey_edit 的 set_meta.researchDesign（null = 清除）。" +
+  "可选 pretest:{participantCount,notes,recordedAt} 是作者自报的试填记录，引用它不等于做完独立核验或量表验证。";
 
 // 题型词表（与 core definition.ts 同步；描述里给模型载荷要点）。工具参数与
 // runner 的 system 提示词共用这一份，不复制两份。
@@ -70,7 +92,9 @@ export const QUESTION_PAYLOAD_HINT =
   "scale→min,max(跨度≤10),minLabel?,maxLabel?；rating→max(3–10)；nps→minLabel?,maxLabel?(0–10 固定)；" +
   "date→min?,max?(YYYY-MM-DD)；time→无载荷；matrix_single/matrix_multiple→rows:[{label}](1–20),columns:[{label}](2–10)；" +
   "matrix_text→rows:[{label}](1–20)，每行一个文本框，无 columns；" +
-  "multi_text→items:[{label}](1–20)；statement→body(markdown 说明，非题目，required 必须为 false)。";
+  "multi_text→items:[{label}](1–20)；statement→body(markdown 说明，非题目，required 必须为 false)。" +
+  '筛选追问必须实际配置 showIf:{questionId:"q_used",op:"eq",value:"yes"}（value 是前题选项 id）；' +
+  '只在题干写「仅使用者」不会隐藏题目。未使用者题用对应 no 选项条件，不能只在研究设计中声称已跳过。';
 
 const optionSummary = (question: SurveyQuestion): string => {
   switch (question.type) {
@@ -143,28 +167,58 @@ const issuesBrief = (issues: SurveyIssue[]): string =>
 export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
   const surveyRead: SurveyAiToolSpec = {
     name: "survey_read",
-    argsHint: "{}",
-    parameters: { type: "object", properties: {}, additionalProperties: false },
+    argsHint: '{"checkIds":["wording.double_barrel"]}',
+    parameters: {
+      type: "object",
+      properties: {
+        checkIds: {
+          type: "array",
+          items: { type: "string" },
+          description:
+            "可选：按 id 取标准检查项的完整判据（claim/来源/反例/处理方式），最多 10 条。" +
+            "不传则只带紧凑标准索引（id/标题/维度/默认严重级别）。",
+        },
+      },
+      additionalProperties: false,
+    },
     write: false,
     hostApplied: false,
-    async run(_args, ctx) {
+    async run(args, ctx) {
       const surveyId = ctx.scopeSurveyId;
       if (!surveyId) {
         return { error: "survey_read 锚定当前问卷：请在问卷工作台的会话里使用本工具。" };
       }
+      const requested = Array.isArray(args["checkIds"])
+        ? args["checkIds"].filter((id): id is string => typeof id === "string").slice(0, 10)
+        : [];
       try {
         const survey = await service.requireSurveyAccess(ctx.actor.userId, surveyId, "read");
         const definition = asDefinition(survey.draftJson);
-        const issues = validateSurveyDefinition(definition);
+        const issues = [...validateSurveyDefinition(definition), ...validateSurveyDesign(definition)];
+        const detail = requested.length > 0 ? standardsCheckDetail(requested) : null;
         return {
           ok: true,
           surveyId,
           status: survey.status,
           draftVersion: survey.draftVersion,
+          // 完整定义是权威内容（诊断必须基于全文，摘要会丢掉措辞与载荷）；
+          // summary 只是页/题索引，便于快速定位 id。
+          definition,
           summary: summarizeDefinition(definition),
+          ...(definition.researchDesign
+            ? {}
+            : {
+                researchDesignHint:
+                  "本问卷还没有 researchDesign（研究设计依据）。需要诊断或生成前先让用户确认研究问题/人群/用途，" +
+                  "再用 survey_edit 的 set_meta.researchDesign 补上；未知事实进 pendingDecisions，不要编造。",
+              }),
+          standards: compactStandardsDigest(),
+          ...(detail ? { standardsDetail: detail } : {}),
           ...(issues.length > 0 ? { issues, issuesNote: issuesBrief(issues) } : {}),
           note:
-            "summary 里的 id 是修改操作（survey_edit）的定位依据；survey_edit 必须把本次返回的 draftVersion 作为 baseDraftVersion 传入。发布与状态变更没有工具，永远由用户手动操作。",
+            "summary 里的 id 是修改操作（survey_edit）与诊断引用（survey_review）的定位依据；" +
+            "survey_edit / survey_review 必须把本次返回的 draftVersion 作为 baseDraftVersion 传入。" +
+            "发布与状态变更没有工具，永远由用户手动操作。",
         };
       } catch (err) {
         if (err instanceof SurveyError) return { error: `问卷不可读（${err.code}）` };
@@ -192,7 +246,7 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
           type: "array",
           description:
             "要应用的操作列表（一次调用批量给出，不要拆成多次调用）。每个操作 {op, ...}，词表：" +
-            "set_meta{title?,description?,consent?}；" +
+            "set_meta{title?,description?,consent?,researchDesign?(null=清除)}（研究设计字段见 definition.researchDesign）；" +
             "add_page{title,afterPageId?,description?,pageId?}；" +
             "update_page{pageId,title?,description?(空串=清除)}；" +
             "remove_page{pageId}（题目并入相邻页）；" +
@@ -296,7 +350,10 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
         definition: {
           type: "object",
           description:
-            "完整问卷定义：{version:1,title,description,consent,questions:[...],pages:[...]}。" +
+            "完整问卷定义：{version:1,title,description,consent,questions:[...],pages:[...],researchDesign:{...}}。" +
+            "生成时必须带 researchDesign（" +
+            RESEARCH_DESIGN_HINT +
+            "）。" +
             "questions 每项含 id(可省略自动生成)/type/title(纯文本)/required 与题型载荷（" +
             QUESTION_PAYLOAD_HINT +
             "）。pages 每项含 id(可省略)/title/questionIds（每题恰属一页；页序 = 全卷题序）。" +
@@ -328,7 +385,7 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
         };
       }
       const definition = parsed.data as SurveyDefinition;
-      const issues = validateSurveyDefinition(definition);
+      const issues = [...validateSurveyDefinition(definition), ...validateSurveyDesign(definition)];
       try {
         const created = await service.createSurvey(ctx.actor, {
           title,
@@ -366,10 +423,162 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
     },
   };
 
-  return { surveyRead, surveyEdit, surveyCreate };
+  const REVIEW_FINDINGS_LIMIT = 20;
+
+  const findingParameters = z.toJSONSchema(SurveyReviewFindingSchema);
+  delete findingParameters.$schema;
+  const surveyReview: SurveyAiToolSpec = {
+    name: "survey_review",
+    argsHint:
+      '{"baseDraftVersion":3,"summary":"覆盖基本齐全，两处措辞需修订","findings":[{"id":"f1","checkId":"wording.double_barrel","questionId":"q2","title":"双重提问","severity":"major","reason":"题干同时问了两件事","recommendation":"拆成两题","suggestedOps":[{"op":"update_question","questionId":"q2","patch":{"title":"..."}}]}]}',
+    parameters: {
+      type: "object",
+      properties: {
+        baseDraftVersion: {
+          type: "integer",
+          minimum: 1,
+          description:
+            "诊断所依据的基线：最近一次 survey_read 返回的 draftVersion。问卷在读取后被修改时本工具拒绝（stale_read），需重新读取后再诊断。",
+        },
+        summary: {
+          type: "string",
+          description: "一句话概括这次诊断的结论（≤300 字，不能只写「已检查」）。",
+        },
+        findings: {
+          type: "array",
+          maxItems: REVIEW_FINDINGS_LIMIT,
+          items: findingParameters,
+          description:
+            `诊断条目（最多 ${REVIEW_FINDINGS_LIMIT} 条；确无发现时给空数组）。每项 {id,checkId,questionId?,title,severity,reason,recommendation,suggestedOps?}：` +
+            "checkId 必须是本次 survey_read 返回的标准索引里真实存在的 id；questionId 必须是定义里存在的题目 id。" +
+            "severity 用 blocker/major/minor 的目录定义判断；reason 写判据与原文依据，recommendation 写怎么改。" +
+            "suggestedOps 只放能安全自动应用的修订（全部会在当前草稿上校验可应用），无法自动修就只写 recommendation。" +
+            "目录外发现省略 checkId，仍留在 findings 并写清依据与待核验限制，不编造目录依据。",
+        },
+      },
+      required: ["baseDraftVersion", "summary", "findings"],
+      additionalProperties: false,
+    },
+    // 诊断不改问卷、不落库：登记后随 done 帧交付给画布侧栏展示。
+    write: false,
+    hostApplied: true,
+    async run(args, ctx) {
+      const surveyId = ctx.scopeSurveyId;
+      if (!surveyId) {
+        return { error: "survey_review 锚定当前问卷：请在问卷工作台的会话里使用本工具。" };
+      }
+      const summary = String(args["summary"] ?? "").trim();
+      if (!summary) return { error: "缺少 summary：一句话概括诊断结论。" };
+      if (summary.length > 300) return { error: "summary 上限 300 字，请压缩成结论。" };
+      const rawFindings = args["findings"];
+      if (!Array.isArray(rawFindings)) return { error: "缺少 findings：诊断条目数组（可以为空数组）。" };
+      if (rawFindings.length > REVIEW_FINDINGS_LIMIT) {
+        return { error: `findings 上限 ${REVIEW_FINDINGS_LIMIT} 条，请合并同类问题或拆成多次诊断。` };
+      }
+      const findings: SurveyReviewFinding[] = [];
+      const invalid: Array<{ index: number; reason: string }> = [];
+      rawFindings.forEach((raw, index) => {
+        const parsed = SurveyReviewFindingSchema.safeParse(raw);
+        if (parsed.success) findings.push(parsed.data);
+        else {
+          const head = parsed.error.issues[0];
+          invalid.push({
+            index,
+            reason: head ? `${head.path.join(".") || "finding"}: ${head.message}` : "条目不合法",
+          });
+        }
+      });
+      if (invalid.length > 0) return { error: "findings 形状不合法（诊断未登记）", invalid };
+      const seenIds = new Set<string>();
+      for (const finding of findings) {
+        if (seenIds.has(finding.id)) return { error: `诊断 id 重复：${finding.id}` };
+        seenIds.add(finding.id);
+      }
+      // 引用闭合在查库前先做掉静态部分：checkId 必须真的在标准目录里。
+      const knownChecks = new Set(STANDARDS_CHECK_IDS);
+      const unknownCheckIds = [...new Set(findings.flatMap((f) => f.checkId ? [f.checkId] : []).filter((id) => !knownChecks.has(id)))];
+      if (unknownCheckIds.length > 0) {
+        return {
+          error: `未知 checkId：${unknownCheckIds.join("、")}`,
+          hint: "用 survey_read 返回的 standards.checks 索引里的 id；目录外发现省略 checkId，不要发明依据。",
+        };
+      }
+      const baseDraftVersion = args["baseDraftVersion"];
+      if (typeof baseDraftVersion !== "number" || !Number.isInteger(baseDraftVersion) || baseDraftVersion < 1) {
+        return { error: "缺少 baseDraftVersion：先 survey_read 拿到 draftVersion，再作为基线传入。" };
+      }
+      try {
+        const survey = await service.requireSurveyAccess(ctx.actor.userId, surveyId, "read");
+        if (survey.draftVersion !== baseDraftVersion) {
+          return {
+            error: `stale_read：问卷在读取后已被修改（基线 ${baseDraftVersion}，当前 ${survey.draftVersion}）。重新 survey_read 后再诊断。`,
+            currentDraftVersion: survey.draftVersion,
+          };
+        }
+        const definition = asDefinition(survey.draftJson);
+        const questionIds = new Set(definition.questions.map((question) => question.id));
+        const unknownQuestions = findings.flatMap((finding) =>
+          finding.questionId && !questionIds.has(finding.questionId)
+            ? [{ findingId: finding.id, questionId: finding.questionId }]
+            : [],
+        );
+        if (unknownQuestions.length > 0) {
+          return {
+            error: "诊断引用了不存在的题目（诊断未登记）",
+            unknownQuestions,
+            hint: "重新 survey_read 拿到当前 questionIds 后重试；不要凭对话记忆猜 id。",
+          };
+        }
+        // suggestedOps 只允许「能安全自动应用」的修订：全部在当前草稿上可应用，
+        // 且不允许整卷替换（那是换卷不是修订，也没有发布口子）。
+        const opProblems: Array<{ findingId: string; reason: string }> = [];
+        for (const finding of findings) {
+          if (!finding.suggestedOps || finding.suggestedOps.length === 0) continue;
+          const replaced = finding.suggestedOps.find((op) => op.op === "replace_all");
+          if (replaced) {
+            opProblems.push({ findingId: finding.id, reason: "replace_all 是整卷替换，不是可安全自动应用的修订" });
+            continue;
+          }
+          const result = applySurveyOps(definition, finding.suggestedOps);
+          if (result.rejected.length > 0) {
+            opProblems.push({
+              findingId: finding.id,
+              reason: result.rejected.map((entry) => entry.reason).join("；"),
+            });
+          } else {
+            finding.suggestedOps = result.applied;
+          }
+        }
+        if (opProblems.length > 0) {
+          return {
+            error: "suggestedOps 未通过可应用性校验（诊断未登记）",
+            opProblems,
+            hint: "无法安全自动修的条目只保留 recommendation；能修的按 survey_edit 词表给出可应用操作。",
+          };
+        }
+        return {
+          ok: true,
+          surveyId,
+          operationId: ctx.operationId,
+          baseDraftVersion,
+          summary,
+          findings,
+          note:
+            "诊断已登记并展示在用户的问卷画布。建议尚未应用：用户确认后才在画布生效。" +
+            `${AGENT_REVIEW_DISCLAIMER}向用户转述结论与建议时不得声称问卷已验证、已通过或已发布；` +
+            "要把「确定的问题」「有依据的风险」「还缺证据的判断」说清楚。",
+        };
+      } catch (err) {
+        if (err instanceof SurveyError) return { error: `问卷不可读（${err.code}）` };
+        throw err;
+      }
+    },
+  };
+
+  return { surveyRead, surveyEdit, surveyCreate, surveyReview };
 }
 
-/** 行为注册入口：宿主把三件套交给自己的工具注册面（1:1 注册，宿主治理目录
+/** 行为注册入口：宿主把四件套交给自己的工具注册面（1:1 注册，宿主治理目录
  *  仍以 name 为键核对）。 */
 export function registerSurveyAiTools(
   tools: SurveyAiTools,
@@ -378,4 +587,5 @@ export function registerSurveyAiTools(
   register(tools.surveyRead);
   register(tools.surveyEdit);
   register(tools.surveyCreate);
+  register(tools.surveyReview);
 }

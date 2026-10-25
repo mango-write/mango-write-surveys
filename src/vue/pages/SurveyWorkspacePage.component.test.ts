@@ -37,6 +37,7 @@ vi.mock("primevue/useconfirm", () => ({
 
 import SurveyWorkspacePage from "./SurveyWorkspacePage.vue";
 import SurveyVersionsPanel from "../components/SurveyVersionsPanel.vue";
+import SurveyResearchAssistant from "../components/SurveyResearchAssistant.vue";
 
 const i18n = createSurveysTestI18n();
 
@@ -1035,4 +1036,49 @@ describe("SurveyWorkspacePage AI 建卷落地提示（issue #217）", () => {
   // SurveyWorkspacePage.aiCreate.component.test.ts：桥是宿主单例，本文件的
   // 历史用例不卸载实例，emit 会广播到残留 handler、单槽被陈旧实例先取走，
   // 断言不稳定——该路径需要在无残留的模块注册表里跑。
+});
+
+describe("问卷诊断修订的工作台闭环", () => {
+  const review = (version = 2) => ({
+    type: "survey_review" as const, surveyId: "s-1", operationId: "review-integration-1",
+    baseDraftVersion: version, summary: "澄清时间范围",
+    findings: [{ id: "f1", checkId: "wording.timeframe", questionId: "q1", title: "明确时间",
+      severity: "major" as const, reason: "行为题需要时间范围", recommendation: "明确过去一学期",
+      suggestedOps: [{ op: "update_question" as const, questionId: "q1", patch: { title: "过去一学期的备注" } }],
+    }],
+  });
+
+  it("应用建议进入同一自动保存与撤销链，应用后诊断立即过期", async () => {
+    const { wrapper, copilotRegister } = await mountWorkspace("/u/surveys/s-1", "outline", { copilot: true });
+    const handlers = copilotRegister!.mock.calls[0]![0];
+    handlers.onSurveyDeliveryFrame(review());
+    await flushPromises();
+    vi.useFakeTimers();
+    const panel = wrapper.findComponent(SurveyResearchAssistant);
+    expect(panel.props("stale")).toBe(false);
+    panel.vm.$emit("apply", "f1");
+    await flushPromises();
+    expect(panel.props("stale")).toBe(true);
+    await vi.advanceTimersByTimeAsync(1500);
+    await flushPromises();
+    expect(mocks.save).toHaveBeenCalled();
+    expect(mocks.save.mock.calls.at(-1)![2].questions[0].title).toBe("过去一学期的备注");
+    await wrapper.find(`button[aria-label="${t("surveys.undo")}"]`).trigger("click");
+    await vi.advanceTimersByTimeAsync(1500);
+    await flushPromises();
+    expect(mocks.save.mock.calls.at(-1)![2].questions[0].title).toBe("备注");
+    wrapper.unmount();
+  });
+
+  it("旧版本诊断即便强行发出应用事件也不能修改草稿", async () => {
+    const { wrapper, copilotRegister } = await mountWorkspace("/u/surveys/s-1", "outline", { copilot: true });
+    copilotRegister!.mock.calls[0]![0].onSurveyDeliveryFrame(review(1));
+    await flushPromises();
+    const panel = wrapper.findComponent(SurveyResearchAssistant);
+    expect(panel.props("stale")).toBe(true);
+    panel.vm.$emit("apply", "f1");
+    await flushPromises();
+    expect(mocks.save).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { validateSurveyDefinition } from "./index.js";
+import { validateSurveyDefinition, validateSurveyDesign } from "./index.js";
 import { makeChainDefinition, makeDefinition } from "./test-fixtures.js";
 
 const codes = (issues: { code: string }[]) => issues.map((i) => i.code);
@@ -261,5 +261,51 @@ describe("validateSurveyDefinition", () => {
     expect(codes(validateSurveyDefinition(tooLong))).toContain(
       "schema.too_big",
     );
+  });
+});
+
+describe("研究设计校验（#224）", () => {
+  const design = {
+    researchQuestion: "使用频率如何？",
+    population: "博士生",
+    recruitment: "邮件列表",
+    purpose: "describe" as const,
+    timeBudgetMinutes: 5,
+    constructs: [{ id: "c1", label: "频率", definition: "近三个月频率", questionIds: ["ghost"] }],
+    analysisPlan: "描述统计",
+    assumptions: [],
+    pendingDecisions: [],
+  };
+
+  it("映射失效只在设计校验里提示，不成为发布硬门禁", () => {
+    const definition = { ...makeDefinition(), researchDesign: design };
+    // 发布路径（validateSurveyDefinition）不因设计映射失败而拒绝发布。
+    expect(codes(validateSurveyDefinition(definition))).toEqual([]);
+    const designIssues = validateSurveyDesign(definition);
+    expect(codes(designIssues)).toEqual(["design_unknown_question"]);
+    expect(designIssues[0]!.path).toBe("researchDesign.constructs.0.questionIds.0");
+  });
+
+  it("没有题目覆盖的维度报 design_construct_unmapped；无设计时不产出任何 issue", () => {
+    const unmapped = {
+      ...makeDefinition(),
+      researchDesign: { ...design, constructs: [{ ...design.constructs[0]!, questionIds: [] }] },
+    };
+    expect(codes(validateSurveyDesign(unmapped))).toEqual(["design_construct_unmapped"]);
+    expect(validateSurveyDesign(makeDefinition())).toEqual([]);
+  });
+
+  it("维度 id 重复走同一条 duplicate_id 语义", () => {
+    const duplicate = {
+      ...makeDefinition(),
+      researchDesign: {
+        ...design,
+        constructs: [
+          { ...design.constructs[0]!, id: "c1", questionIds: [] },
+          { ...design.constructs[0]!, id: "c1", questionIds: [] },
+        ],
+      },
+    };
+    expect(codes(validateSurveyDesign(duplicate))).toContain("duplicate_id");
   });
 });

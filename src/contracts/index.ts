@@ -7,6 +7,7 @@ import {
   SurveyDefinitionSchema,
   SurveyIssueSchema,
   SurveyOpSchema,
+  SurveyReviewSeveritySchema,
 } from "../core/index.js";
 
 const IdSchema = z.string().regex(z.regexes.guid);
@@ -36,6 +37,10 @@ export {
   SurveyQuestionTypeSchema,
   SurveyRankingQuestionSchema,
   SurveyRatingQuestionSchema,
+  SurveyResearchConstructSchema,
+  SurveyResearchDesignSchema,
+  SurveyResearchPretestSchema,
+  SurveyReviewSeveritySchema,
   SurveyScaleQuestionSchema,
   SurveySingleQuestionSchema,
   SurveyStatementQuestionSchema,
@@ -68,6 +73,10 @@ export type {
   SurveyQuestionType,
   SurveyRankingQuestion,
   SurveyRatingQuestion,
+  SurveyResearchConstruct,
+  SurveyResearchDesign,
+  SurveyResearchPretest,
+  SurveyReviewSeverity,
   SurveyScaleQuestion,
   SurveySingleQuestion,
   SurveyStatementQuestion,
@@ -220,10 +229,29 @@ export const SurveyResponseViewSchema = z.object({
 export type SurveyResponseView = z.infer<typeof SurveyResponseViewSchema>;
 
 /**
+ * 结构化诊断条目（#224）：由模型阅读完整定义后登记，服务端校验引用闭合与
+ * suggestedOps 可应用。AI 方法审查只是内部代理证据，不代表真人预测试或效度验证。
+ */
+export const SurveyReviewFindingSchema = z.object({
+  id: z.string().min(1).max(64),
+  /** 目录外发现省略 checkId，仍保留原因与建议供独立核验。 */
+  checkId: z.string().min(1).max(120).optional(),
+  questionId: z.string().min(1).max(64).optional(),
+  title: z.string().min(1).max(200),
+  severity: SurveyReviewSeveritySchema,
+  reason: z.string().min(1).max(1000),
+  recommendation: z.string().min(1).max(1000),
+  /** 安全的候选修订：必须在当前草稿上全部可应用，且不含发布/整卷替换。 */
+  suggestedOps: z.array(SurveyOpSchema).max(5).optional(),
+});
+export type SurveyReviewFinding = z.infer<typeof SurveyReviewFindingSchema>;
+
+/**
  * 问卷交付载荷（issue #217，与主仓 @mango-write/contracts 的 ToolSurveyDelivery
  * 同构；本包持有同一定义的投影，宿主桥适配时零转换）。survey_edit 由工作区页在
  * 本地草稿上重放 ops（进撤销栈 + 自动保存 + toast）；survey_create 由列表页/
- * 工作区导航到新问卷。只经活流发一次（刷新回放不重放，add 类操作重复应用会重复加题）。
+ * 工作区导航到新问卷；survey_review 把诊断卡片挂到画布侧栏（不落库、不改卷）。
+ * 只经活流发一次（刷新回放不重放，add 类操作重复应用会重复加题）。
  */
 export const ToolSurveyDeliverySchema = z.discriminatedUnion("type", [
   z.object({
@@ -253,6 +281,15 @@ export const ToolSurveyDeliverySchema = z.discriminatedUnion("type", [
     operationId: z.string().min(6).max(64),
     title: z.string().max(200),
     issues: z.array(SurveyIssueSchema).max(200).optional(),
+  }),
+  z.object({
+    type: z.literal("survey_review"),
+    surveyId: IdSchema,
+    operationId: z.string().min(6).max(64),
+    /** 诊断所依据的持久草稿版本；页面与本地副本不一致时只展示、不提供一键应用。 */
+    baseDraftVersion: z.number().int().min(1),
+    summary: z.string().max(300),
+    findings: z.array(SurveyReviewFindingSchema).max(20),
   }),
 ]);
 export type ToolSurveyDelivery = z.infer<typeof ToolSurveyDeliverySchema>;

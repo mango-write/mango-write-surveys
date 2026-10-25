@@ -77,6 +77,7 @@ export interface SurveysCopilotHost {
   /** 预填对话输入框并聚焦（列表页「AI 生成」入口）。 */
   fillComposer(text: string): void;
   focusComposer(): void;
+  sendPrompt?(text: string, toolNames?: string[]): Promise<void>;
   /** 页面卸载时清掉它写进桥的状态（桥是宿主单例，脏状态会漏给下一页）。 */
   releasePageState(): void;
 }
@@ -103,6 +104,7 @@ export type SurveysLayoutPrefsHost = (
 ) => SurveysLayoutPrefs;
 
 export interface SurveysWebHost {
+  workbenchShell?: Component;
   transport: SurveysTransport;
   notify: SurveysNotify;
   navigate(to: SurveysRouteTarget): void;

@@ -418,3 +418,82 @@ describe("retargetQuestionType", () => {
     expect(matrixText).not.toHaveProperty("columns");
   });
 });
+
+describe("researchDesign（#224）", () => {
+  const design = {
+    researchQuestion: "研究者在多大程度上使用 AI 辅助写作？",
+    population: "高校理工科在读博士生",
+    recruitment: "院系邮件列表与学术社群",
+    purpose: "describe" as const,
+    timeBudgetMinutes: 8,
+    constructs: [{ id: "c1", label: "使用频率", definition: "近三个月使用频率", questionIds: ["q1"] }],
+    analysisPlan: "描述统计与分组交叉表；不做推断检验",
+    assumptions: ["样本可代表同一学科"],
+    pendingDecisions: ["是否需要按年级分层"],
+  };
+
+  it("旧定义没有 researchDesign 仍合法（向后兼容）", () => {
+    const definition = makeDefinition();
+    expect(definition).not.toHaveProperty("researchDesign");
+    expect(apply(definition, [{ op: "set_meta", title: "旧卷" }]).rejected).toEqual([]);
+  });
+
+  it("set_meta 写入研究设计；null 清除，未给字段不动", () => {
+    const saved = apply(makeDefinition(), [{ op: "set_meta", researchDesign: design }]);
+    expect(saved.rejected).toEqual([]);
+    expect(saved.definition.researchDesign).toEqual(design);
+
+    const cleared = apply(saved.definition, [{ op: "set_meta", researchDesign: null }]);
+    expect(cleared.rejected).toEqual([]);
+    expect(cleared.definition).not.toHaveProperty("researchDesign");
+    expect(cleared.definition.title).toBe(saved.definition.title);
+
+    const untouched = apply(saved.definition, [{ op: "set_meta", title: "新标题" }]);
+    expect(untouched.definition.researchDesign).toEqual(design);
+  });
+
+  it("研究设计形状不合法被拒（未知 purpose / 超上限维度）", () => {
+    const bad = apply(makeDefinition(), [
+      { op: "set_meta", researchDesign: { ...design, purpose: "predict" } },
+    ]);
+    expect(bad.rejected).toHaveLength(1);
+    expect(bad.definition).not.toHaveProperty("researchDesign");
+  });
+
+  it("作者自报的试填记录随设计保存，缺时间戳被拒", () => {
+    const pretest = { participantCount: 3, notes: "两位反馈题干歧义", recordedAt: "2026-10-25T00:00:00.000Z" };
+    const saved = apply(makeDefinition(), [{ op: "set_meta", researchDesign: { ...design, pretest } }]);
+    expect(saved.rejected).toEqual([]);
+    expect(saved.definition.researchDesign?.pretest).toEqual(pretest);
+
+    const bad = apply(makeDefinition(), [
+      { op: "set_meta", researchDesign: { ...design, pretest: { participantCount: 0, notes: "", recordedAt: "" } } },
+    ]);
+    expect(bad.rejected).toHaveLength(1);
+  });
+
+  it("删除题目摘掉失效映射，不给悬空 id 留「已被测量」的假象", () => {
+    const withDesign = apply(makeDefinition(), [{ op: "set_meta", researchDesign: design }]).definition;
+    const removed = apply(withDesign, [{ op: "remove_question", questionId: "q1" }]);
+    expect(removed.rejected).toEqual([]);
+    expect(removed.definition.researchDesign?.constructs[0]?.questionIds).toEqual([]);
+    // 只摘映射，不改研究问题与维度定义（不默默重写研究目标）。
+    expect(removed.definition.researchDesign?.researchQuestion).toBe(design.researchQuestion);
+    expect(removed.definition.researchDesign?.constructs[0]?.definition).toBe(design.constructs[0]!.definition);
+    // 维度失去全部题目时给出提示，而不是假装覆盖仍在。
+    expect(removed.issues.map((issue) => issue.code)).toContain("design_construct_unmapped");
+  });
+
+  it("外部写入的悬空映射被语义校验报出", () => {
+    const definition: SurveyDefinition = {
+      ...makeDefinition(),
+      researchDesign: {
+        ...design,
+        constructs: [{ ...design.constructs[0]!, questionIds: ["ghost"] }],
+      },
+    };
+    const result = apply(definition, [{ op: "set_meta", title: "校验" }]);
+    const codes = result.issues.map((issue) => issue.code);
+    expect(codes).toContain("design_unknown_question");
+  });
+});

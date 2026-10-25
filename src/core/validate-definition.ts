@@ -366,3 +366,38 @@ export function validateSurveyDefinition(def: unknown): SurveyIssue[] {
 
   return issues;
 }
+
+// 题目映射仅产生方法学提示，发布硬门禁仍由 validateSurveyDefinition 拥有。
+export function validateSurveyDesign(
+  definition: SurveyDefinition,
+): SurveyIssue[] {
+  const design = definition.researchDesign;
+  if (!design) return [];
+  const issues: SurveyIssue[] = [];
+  const questionIds = new Set(definition.questions.map((question) => question.id));
+  const constructIds = new Set<string>();
+  design.constructs.forEach((construct, i) => {
+    if (constructIds.has(construct.id))
+      issues.push({
+        path: `researchDesign.constructs.${i}.id`,
+        code: "duplicate_id",
+        message: `维度 id 重复：${construct.id}`,
+      });
+    constructIds.add(construct.id);
+    construct.questionIds.forEach((questionId, j) => {
+      if (!questionIds.has(questionId))
+        issues.push({
+          path: `researchDesign.constructs.${i}.questionIds.${j}`,
+          code: "design_unknown_question",
+          message: `研究设计引用了不存在的题目：${questionId}`,
+        });
+    });
+    if (construct.questionIds.length === 0)
+      issues.push({
+        path: `researchDesign.constructs.${i}.questionIds`,
+        code: "design_construct_unmapped",
+        message: `维度「${construct.label}」还没有对应题目`,
+      });
+  });
+  return issues;
+}

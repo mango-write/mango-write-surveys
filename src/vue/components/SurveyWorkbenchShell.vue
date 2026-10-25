@@ -42,7 +42,14 @@ function selectTab(id: string) {
 const leftWidthStyle = computed(() => ({ width: `${prefs.leftRailWidth.value}px` }));
 </script>
 <template>
-  <div class="survey-workbench-shell">
+  <component v-if="host.workbenchShell" :is="host.workbenchShell" :tabs="tabs">
+    <template #left="{ activeTab: hostActiveTab }">
+      <slot name="left" :active-tab="hostActiveTab" />
+    </template>
+    <template #left-footer><slot name="left-footer" /></template>
+    <template #center><slot name="center" /></template>
+  </component>
+  <div v-else class="survey-workbench-shell">
     <aside
       v-if="tabs.length"
       class="shell-left"

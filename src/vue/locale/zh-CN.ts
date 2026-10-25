@@ -1,4 +1,49 @@
 export default {
+  assistant: {
+    "questionIndex": "第 {n} 题",
+    "unmapped": "映射待更新",
+
+    "trialTitle": "试填与反馈记录",
+    "trialCount": "试填人数（作者记录）",
+    "trialNotes": "理解歧义、作答困难与修订建议",
+    "recordTrial": "保存试填记录",
+    "trialRecorded": "这是作者填写的试填记录，尚未独立核验，不代表量表已验证。",
+
+  "title": "研究设计与诊断",
+  "subtitle": "让每道题都服务于你的研究问题。",
+  "review": "诊断问卷",
+  "design": "研究设计依据",
+  "question": "想回答的研究问题",
+  "population": "目标人群",
+  "recruitment": "招募与样本来源",
+  "analysis": "预期分析",
+  "assumptions": "当前假设：",
+  "pending": "请确认：",
+  "designEmpty": "先明确研究目标、人群和分析用途，再检查题目是否覆盖。",
+  "addDesign": "请 Copilot 补充设计",
+  "findings": "{n} 条诊断建议",
+  "stale": "问卷已修改。这份诊断仅供参考，请重新诊断后应用建议。",
+  "noFindings": "本次未发现需要修改的问题；这不代表已完成真人验证。",
+  "locate": "定位题目",
+  "apply": "应用建议",
+  "evidenceNote": "AI 方法审查建议，来源链接用于核对方法依据；不代表该问卷已通过真人预测试或信效度验证。",
+  "severity": {
+    "blocker": "关键问题",
+    "major": "需要关注",
+    "minor": "改进建议"
+  },
+  "uncatalogued": "目录外发现，依据需独立核验。",
+  "reviewPrompt": "请对当前问卷做方法学诊断：先用 survey_read 读取完整定义与研究设计，再检查研究问题与测量覆盖、表述、选项、筛选条件和分析可行性。对拟报告的检查项，再用 survey_read(checkIds) 读取完整判据、适用条件和例外；选答、单题或未做预测试本身不等于已证实偏差。区分确定问题、风险和待验证，不为凑数找错，不编造实际偏差或验证结论。最后调用 survey_review 提交结构化诊断，能安全修订的条目附 suggestedOps；请勿直接修改问卷。",
+  "designPrompt": "请先用 survey_read 读取当前问卷，然后用 survey_edit 的 set_meta 补充 researchDesign，说明研究问题、人群、招募、维度与题目的对应和现有统计可完成的分析计划。未知事实放入 pendingDecisions，假设列入 assumptions，不改已有题目，不编造来源或已验证状态。",
+  "saveFirst": "请先解决保存失败或版本冲突，再执行 AI 操作。",
+  "requestFailed": "AI 请求未完成，请在右侧对话查看原因后重试。",
+  "applied": "建议已应用，可撤销；保存状态见顶栏。",
+  "applyFailed": "建议未能完整应用，请重新诊断。",
+  "analysisPrompt": "请用 research_read 读取当前问卷发布版本的数据概况，选择能回答研究问题的现有描述统计、分组或交叉分析，用 research_analyze 计算并保存固定运行。解释有效样本、缺失、筛选和限制，不默认排除答卷，不做无依据显著性或因果结论。",
+  "analyze": "让 Copilot 分析",
+  "trial": "邀请目标人群试填",
+  "trialHint": "预览可检查流程。请另外请目标人群解释题意并记录反馈；预览不生成正式答卷。"
+},
   sessionExpired:
     "本次作答已过期。重新开始会清除本地答案，并使用当前发布的问卷。",
   restart: "清除本地答案，重新开始",
@@ -101,7 +146,7 @@ export default {
   copilot: {
     generate: "AI 生成",
     generateTemplate:
-      "请帮我生成一份问卷。\n研究主题：（在这里填写研究主题）\n目标人群：（例如：研究生）\n题量：约 8 题，分 3 页\n知情同意：需要一段参与说明",
+      "请帮我设计一份能回答研究问题的问卷，并保存研究设计依据。\n研究问题：（我想了解什么）\n目标人群：（例如：研究生）\n招募渠道：（未知可先标为待确认）\n用途：（描述现状 / 比较群体 / 测量态度）\n答题时间：约 5 分钟，约 8 题\n请说明维度与题目对应、预期分析及待确认事项；包含参与说明，先不发布。",
     created: "已生成《{title}》，正在打开…",
     aiCreated:
       "本问卷由 AI 根据你的描述生成：《{title}》，{pages} 页 {questions} 题。可以继续在这里对话修改。",

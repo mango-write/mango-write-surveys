@@ -46,6 +46,7 @@ import SurveyOutlinePanel from "../components/SurveyOutlinePanel.vue";
 import SurveyVersionsPanel from "../components/SurveyVersionsPanel.vue";
 import SurveyDistributePanel from "../components/SurveyDistributePanel.vue";
 import SurveyPreviewOverlay from "../components/SurveyPreviewOverlay.vue";
+import SurveyResearchAssistant from "../components/SurveyResearchAssistant.vue";
 import {
   takeAiCreatedSurveyHandoff,
   setAiCreatedSurveyHandoff,
@@ -172,6 +173,46 @@ async function redo() {
 const aiEditBanner = ref<{ applied: number; summary: string; rejected: number } | null>(null);
 type SurveyEditDelivery = Extract<ToolSurveyDelivery, { type: "survey_edit" }>;
 const aiStaleDelivery = ref<SurveyEditDelivery | null>(null);
+type SurveyReviewDelivery = Extract<ToolSurveyDelivery, { type: "survey_review" }>;
+const reviewReport = ref<SurveyReviewDelivery | null>(null);
+const reviewBusy = ref(false);
+const reviewStale = computed(() => !!reviewReport.value && (
+  reviewReport.value.baseDraftVersion !== draftVersion.value || !["idle", "saved"].includes(autosave.status.value)
+));
+async function askResearch(kind: "review" | "design") {
+  if (reviewBusy.value || !survey.value?.canWrite) return;
+  if (!await autosave.flush()) {
+    notify.warn(t("surveys.assistant.saveFirst"));
+    return;
+  }
+  const prompt = t(`surveys.assistant.${kind === "review" ? "reviewPrompt" : "designPrompt"}`);
+  if (!host.copilot?.sendPrompt) {
+    host.copilot?.fillComposer(prompt);
+    host.copilot?.focusComposer();
+    return;
+  }
+  reviewBusy.value = true;
+  try {
+    await host.copilot.sendPrompt(prompt, kind === "review" ? ["survey_read", "survey_review"] : ["survey_read", "survey_edit"]);
+  } catch {
+    notify.error(t("surveys.assistant.requestFailed"));
+  } finally {
+    reviewBusy.value = false;
+  }
+}
+function applyReviewSuggestion(id: string) {
+  const report = reviewReport.value;
+  const finding = report?.findings.find((entry) => entry.id === id);
+  if (!report || !finding?.suggestedOps?.length || reviewStale.value || !survey.value?.canWrite) return;
+  const result = applySurveyOps(definition.value, finding.suggestedOps);
+  if (result.rejected.length || !result.applied.length) {
+    notify.warn(t("surveys.assistant.applyFailed"));
+    return;
+  }
+  history.commit({ ...history.current.value, definition: result.definition }, { source: "assistant", label: finding.title });
+  autosave.schedule();
+  notify.success(t("surveys.assistant.applied"));
+}
 // AI 建卷落地提示（issue #217）：survey_create 帧载荷经一次性单槽带进工作区，
 // load 成功后取走展示——生成会话是 global scope，落进右岛的新 survey 会话是
 // 空的，这张卡补上「AI 刚建了什么」。取走即清，刷新不重复。
@@ -197,6 +238,10 @@ function applyEditDelivery(delivery: SurveyEditDelivery) {
 }
 
 async function applySurveyDelivery(delivery: ToolSurveyDelivery) {
+  if (delivery.type === "survey_review") {
+    if (delivery.surveyId === surveyId.value) reviewReport.value = delivery;
+    return;
+  }
   if (delivery.type !== "survey_edit") {
     // survey_create：导航到新问卷工作区（列表页与工作区共用同一入口语义）。
     setAiCreatedSurveyHandoff(delivery);
@@ -355,6 +400,7 @@ function errorMessage(cause: unknown) {
 let generation = 0;
 async function load() {
   const own = ++generation;
+  reviewReport.value = null;
   loading.value = true;
   error.value = "";
   try {
@@ -712,6 +758,22 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
             @retry="load"
           >
             <template v-if="survey">
+              <SurveyResearchAssistant
+                v-if="stage === 'design'"
+                :design="definition.researchDesign"
+                :questions="definition.questions"
+                :report="reviewReport"
+                :stale="reviewStale"
+                :busy="reviewBusy"
+                :disabled="!survey.canWrite"
+                :has-copilot="!!host.copilot"
+                @update:design="commitDefinition({ ...definition, researchDesign: $event })"
+                @review="askResearch('review')"
+                @design-request="askResearch('design')"
+                @apply="applyReviewSuggestion"
+                @locate="selectedQuestionId = $event"
+                @preview="previewOpen = true"
+              />
               <Message
                 v-if="survey.currentRevisionId && stage === 'design'"
                 severity="info"

@@ -3,7 +3,7 @@
 // 不重复。条目分级 rule / judgment / human_data 对应阶段 3 的规则检查、AI
 // 审查与真人/数据验证三路实现；severity 语义见 review-protocol.ts。
 import { z } from "zod";
-import { SurveyQuestionTypeSchema } from "../core/definition.js";
+import { SurveyQuestionTypeSchema, SurveyReviewSeveritySchema } from "../core/definition.js";
 
 // 首批覆盖的三类研究（issue #224 阶段 1）：id 进 appliesTo 与评测集引用。
 export const RESEARCH_TYPE_IDS = [
@@ -72,7 +72,7 @@ export const SOURCES: Record<
 export const CheckClassificationSchema = z.enum(["rule", "judgment", "human_data"]);
 export type CheckClassification = z.infer<typeof CheckClassificationSchema>;
 
-export const CheckSeveritySchema = z.enum(["blocker", "major", "minor"]);
+export const CheckSeveritySchema = SurveyReviewSeveritySchema;
 export type CheckSeverity = z.infer<typeof CheckSeveritySchema>;
 
 export const CheckCitationSchema = z.object({

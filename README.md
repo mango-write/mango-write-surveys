@@ -8,7 +8,7 @@
 - **发布与回收**：不可变发布版本、填写链接与二维码、回收上限、暂停和恢复。
 - **匿名作答**：知情同意、浏览器续答、答案校验和提交回执。
 - **数据查看**：按发布版本查看答卷、逐题摘要、原始答卷 CSV 与变量字典导出。
-- **AI 辅助**：使用 OpenAI 兼容接口生成问卷，提供读卷、改卷与建卷工具。
+- **AI 辅助**：使用 OpenAI 兼容接口生成问卷，提供完整读卷、改卷、建卷与结构化诊断工具；研究设计可记录目标人群、测量维度、题目映射、分析计划和作者自报试填反馈。诊断建议须由作者选择应用，不代表信效度验证。
 
 ## 快速开始
 
@@ -55,7 +55,7 @@ AI 配置、开发模式和部署说明见[应用指南](examples/standalone/REA
 | `@mango-write/surveys/adapters` | PostgreSQL、文件媒体与默认授权实现 |
 | `@mango-write/surveys/ports` | 授权、事务存储和媒体接口 |
 
-服务端使用 `createStandaloneSurveysPorts()` 配置数据库与媒体目录，再创建服务和路由。前端通过 `SurveysWebHost` 配置请求、导航、通知和 Markdown 渲染。
+服务端使用 `createStandaloneSurveysPorts()` 配置数据库与媒体目录，再创建服务和路由。前端通过 `SurveysWebHost` 配置请求、导航、通知和 Markdown 渲染。可选 `workbenchShell` 复用宿主的左栏与中心布局；可选 `copilot.sendPrompt(text, toolNames)` 支持一键诊断和完善设计，未提供时退回预填输入框。研究设计与试填记录仅供作者使用，不进入匿名问卷。
 
 完整示例位于 [`examples/standalone`](examples/standalone/README.md)。自定义集成可以分别实现[服务端接口](src/ports.ts)与[前端接口](src/vue/host.ts)。
 

@@ -19,6 +19,13 @@ export const SURVEY_LIMITS = {
   maxMatrixColumns: 10,
   maxMultiTextItems: 20,
   maxStatementLength: 2000,
+  maxDesignTextLength: 2000,
+  maxDesignNoteLength: 500,
+  maxDesignNotes: 20,
+  maxConstructs: 20,
+  maxConstructLabelLength: 200,
+  maxConstructDefinitionLength: 1000,
+  maxTimeBudgetMinutes: 600,
 } as const;
 
 const idSchema = z
@@ -293,6 +300,47 @@ export const SurveyQuestionTypeSchema = z.enum(
 );
 export type SurveyQuestionType = z.infer<typeof SurveyQuestionTypeSchema>;
 
+// 研究设计依据（#224）：AI 建卷前先写清楚要回答什么、对谁、怎么分析，
+// 诊断才有判据。旧问卷没有该字段（可选，不改 version:1）。
+const designText = z.string().max(SURVEY_LIMITS.maxDesignTextLength);
+const designNote = z.string().max(SURVEY_LIMITS.maxDesignNoteLength);
+
+export const SurveyResearchConstructSchema = z.object({
+  id: idSchema,
+  label: z.string().min(1).max(SURVEY_LIMITS.maxConstructLabelLength),
+  definition: z.string().min(1).max(SURVEY_LIMITS.maxConstructDefinitionLength),
+  // 空数组 = 该维度尚无题目覆盖；validateSurveyDesign 报 design_construct_unmapped。
+  questionIds: z.array(idSchema).max(SURVEY_LIMITS.maxQuestions),
+});
+export type SurveyResearchConstruct = z.infer<typeof SurveyResearchConstructSchema>;
+
+// 作者自报的试填记录。它是作者声明，不是外部核验：诊断只能引用、不能据此宣称已验证。
+export const SurveyResearchPretestSchema = z.object({
+  participantCount: z.number().int().min(1).max(100000),
+  notes: designText,
+  recordedAt: z.string().datetime(),
+});
+export type SurveyResearchPretest = z.infer<typeof SurveyResearchPretestSchema>;
+
+export const SurveyResearchDesignSchema = z.object({
+  // 未知事实留空串而不是编造：人群/招募/许可不了解时写进 pendingDecisions。
+  researchQuestion: designText,
+  population: designText,
+  recruitment: designText,
+  purpose: z.enum(["describe", "compare", "measure"]),
+  timeBudgetMinutes: z.number().int().min(1).max(SURVEY_LIMITS.maxTimeBudgetMinutes),
+  constructs: z.array(SurveyResearchConstructSchema).max(SURVEY_LIMITS.maxConstructs),
+  analysisPlan: designText,
+  assumptions: z.array(designNote).max(SURVEY_LIMITS.maxDesignNotes),
+  pendingDecisions: z.array(designNote).max(SURVEY_LIMITS.maxDesignNotes),
+  pretest: SurveyResearchPretestSchema.optional(),
+});
+export type SurveyResearchDesign = z.infer<typeof SurveyResearchDesignSchema>;
+
+// standards 复用本词表，诊断与方法目录保持同一分级。
+export const SurveyReviewSeveritySchema = z.enum(["blocker", "major", "minor"]);
+export type SurveyReviewSeverity = z.infer<typeof SurveyReviewSeveritySchema>;
+
 export const SurveyPageSchema = z.object({
   id: idSchema,
   title: z.string().min(1).max(SURVEY_LIMITS.maxPageTitleLength),
@@ -319,6 +367,7 @@ export const SurveyDefinitionSchema = z.object({
   consent: z.string().max(SURVEY_LIMITS.maxConsentLength),
   questions: z.array(SurveyQuestionSchema).max(SURVEY_LIMITS.maxQuestions),
   pages: z.array(SurveyPageSchema).max(SURVEY_LIMITS.maxPages),
+  researchDesign: SurveyResearchDesignSchema.optional(),
 });
 export type SurveyDefinition = z.infer<typeof SurveyDefinitionSchema>;
 

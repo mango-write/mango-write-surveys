@@ -551,14 +551,22 @@ export type SurveysService = ReturnType<typeof createSurveysService>;
 export const PUBLIC_MEDIA_URL_PREFIX = "/api/survey-public/assets";
 
 export function toPublicDefinition(definition: SurveyDefinition): SurveyDefinition {
+  const publicDefinition: SurveyDefinition = {
+    version: definition.version,
+    title: definition.title,
+    description: definition.description,
+    consent: definition.consent,
+    questions: definition.questions,
+    pages: definition.pages,
+  };
   const hasImage = definition.questions.some(
     (question) =>
       (question.type === "image_single" || question.type === "image_multiple") &&
       question.options.some((option) => option.imageFileId),
   );
-  if (!hasImage) return definition;
+  if (!hasImage) return publicDefinition;
   return {
-    ...definition,
+    ...publicDefinition,
     questions: definition.questions.map((question) => {
       if (question.type !== "image_single" && question.type !== "image_multiple")
         return question;

@@ -12,13 +12,15 @@ import {
   SurveyConditionSchema,
   SurveyDefinitionSchema,
   SurveyQuestionSchema,
+  SurveyResearchDesignSchema,
   type SurveyCondition,
   type SurveyDefinition,
   type SurveyIssue,
   type SurveyPage,
   type SurveyQuestion,
+  type SurveyResearchDesign,
 } from "./definition.js";
-import { validateSurveyDefinition } from "./validate-definition.js";
+import { validateSurveyDefinition, validateSurveyDesign } from "./validate-definition.js";
 
 // 换题型时载荷可原样保留的分组：选项族（单选/多选/下拉/排序/图片单选/图片多选，
 // 选项共用；imageFileId 只属于图片题型，转纯文本选项时随 schema 剥离）与矩阵族
@@ -51,7 +53,14 @@ export interface SurveyOpsOptions {
 }
 
 export type SurveyOp =
-  | { op: "set_meta"; title?: string; description?: string; consent?: string }
+  | {
+      op: "set_meta";
+      title?: string;
+      description?: string;
+      consent?: string;
+      /** null = 清除研究设计（不要为了让诊断通过而留半份旧设计）。 */
+      researchDesign?: SurveyResearchDesign | null;
+    }
   | {
       op: "add_page";
       afterPageId?: string;
@@ -84,6 +93,7 @@ const metaOpSchema = z.object({
   title: z.string().min(1).max(SURVEY_LIMITS.maxTitleLength).optional(),
   description: z.string().max(SURVEY_LIMITS.maxDescriptionLength).optional(),
   consent: z.string().max(SURVEY_LIMITS.maxConsentLength).optional(),
+  researchDesign: SurveyResearchDesignSchema.nullable().optional(),
 });
 
 const addPageOpSchema = z.object({
@@ -315,16 +325,16 @@ function applyOp(
 ): OpApplication {
   switch (op.op) {
     case "set_meta": {
-      return {
-        ok: true,
-        op,
-        definition: {
-          ...definition,
-          ...(op.title !== undefined ? { title: op.title } : {}),
-          ...(op.description !== undefined ? { description: op.description } : {}),
-          ...(op.consent !== undefined ? { consent: op.consent } : {}),
-        },
+      const { researchDesign, ...rest } = op;
+      const next: SurveyDefinition = {
+        ...definition,
+        ...(rest.title !== undefined ? { title: rest.title } : {}),
+        ...(rest.description !== undefined ? { description: rest.description } : {}),
+        ...(rest.consent !== undefined ? { consent: rest.consent } : {}),
       };
+      if (researchDesign === null) delete next.researchDesign;
+      else if (researchDesign !== undefined) next.researchDesign = researchDesign;
+      return { ok: true, op, definition: next };
     }
     case "add_page": {
       if (op.afterPageId !== undefined && !definition.pages.some((page) => page.id === op.afterPageId)) {
@@ -436,10 +446,22 @@ function applyOp(
         if (next.jump?.when.questionId === op.questionId) delete next.jump;
         return next;
       });
+      // 研究设计里的题目映射同步摘掉被删题：留下悬空 id 会假装该维度仍被测量。
+      // 只动映射，不改研究问题/维度定义——目标本身不由工具替用户重写。
+      const researchDesign = definition.researchDesign
+        ? {
+            ...definition.researchDesign,
+            constructs: definition.researchDesign.constructs.map((construct) => ({
+              ...construct,
+              questionIds: construct.questionIds.filter((id) => id !== op.questionId),
+            })),
+          }
+        : undefined;
       return {
         ok: true,
         definition: {
           ...definition,
+          ...(researchDesign ? { researchDesign } : {}),
           pages,
           questions: definition.questions
             .filter((question) => question.id !== op.questionId)
@@ -536,5 +558,10 @@ export function applySurveyOps(
     current = outcome.definition;
     applied.push(outcome.op);
   }
-  return { definition: current, applied, rejected, issues: validateSurveyDefinition(current) };
+  return {
+    definition: current,
+    applied,
+    rejected,
+    issues: [...validateSurveyDefinition(current), ...validateSurveyDesign(current)],
+  };
 }
