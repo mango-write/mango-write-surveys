@@ -18,6 +18,9 @@ import {
   type NoviceTask,
 } from "./schema.js";
 
+export { buildBlindEdgePacket, summarizeReviewDecisions, ReviewDecisionSchema } from "./review.js";
+export type { ReviewDecision } from "./review.js";
+
 export interface EvalDatasetIssue {
   path: string;
   message: string;

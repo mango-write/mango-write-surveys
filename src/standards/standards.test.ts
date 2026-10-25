@@ -53,6 +53,6 @@ describe("研究标准目录", () => {
 
   it("严重级别表与 severity 词表一致，评审协议处于草案状态", () => {
     expect(SEVERITY_LEVELS.map((s) => s.id).sort()).toEqual(["blocker", "major", "minor"]);
-    expect(REVIEW_PROTOCOL_STATUS).toBe("draft-pending-expert-review");
+    expect(REVIEW_PROTOCOL_STATUS).toBe("draft-agent-review");
   });
 });

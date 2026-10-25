@@ -327,13 +327,13 @@ export const defectCases: DefectCase[] = [
       {
         checkId: "wording.acquiescence",
         at: "q4",
-        note: "自拟态度题用同意度矩阵承载单侧陈述，默许倾向会系统性抬高同意侧。",
+        note: "自拟态度题用同意度矩阵承载单侧陈述，可提示默许风险，但不能仅因同意度格式认定严重缺陷。",
       },
     ],
     mustNotFlag: [
       {
         checkId: "wording.acquiescence",
-        note: "q6-q8 由 q5 声明沿用已验证量表的原始同意度格式，按该条 severity.conditions 豁免，不按自拟题上报。",
+        note: "q6-q8 不因同意度格式自动判错；q5 的无名量表声明仍缺可核验来源，不能据此证明量表已验证。",
       },
       {
         checkId: "wording.timeframe",

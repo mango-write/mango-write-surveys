@@ -25,7 +25,7 @@ export const wordingChecks: StandardsCheck[] = [
     classification: "judgment",
     severity: {
       level: "major",
-      conditions: "两个并列对象中有一个是另一个的限定说明（不构成独立评价对象）时降 minor。",
+      conditions: "其中一个词只是另一评价对象的限定说明、无法独立作答时，不构成双重提问，不报本项。",
     },
     errorExample: {
       description: "单选题把「课程内容」与「授课教师」两个评价对象并列。",
@@ -164,18 +164,18 @@ export const wordingChecks: StandardsCheck[] = [
       snippet: "你不认为导师没有义务逐句修改你的论文。〔非常不同意…非常同意〕",
       why: "受访者需要算两次「不」才能还原句义，作答极易翻转；该行数据几乎不可用。",
     },
-    handling: "改写为肯定句陈述（「导师有义务逐句修改你的论文」）；需要反向计分题时保留肯定表述、用刻度方向反向，不改写题干。",
+    handling: "简化否定，保留原本要测量的含义；反向计分由构念方向与计分规则决定，不以翻转显示刻度替代，也不擅改既有量表。",
   },
   {
     id: "wording.acquiescence",
     dimension: "wording",
-    title: "同意-同意格式题",
+    title: "同意度格式的默许风险",
     claim:
-      "测量态度的题目不得以「是否同意某陈述」为作答格式（agree-disagree）：默许倾向（acquiescence bias）会系统性抬高同意侧，应改为对陈述对象本身的直接评价。",
+      "同意度格式可能受到默许倾向影响，应结合陈述方向、目标人群和测量目的评估是否改为直接评价；仅凭使用同意度格式，不能认定题目无效或存在严重缺陷。",
     citations: [
       {
         source: "pew",
-        note: "Question wording 节：avoiding agree-disagree format——acquiescence bias 在低教育人群与自填场景更严重",
+        note: "Question wording：同意度格式可能产生 acquiescence bias；据此检查风险，不推导所有态度题禁用同意度格式。",
       },
     ],
     appliesTo: {
@@ -185,15 +185,15 @@ export const wordingChecks: StandardsCheck[] = [
     classification: "judgment",
     severity: {
       level: "minor",
-      conditions: "整卷沿用已验证量表的原始同意度格式时不算违反（改编须记录来源）；自拟题使用同意度格式升 major。",
+      conditions: "仅提供格式改进建议，不因自拟题自动升 major；有适用证据的既有量表不为规避格式风险而擅改。声称沿用但缺可核验来源时，记录来源证据不足，不视为已验证。",
     },
     errorExample: {
-      description: "自拟态度题用同意度刻度承载单侧陈述。",
+      description: "自拟态度题使用同意度刻度，需要评估默许风险。",
       snippet: "我擅长使用新工具。〔非常不同意…非常同意〕",
-      why: "默许倾向下受访者偏向「同意」，与直接问「你的工具使用能力如何」得到的分布不可比，效度未被验证的自拟题尤甚。",
+      why: "可能出现与内容无关的同意倾向，但风险是否实际损害测量需要证据；直接自评能力也不是对原题的当然等价替代。",
     },
     handling:
-      "改为直接评价对象（「你使用新工具的熟练程度」+ 熟练度刻度）；沿用已验证量表原格式时在映射中标注来源，不改写。",
+      "将直接评价作为候选方案，先核对是否仍测量同一概念，再通过试答比较；既有量表保留适用版本与来源，不仅为格式偏好改写。",
   },
   {
     id: "wording.presumptive",
@@ -232,7 +232,7 @@ export const wordingChecks: StandardsCheck[] = [
     dimension: "wording",
     title: "敏感题社会期许",
     claim:
-      "涉及违规行为、能力自评、收入、心理健康等敏感话题的题目，直陈式提问会因社会期许偏差（高报美德、低报污名）系统性失真，须降低作答的道德压力。",
+      "敏感或具有社会评价压力的话题可能存在社会期许偏差，应评估匿名、拒答路径与中性表述；直陈式提问不自动证明严重偏差，间接提问也不是普遍更优的替代。",
     citations: [
       {
         source: "pew",
@@ -249,14 +249,14 @@ export const wordingChecks: StandardsCheck[] = [
     classification: "judgment",
     severity: {
       level: "major",
-      conditions: "题目匿名作答且敏感度低（如常规课程评价）时降 minor；高敏话题（违纪、心理健康）保持 major 且必须配退出路径。",
+      conditions: "仅发现敏感主题时记录风险或待验证；结合强迫回答、识别风险或实测证据判断严重性，不只按主题定 major。已有匿名和拒答措施也不代表风险必然消除。",
     },
     errorExample: {
       description: "直陈式问学术不端行为且必答。",
       snippet: "你抄袭过别人的论文吗？〔是/否〕（必答）",
-      why: "匿名承诺也压不住直陈羞耻感，否认率远高于真实率；必答设计还把宁退出的人变成缺失数据。",
+      why: "敏感经历与必答组合可能促使拒答、退出或隐瞒，但不能未实测就给出偏差幅度或断言否认率。",
     },
     handling:
-      "改用非自证口径（「你了解到你周围同学中出现过抄袭的情况吗」）、允许拒答（本题设为非必答或加「不愿回答」选项）、把敏感题放在信任建立后的后段；研究说明写清匿名与数据用途。",
+      "保留测量本人行为的目标，提供可信保密说明、中性措辞和拒答路径；询问周围同学会改变测量对象，不能当作等价修复。间接方法须另行设计并验证。",
   },
 ];

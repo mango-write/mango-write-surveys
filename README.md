@@ -61,7 +61,11 @@ AI 配置、开发模式和部署说明见[应用指南](examples/standalone/REA
 
 ## 研究标准与评测集
 
-[`src/standards`](src/standards) 维护问卷研究质量的检查标准目录（八维度：研究目标、人群与招募、测量覆盖、表述、选项、流程、负担、分析可行性）、首批三类研究的适用条件与限制，以及用于评测生成与诊断链路的案例集。每条标准带方法学来源（AAPOR、Pew、CDC 认知访谈、COSMIN）、适用条件、错误示例与处理方式，并按 rule / judgment / human_data 三级标注实现路径；`src/standards/standards.test.ts` 与 `src/standards/eval/eval-dataset.test.ts` 把「每条合格」变成可执行门禁。标准当前处于草案状态（待方法学专家审核），不构成专业认证。
+[`src/standards`](src/standards) 维护研究质量检查目录、研究类型及评测案例。规则分 rule / judgment / human_data；结构测试只核验字段与引用，不能证明方法学正确。标准采用[证据审查协议](src/standards/review-protocol.ts)，Agent 独立核对来源、测量逻辑和反例，无需等待专家团；结果是内部代理证据，不构成专业认证，也不替代真人预测试。
+
+复用评测时，由 `src/standards/eval` 的 `buildBlindEdgePacket` 生成仅含匿名编号、情境与待判主张的输入，答案、理由和原始案例 ID 不交给首轮评审。已公开的案例仍是工作集，匿名化不使其成为真正留出集。首轮封存后按原始证据裁决，保留模型、提示词、输入哈希、原始输出及未决项；同模型不同角色不算跨模型验证。
+
+`summarizeReviewDecisions` 汇总已去重的问题裁决，目录外问题也进入分母；报告支持率上下界、裁决覆盖率和证据来源，不将 Agent 共识写成准确率。每条定论须有来源位置与推理，重复问题 ID 拒绝计数；问题归一化与证据真实性仍需审查，工具不会自动认证。
 
 ## 开发
 

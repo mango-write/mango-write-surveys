@@ -8,7 +8,7 @@ export const burdenChecks: StandardsCheck[] = [
     dimension: "burden",
     title: "总题量超载",
     claim:
-      "全卷题量应按预估完成时长收敛：科研问卷的建议口径是 30 题以内、10-15 分钟可答完；系统承载上限 50 题是容量边界不是质量标准——贴着上限设计的问卷完成率会系统性坍塌，且后段题目只收到高耐受幸存者样本。",
+      "负担应结合题目复杂度、矩阵行数、开放题与实际耗时评估；系统上限不是质量标准。仅凭题数不能推定完成率，也没有适用于所有科研问卷的统一题数门槛。",
     citations: [
       {
         source: "product",
@@ -22,18 +22,18 @@ export const burdenChecks: StandardsCheck[] = [
     appliesTo: {
       notes: "一切问卷；attitude_scale 的题数按「维度×每题数」估算，矩阵行不计题数但计入负担（见 burden.matrix_rows）。",
     },
-    classification: "rule",
+    classification: "judgment",
     severity: {
-      level: "major",
-      conditions: "有激励或强归属感的专业样本可放宽至 40 题；超过 30 题须在研究说明写明理由、时长预估与完成率保护措施。",
+      level: "minor",
+      conditions: "只有题数时提示核验负担；有实测耗时、退出或答题质量证据显示明显问题时，结合用途升 major，不按通用 30/40 题阈值自动定级。",
     },
     errorExample: {
       description: "贴着系统上限堆题。",
       snippet: "全卷 50 题、20 页，卷首声明「预计 5 分钟」",
-      why: "实测要 20 分钟以上的匿名链接问卷完成率通常不足两成；后 1/3 的题只收到高耐受样本，分布自选择且与题序污染叠加。",
+      why: "题数与页数使五分钟承诺需要试填验证；未实测就无法确认耗时、完成率或后段选择偏差，不能编造具体完成率。",
     },
     handling:
-      "压到 30 题内：删非核心题、合并近重复题、把同刻度题组矩阵化；超 30 题必须给出时长预估与保护措施（分次发放、进度提示），规则引擎按题数阈值直接报数。",
+      "统计实际作答任务（含矩阵行）并试填测时，删去非核心题；矩阵化不等于减少认知任务。依据实测调整长度、承诺时长与流程，不伪称题数阈值来自方法学标准。",
   },
   {
     id: "burden.required_ratio",

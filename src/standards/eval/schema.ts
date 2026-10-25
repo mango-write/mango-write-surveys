@@ -64,6 +64,7 @@ export const EdgeCaseSchema = z.object({
   id: caseId("edge"),
   title: z.string().min(2).max(80),
   situation: z.string().min(10).max(500),
+  reviewQuestion: z.string().min(5).max(300),
   relatedCheckIds: z.array(z.string().min(1)).min(1),
   // contextual = 判定依赖研究目标或人群上下文，评测时必须带上下文判。
   expected: z.enum(["flag", "not_flag", "contextual"]),

@@ -153,13 +153,13 @@ export const optionsChecks: StandardsCheck[] = [
   {
     id: "options.forced_choice",
     dimension: "options",
-    title: "该取舍时用了全选",
+    title: "选项格式与信息目标错配",
     claim:
-      "当研究关心「哪个选项相对更重要、更主要」时，不得用 select-all 多选代替 forced-choice：多选选中率随选项集合的吸引力与数量变化，选项间不可比，主次信息全部丢失。",
+      "选择格式须与分析目标一致：多选只说明选中了哪些，不能直接给出唯一首选或完整排序；逐项是/否、单选首选和排序回答不同问题，不能互相等同。",
     citations: [
       {
         source: "pew",
-        note: "Open- and closed-ended questions 节：forced-choice 优于 select-all——要求受访者取舍，所得数据才可比",
+        note: "Open- and closed-ended questions 及其 2019 格式研究：forced-choice 指逐项明确是/否，不是整题只选一项；格式影响选中率，排序研究并非一律禁用多选。",
       },
     ],
     appliesTo: {
@@ -174,10 +174,10 @@ export const optionsChecks: StandardsCheck[] = [
     errorExample: {
       description: "问「最影响」却开放多选。",
       snippet: "哪些因素最影响你的选题？（可多选）〔导师建议/经费/兴趣/前沿性/…〕",
-      why: "选项列得越多选中率越高，「最」字承诺的主次排序完全丢失；换一份选项集不同的问卷，选中率不可比。",
+      why: "此处若要获取每个人的唯一首选，多选答案不足以恢复个人排序；若只描述人群中的选中率，则可保留多选并按实际格式解释。",
     },
     handling:
-      "改为单选 forced-choice，或追加 ranking/「最主要的一项」追问；必须保留多选时在研究说明写明「符合项集合」口径并冻结选项集。",
+      "需要唯一首选时追加单选，需要顺序时用排序；需逐项判断是否符合时可逐项是/否。保留多选时按符合项集合解释，不把选中率直接称为个人优先级。",
   },
   {
     id: "options.exclusive_semantics",

@@ -47,7 +47,7 @@ export const SOURCES: Record<
     label: "Pew 问卷题目设计",
     url: "https://www.pewresearch.org/writing-survey-questions/",
     covers:
-      "Question development / Open- and closed-ended questions（选项数量、轮换、穷尽互斥、forced-choice 优于 select-all）/ Question wording（双重提问、简单具体、避免双重否定与行话、避免情绪化措辞、避免同意-不同意格式、社会期许）/ Question order（顺序效应、先一般后具体）",
+      "Question development / Open- and closed-ended questions（选项、轮换、互斥完备、逐项是/否与多选格式差异）/ Question wording（双重提问、具体语言、否定、情绪化措辞、默许与社会期许风险）/ Question order（顺序效应）",
   },
   cdc_cognitive: {
     label: "CDC 认知访谈",
