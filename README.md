@@ -59,6 +59,10 @@ AI 配置、开发模式和部署说明见[应用指南](examples/standalone/REA
 
 完整示例位于 [`examples/standalone`](examples/standalone/README.md)。自定义集成可以分别实现[服务端接口](src/ports.ts)与[前端接口](src/vue/host.ts)。
 
+## 研究标准与评测集
+
+[`src/standards`](src/standards) 维护问卷研究质量的检查标准目录（八维度：研究目标、人群与招募、测量覆盖、表述、选项、流程、负担、分析可行性）、首批三类研究的适用条件与限制，以及用于评测生成与诊断链路的案例集。每条标准带方法学来源（AAPOR、Pew、CDC 认知访谈、COSMIN）、适用条件、错误示例与处理方式，并按 rule / judgment / human_data 三级标注实现路径；`src/standards/standards.test.ts` 与 `src/standards/eval/eval-dataset.test.ts` 把「每条合格」变成可执行门禁。标准当前处于草案状态（待方法学专家审核），不构成专业认证。
+
 ## 开发
 
 在仓库根目录运行：
