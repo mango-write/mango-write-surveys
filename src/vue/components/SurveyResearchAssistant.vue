@@ -224,22 +224,22 @@ function changeRows(group: SurveyReviewPlanGroup): ReviewChangeRow[] {
         <div class="design-fields">
           <label>
             {{ t("surveys.assistant.question") }}
-            <Textarea :model-value="design.researchQuestion" :disabled="disabled" rows="2" auto-resize
+            <Textarea :model-value="design.researchQuestion" :disabled="disabled" rows="3" auto-resize fluid
               @change="update('researchQuestion', ($event.target as HTMLTextAreaElement).value)" />
           </label>
           <label>
             {{ t("surveys.assistant.population") }}
-            <InputText :model-value="design.population" :disabled="disabled"
+            <InputText :model-value="design.population" :disabled="disabled" fluid
               @change="update('population', ($event.target as HTMLInputElement).value)" />
           </label>
           <label>
             {{ t("surveys.assistant.recruitment") }}
-            <InputText :model-value="design.recruitment" :disabled="disabled"
+            <InputText :model-value="design.recruitment" :disabled="disabled" fluid
               @change="update('recruitment', ($event.target as HTMLInputElement).value)" />
           </label>
           <label>
             {{ t("surveys.assistant.analysis") }}
-            <Textarea :model-value="design.analysisPlan" :disabled="disabled" rows="2" auto-resize
+            <Textarea :model-value="design.analysisPlan" :disabled="disabled" rows="3" auto-resize fluid
               @change="update('analysisPlan', ($event.target as HTMLTextAreaElement).value)" />
           </label>
         </div>
@@ -274,11 +274,11 @@ function changeRows(group: SurveyReviewPlanGroup): ReviewChangeRow[] {
       <template v-if="design">
         <label class="trial-field">
           {{ t("surveys.assistant.trialCount") }}
-          <InputNumber v-model="trialCount" :min="1" :max="10000" :disabled="disabled" show-buttons />
+          <InputNumber v-model="trialCount" :min="1" :max="10000" :disabled="disabled" show-buttons fluid />
         </label>
         <label class="trial-field">
           {{ t("surveys.assistant.trialNotes") }}
-          <Textarea v-model="trialNotes" :maxlength="2000" rows="3" auto-resize :disabled="disabled" />
+          <Textarea v-model="trialNotes" :maxlength="2000" rows="3" auto-resize fluid :disabled="disabled" />
         </label>
         <Button :label="t('surveys.assistant.recordTrial')"  severity="secondary"
           :disabled="disabled || !trialCount || !trialNotes.trim()" @click="recordTrial" />
@@ -377,7 +377,7 @@ p { margin: .4rem 0; line-height: 1.6; }
 .assistant-header p, .assistant-note, .finding-actions a { color: var(--color-text-tertiary); font-size: .8rem; }
 summary { cursor: pointer; font-weight: 600; padding: .35rem 0; }
 .design-fields { display: grid; grid-template-columns: 1fr 1fr; gap: .7rem; margin: .7rem 0; }
-.design-fields label { display: flex; flex-direction: column; gap: .3rem; font-size: .85rem; }
+.design-fields label { display: flex; flex-direction: column; gap: .5rem; min-width: 0; font-size: .85rem; }
 .design-fields label:first-child, .design-fields label:last-child { grid-column: 1 / -1; }
 .constructs > div { padding: .5rem 0; border-top: 1px solid var(--color-border-subtle); }
 .constructs span { margin-left: .5rem; font-size: .85rem; }

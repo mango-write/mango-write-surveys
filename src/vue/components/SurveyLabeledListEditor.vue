@@ -115,6 +115,7 @@ function inputRef(el: unknown, index: number) {
       <div class="label-row">
         <InputText
           :ref="(el) => inputRef(el, index)"
+          fluid
           class="label-input"
           :class="{ 'opt-input--default': isDefaultOptionLabel(item.label) }"
           :model-value="item.label"
@@ -144,6 +145,7 @@ function inputRef(el: unknown, index: number) {
                 (el as { $el?: HTMLInputElement } | null)?.$el ?? null;
             }
           "
+          fluid
           class="label-input"
           :placeholder="t(labelKey, { n: index + 2 })"
           maxlength="200"
@@ -168,21 +170,12 @@ function inputRef(el: unknown, index: number) {
   align-items: center;
   gap: 8px;
 }
-.label-input,
-:deep(.label-input) {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-  padding-block: 4px;
+.label-input {
+  flex: 1;
+  min-width: 0;
 }
 .label-input.opt-input--default:not(:focus) {
   color: var(--color-muted);
-}
-:deep(.label-input:hover) {
-  border-color: var(--color-border-subtle);
-}
-:deep(.label-input:focus) {
-  border-color: var(--color-brand-400);
 }
 .label-hint {
   font-size: 11.5px;

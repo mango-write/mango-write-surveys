@@ -9,6 +9,7 @@ import { computed, onBeforeUnmount, ref, watch, type Ref } from "vue";
 import { EditorContent, useEditor, type Editor } from "@tiptap/vue-3";
 
 import StarterKit from "@tiptap/starter-kit";
+import Textarea from "primevue/textarea";
 import { useSurveysHost } from "../host.js";
 
 const props = defineProps<{
@@ -93,10 +94,10 @@ watch(
   },
 );
 
-function onPlainInput(event: Event) {
-  const value = (event.target as HTMLTextAreaElement).value;
-  empty.value = !value;
-  emit("change", value);
+function onPlainInput(value: string | undefined) {
+  const next = value ?? "";
+  empty.value = !next;
+  emit("change", next);
 }
 
 watch(
@@ -110,14 +111,16 @@ onBeforeUnmount(() => editor.value?.destroy());
   <div class="survey-markdown-field" :class="{ 'is-empty': empty && !!placeholder && !plainEditing }">
     <EditorContent v-if="editor" :editor="editor" class="survey-markdown-field__surface" />
     <!-- textarea 直编（宿主缺富文本往返转换器）：markdown 源文本进出，无转换。 -->
-    <textarea
+    <Textarea
       v-else-if="plainEditing"
       class="survey-markdown-field__surface survey-markdown-field__plain"
-      :value="modelValue"
+      :model-value="modelValue"
       :aria-label="ariaLabel"
       :placeholder="placeholder"
       rows="4"
-      @input="onPlainInput"
+      auto-resize
+      fluid
+      @update:model-value="onPlainInput"
       @blur="emit('commit')"
     />
     <!-- 只读（disabled）：经宿主安全渲染器展示，不接受输入。 -->
@@ -160,17 +163,8 @@ onBeforeUnmount(() => editor.value?.destroy());
   overflow-wrap: anywhere;
 }
 .survey-markdown-field__plain {
-  width: 100%;
-  box-sizing: border-box;
-  border: 1px solid var(--color-border, currentColor);
-  border-radius: var(--radius-sm, 6px);
-  padding: 6px 8px;
-  color: var(--color-text-primary);
-  font: inherit;
-  font-size: 13.5px;
+  min-height: 7rem;
   line-height: 1.7;
-  resize: vertical;
-  background: transparent;
 }
 .survey-markdown-field__placeholder {
   position: absolute;

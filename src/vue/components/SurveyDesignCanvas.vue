@@ -655,6 +655,7 @@ defineExpose({ locateIssue });
     <header class="canvas-head">
       <Textarea
         class="canvas-title"
+        fluid
         :model-value="definition.title"
         rows="1"
         auto-resize
@@ -722,6 +723,7 @@ defineExpose({ locateIssue });
         <span class="page-index">{{ t("surveys.pageNumber", { n: pageIndex + 1 }) }}</span>
         <InputText
           class="page-title"
+          fluid
           :model-value="page.title"
           :placeholder="pageTitlePlaceholder(pageIndex)"
           :disabled="disabled"

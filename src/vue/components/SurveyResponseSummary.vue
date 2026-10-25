@@ -20,6 +20,7 @@ import {
   type TextSummary,
 } from "../lib/summary.js";
 import SurveySummaryBars from "./SurveySummaryBars.vue";
+import SurveyTextWordCloud from "./SurveyTextWordCloud.vue";
 
 // 长文本收敛：默认只列前 10 条，展开后最多 200 条（再长页面会失控，给出截断说明）。
 const TEXT_DEFAULT_VISIBLE = 10;
@@ -32,7 +33,7 @@ const props = defineProps<{
   /** 摘要口径对应的发布版本号（标题处标明；null 时省略）。 */
   revisionNumber: number | null;
 }>();
-const { t } = useI18n();
+const { locale, t } = useI18n();
 
 const expanded = ref(new Set<string>());
 function toggleExpanded(questionId: string) {
@@ -230,6 +231,11 @@ function truncate(text: string): string {
 
         <!-- 文本 / 日期：列举 + 收敛 -->
         <template v-else-if="card.list">
+          <SurveyTextWordCloud
+            v-if="card.summary.view === 'text'"
+            :entries="card.list.entries"
+            :locale="locale"
+          />
           <ul class="text-entries">
             <li v-for="entry in card.list.entries.slice(0, card.visibleCount)" :key="entry.text">
               <span class="text-entry-body" :title="entry.text">{{ truncate(entry.text) }}</span>

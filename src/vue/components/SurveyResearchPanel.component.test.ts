@@ -155,9 +155,7 @@ const runDetail: ResearchRunDetail = {
           { key: "estimate", label: "估计" },
           { key: "ciLow", label: "CI 下限" },
         ],
-        rows: [
-          { effect: "W=-1 条件间接效应", estimate: 0.12345, ciLow: null },
-        ],
+        rows: [{ effect: "W=-1 条件间接效应", estimate: 0.12345, ciLow: null }],
       },
       {
         id: "model_fit",
@@ -182,50 +180,62 @@ const context: SurveysResearchContext = {
   exclusions: [],
 };
 
-function createRouter(options: {
-  codebook?: SurveyCodebook;
-  datasets?: ResearchDatasetSummary[];
-  runs?: ResearchRunSummary[];
-  failLoad?: boolean;
-} = {}) {
-  const createdRuns: Array<{ datasetId: string; recipe: { type: string } }> = [];
+function createRouter(
+  options: {
+    codebook?: SurveyCodebook;
+    datasets?: ResearchDatasetSummary[];
+    runs?: ResearchRunSummary[];
+    failLoad?: boolean;
+  } = {},
+) {
+  const createdRuns: Array<{ datasetId: string; recipe: { type: string } }> =
+    [];
   const createdDatasets: Array<Record<string, unknown>> = [];
   let runSeq = 0;
-  const router = vi.fn(async (path: string, init?: { method?: string; body?: unknown }) => {
-    const method = init?.method ?? "GET";
-    if (options.failLoad && path.includes("/codebook") && method === "GET")
-      throw new Error("boom");
-    if (path === `/api/surveys/${surveyId}/codebook?revisionId=${revisionId}`)
-      return options.codebook ?? codebookWithModels;
-    if (path === "/api/research/datasets" && method === "POST") {
-      createdDatasets.push(init!.body as Record<string, unknown>);
-      return { ...publicDataset, id: datasetId, name: "导入样本" };
-    }
-    if (path === `/api/research/surveys/${surveyId}/datasets`) {
-      if (method === "GET")
-        return { items: options.datasets ?? [publicDataset, syntheticDataset] };
-    }
-    if (path === `/api/research/surveys/${surveyId}/datasets/${datasetId}`)
-      return datasetDetail;
-    if (path === `/api/research/surveys/${surveyId}/datasets/${syntheticDatasetId}`)
-      return { ...datasetDetail, id: syntheticDatasetId };
-    if (path === `/api/research/surveys/${surveyId}/runs`) {
-      if (method === "GET")
-        return { items: options.runs ?? [runSummary] };
-      if (method === "POST") {
-        const input = init!.body as { datasetId: string; recipe: { type: string } };
-        createdRuns.push(input);
-        runSeq += 1;
-        const id = `00000000-0000-4000-8000-0000000001${String(runSeq).padStart(2, "0")}`;
-        return { ...runSummary, id, recipe: input.recipe };
+  const router = vi.fn(
+    async (path: string, init?: { method?: string; body?: unknown }) => {
+      const method = init?.method ?? "GET";
+      if (options.failLoad && path.includes("/codebook") && method === "GET")
+        throw new Error("boom");
+      if (path === `/api/surveys/${surveyId}/codebook?revisionId=${revisionId}`)
+        return options.codebook ?? codebookWithModels;
+      if (path === "/api/research/datasets" && method === "POST") {
+        createdDatasets.push(init!.body as Record<string, unknown>);
+        return { ...publicDataset, id: datasetId, name: "导入样本" };
       }
-    }
-    if (path.startsWith(`/api/research/surveys/${surveyId}/runs/`)) {
-      const id = path.slice(`/api/research/surveys/${surveyId}/runs/`.length);
-      return { ...runDetail, id };
-    }
-    throw new Error(`transport 未在用例中提供: ${method} ${path}`);
-  });
+      if (path === `/api/research/surveys/${surveyId}/datasets`) {
+        if (method === "GET")
+          return {
+            items: options.datasets ?? [publicDataset, syntheticDataset],
+          };
+      }
+      if (path === `/api/research/surveys/${surveyId}/datasets/${datasetId}`)
+        return datasetDetail;
+      if (
+        path ===
+        `/api/research/surveys/${surveyId}/datasets/${syntheticDatasetId}`
+      )
+        return { ...datasetDetail, id: syntheticDatasetId };
+      if (path === `/api/research/surveys/${surveyId}/runs`) {
+        if (method === "GET") return { items: options.runs ?? [runSummary] };
+        if (method === "POST") {
+          const input = init!.body as {
+            datasetId: string;
+            recipe: { type: string };
+          };
+          createdRuns.push(input);
+          runSeq += 1;
+          const id = `00000000-0000-4000-8000-0000000001${String(runSeq).padStart(2, "0")}`;
+          return { ...runSummary, id, recipe: input.recipe };
+        }
+      }
+      if (path.startsWith(`/api/research/surveys/${surveyId}/runs/`)) {
+        const id = path.slice(`/api/research/surveys/${surveyId}/runs/`.length);
+        return { ...runDetail, id };
+      }
+      throw new Error(`transport 未在用例中提供: ${method} ${path}`);
+    },
+  );
   return { router, createdRuns, createdDatasets };
 }
 
@@ -259,11 +269,14 @@ function render(
 const DialogStub = defineComponent({
   name: "DialogStub",
   setup(_, { slots }) {
-    return () => h("div", { class: "dialog-stub" }, [slots.default?.(), slots.footer?.()]);
+    return () =>
+      h("div", { class: "dialog-stub" }, [slots.default?.(), slots.footer?.()]);
   },
 });
 
-async function openImportDialog(wrapper: Awaited<ReturnType<typeof render>>["wrapper"]) {
+async function openImportDialog(
+  wrapper: Awaited<ReturnType<typeof render>>["wrapper"],
+) {
   await wrapper
     .findAll("button")
     .find((button) => button.text() === "导入数据集")!
@@ -271,13 +284,12 @@ async function openImportDialog(wrapper: Awaited<ReturnType<typeof render>>["wra
   await flushPromises();
 }
 
-async function chooseCsvFile(wrapper: Awaited<ReturnType<typeof render>>["wrapper"]) {
-  const csv = [
-    "q1.r1,q1.r2,q2,q3",
-    "4,5,3,21",
-    "2,1,5,34",
-    "5,5,2,28",
-  ].join("\n");
+async function chooseCsvFile(
+  wrapper: Awaited<ReturnType<typeof render>>["wrapper"],
+) {
+  const csv = ["q1.r1,q1.r2,q2,q3", "4,5,3,21", "2,1,5,34", "5,5,2,28"].join(
+    "\n",
+  );
   const input = wrapper.find('input[type="file"]');
   Object.defineProperty(input.element, "files", {
     value: [new File([csv], "sample.csv", { type: "text/csv" })],
@@ -302,7 +314,9 @@ it("shows the error state with retry when loading fails", async () => {
   const { wrapper } = render({}, { failLoad: true });
   await flushPromises();
   expect(wrapper.text()).toContain("研究数据加载失败，请重试");
-  const retry = wrapper.findAll("button").find((button) => button.text().includes("重试"));
+  const retry = wrapper
+    .findAll("button")
+    .find((button) => button.text().includes("重试"));
   expect(retry).toBeTruthy();
   wrapper.unmount();
 });
@@ -323,7 +337,9 @@ it("lists datasets with source badges, hashes and picks the first as active", as
   expect(wrapper.text()).toContain("疑似重复行 1 行");
   expect(
     router.mock.calls.filter(
-      ([path]) => String(path) === `/api/research/surveys/${surveyId}/datasets/${datasetId}`,
+      ([path]) =>
+        String(path) ===
+        `/api/research/surveys/${surveyId}/datasets/${datasetId}`,
     ),
   ).toHaveLength(1);
   wrapper.unmount();
@@ -334,8 +350,8 @@ it("renders the fixed run result with the report link and formatted numbers", as
   const { wrapper } = render();
   await flushPromises();
   expect(wrapper.text()).toContain("调节中介分析（Bootstrap）");
-  expect(wrapper.text()).toContain("有效样本 188");
-  expect(wrapper.text()).toContain("因缺失排除 12 行");
+  expect(wrapper.find(".result-metrics").text()).toContain("188");
+  expect(wrapper.find(".result-metrics").text()).toContain("12");
   expect(wrapper.text()).toContain("区间不等于因果。");
   expect(wrapper.text()).toContain("0.1235");
   expect(wrapper.text()).toContain("不可计算");
@@ -377,7 +393,10 @@ it("creates reliability, EFA and moderatedMediation runs from one click", async 
 });
 
 it("falls back to manual role selection when no structured models exist", async () => {
-  const { wrapper, createdRuns } = render({}, { codebook: codebookWithoutModels });
+  const { wrapper, createdRuns } = render(
+    {},
+    { codebook: codebookWithoutModels },
+  );
   await flushPromises();
   // 无结构化模型：一键仍在（信度/EFA 可跑），但提示缺调节中介并给出角色选择。
   expect(wrapper.text()).toContain("当前计划未包含调节中介");
@@ -410,12 +429,18 @@ it("falls back to manual role selection when no structured models exist", async 
 });
 
 describe("dataset import dialog", () => {
-  async function fillSourceFields(wrapper: Awaited<ReturnType<typeof render>>["wrapper"]) {
+  async function fillSourceFields(
+    wrapper: Awaited<ReturnType<typeof render>>["wrapper"],
+  ) {
     // PrimeVue Select 内部也渲染 .p-inputtext，只取不在下拉里的字段输入框；
     // 顺序 = 数据集名称、标题、引用、链接、许可、说明（名称已有文件名缺省）。
     const fields = wrapper
-      .findAll(".dialog-stub input.p-inputtext")
-      .filter((input) => !(input.element as HTMLInputElement).closest(".p-select"));
+      .findAll(
+        ".dialog-stub input.p-inputtext, .dialog-stub textarea.p-textarea",
+      )
+      .filter(
+        (input) => !(input.element as HTMLInputElement).closest(".p-select"),
+      );
     expect(fields).toHaveLength(6);
     const values = [
       null,
@@ -432,7 +457,11 @@ describe("dataset import dialog", () => {
   }
 
   it("auto-maps codebook variables to columns and submits the confirmed source", async () => {
-    const { wrapper, createdDatasets, notify } = render({}, {}, { Dialog: DialogStub });
+    const { wrapper, createdDatasets, notify } = render(
+      {},
+      {},
+      { Dialog: DialogStub },
+    );
     await flushPromises();
     await openImportDialog(wrapper);
     expect(wrapper.find(".dialog-stub").exists()).toBe(true);
@@ -461,6 +490,9 @@ describe("dataset import dialog", () => {
         kind: "public",
         citation: "Doe (2026) Open Sample",
         license: "CC-BY-4.0",
+        note: "公开复刻数据",
+        title: "Open Sample",
+        url: "https://example.com/data.csv",
       },
     });
     expect(notify.success).toHaveBeenCalledWith("数据集「导入样本」已导入。");
@@ -474,11 +506,73 @@ describe("dataset import dialog", () => {
     await chooseCsvFile(wrapper);
     // 来源字段默认为空：公开数据的必填校验挡住提交。
     const submit = () =>
-      wrapper
-        .findAll("button")
-        .find((button) => button.text() === "确认导入")!;
+      wrapper.findAll("button").find((button) => button.text() === "确认导入")!;
     expect(submit().attributes("disabled")).toBeDefined();
-    expect(wrapper.text()).toContain("公开数据需要完整填写标题、引用、链接、许可与说明");
+    expect(wrapper.text()).toContain(
+      "公开数据需要完整填写标题、引用、链接、许可与说明",
+    );
     wrapper.unmount();
   });
+});
+
+it("prioritizes existing results and keeps data and plan collapsed", async () => {
+  const { wrapper } = render();
+  await flushPromises();
+  expect(wrapper.find(".research-settings").attributes("open")).toBeUndefined();
+  expect(
+    wrapper
+      .find(".research-flow")
+      .element.firstElementChild?.classList.contains("results-block"),
+  ).toBe(true);
+  expect(wrapper.find(".run-history button").attributes("aria-pressed")).toBe(
+    "true",
+  );
+  wrapper.unmount();
+});
+
+it("opens data and plan for first use and prevents runs in read-only mode", async () => {
+  const { wrapper, createdRuns } = render({ canWrite: false }, { runs: [] });
+  await flushPromises();
+  expect(wrapper.find(".research-settings").attributes("open")).toBeDefined();
+  expect(wrapper.find(".results-block").exists()).toBe(false);
+  const run = wrapper
+    .findAll("button")
+    .find((button) => button.text() === "一键运行研究计划")!;
+  expect(run.attributes("disabled")).toBeDefined();
+  await run.trigger("click");
+  expect(createdRuns).toHaveLength(0);
+  wrapper.unmount();
+});
+
+it("keeps the newest selection when a previous run request resolves late", async () => {
+  const secondId = "00000000-0000-4000-8000-000000000006";
+  const { wrapper, router } = render(
+    {},
+    { runs: [runSummary, { ...runSummary, id: secondId }] },
+  );
+  await flushPromises();
+  const original = router.getMockImplementation()!;
+  let finishFirst!: (value: ResearchRunDetail) => void;
+  router.mockImplementation(async (path, init) => {
+    if (path.endsWith(`/runs/${runId}`))
+      return new Promise<ResearchRunDetail>((resolve) => {
+        finishFirst = resolve;
+      });
+    if (path.endsWith(`/runs/${secondId}`))
+      return {
+        ...runDetail,
+        id: secondId,
+        result: { ...runDetail.result, method: "latest-selection" },
+      };
+    return original(path, init);
+  });
+  const buttons = wrapper.findAll(".run-history button");
+  await buttons[0]!.trigger("click");
+  await buttons[1]!.trigger("click");
+  await flushPromises();
+  finishFirst(runDetail);
+  await flushPromises();
+  expect(wrapper.find(".method-detail").text()).toContain("latest-selection");
+  expect(buttons[1]!.attributes("aria-pressed")).toBe("true");
+  wrapper.unmount();
 });

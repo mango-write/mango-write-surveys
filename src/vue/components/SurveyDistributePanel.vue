@@ -97,6 +97,7 @@ function onLimitChange(value: number | null) {
       <label class="limit-field"
         >{{ t("surveys.responseLimit") }}<InputNumber
           :model-value="responseLimit"
+          fluid
           :min="1"
           :max="10000"
           :step="1"
@@ -179,7 +180,8 @@ function onLimitChange(value: number | null) {
 .limit-field {
   display: grid;
   gap: 0.5rem;
-  max-width: 16rem;
+  width: 100%;
+  min-width: 0;
 }
 @media (max-width: 767.98px) {
   .share-row {

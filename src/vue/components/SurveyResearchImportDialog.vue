@@ -6,7 +6,9 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
+import FileUpload, { type FileUploadSelectEvent } from "primevue/fileupload";
 import InputText from "primevue/inputtext";
+import Textarea from "primevue/textarea";
 import Message from "primevue/message";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
@@ -80,10 +82,8 @@ watch(
   },
 );
 
-async function readFile(event: Event) {
-  const input = event.target as HTMLInputElement;
-  const file = input.files?.[0];
-  input.value = "";
+async function readFile(event: FileUploadSelectEvent) {
+  const file = event.files[0];
   parseError.value = null;
   parsed.value = null;
   csvText.value = null;
@@ -211,12 +211,17 @@ async function submit() {
     <div class="import-body">
       <label
         >{{ t("surveys.research.pickFile") }}
-        <input
-          type="file"
+        <FileUpload
+          mode="basic"
+          class="import-file"
           accept=".csv,text/csv"
+          :max-file-size="RESEARCH_CSV_MAX_BYTES"
+          :choose-label="t('surveys.research.pickFile')"
+          choose-icon="pi pi-upload"
+          :custom-upload="true"
+          :auto="false"
           :disabled="!canWrite"
-          :aria-label="t('surveys.research.pickFile')"
-          @change="readFile"
+          @select="readFile"
         />
         <small v-if="parsed" class="tw:text-muted">{{
           t("surveys.research.fileParsed", {
@@ -296,7 +301,7 @@ async function submit() {
           /></label>
           <label
             >{{ t("surveys.research.sourceCitation")
-            }}<InputText v-model="sourceCitation" fluid :maxlength="2000"
+            }}<Textarea v-model="sourceCitation" fluid :maxlength="2000" rows="2" auto-resize
           /></label>
           <label
             >{{ t("surveys.research.sourceUrl")
@@ -308,7 +313,7 @@ async function submit() {
           /></label>
           <label
             >{{ t("surveys.research.sourceNote")
-            }}<InputText v-model="sourceNote" fluid :maxlength="2000"
+            }}<Textarea v-model="sourceNote" fluid :maxlength="2000" rows="3" auto-resize
           /></label>
           <small v-if="publicSourceIncomplete" class="import-error">{{
             t("surveys.research.publicSourceRequired")
@@ -348,7 +353,12 @@ async function submit() {
 label {
   display: grid;
   gap: 0.5rem;
+  width: 100%;
   min-width: 0;
+}
+.import-file,
+.import-file :deep(.p-fileupload-choose-button) {
+  width: 100%;
 }
 .import-error {
   color: var(--color-danger-700);
@@ -380,5 +390,10 @@ label {
 }
 .synthetic-notice {
   font-weight: 600;
+}
+@media (max-width: 600px) {
+  .mapping-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 </style>

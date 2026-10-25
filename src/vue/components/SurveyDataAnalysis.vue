@@ -208,6 +208,7 @@ watch(
         >{{ t("surveys.dataVersion")
         }}<Select
           v-model="revisionId"
+          fluid
           :options="revisionOptions"
           option-label="label"
           option-value="value"
@@ -221,12 +222,14 @@ watch(
           :disabled="busy || !revisionId"
           @click="load"
         /><Button
+          v-if="mode === 'data'"
           :label="t('surveys.exportData')"
           icon="pi pi-download"
           severity="secondary"
           :disabled="!revisionId"
           @click="exportCsv"
         /><Button
+          v-if="mode === 'data'"
           :label="t('surveys.codebook')"
           severity="secondary"
           :disabled="!revisionId"
@@ -291,6 +294,7 @@ watch(
               >{{ t("surveys.searchData")
               }}<InputText
                 v-model="tableSearch"
+                fluid
                 :placeholder="t('surveys.searchData')"
                 :aria-label="t('surveys.searchData')"
               /><small class="tw:text-muted">{{
@@ -435,10 +439,11 @@ watch(
 label {
   display: grid;
   gap: 0.5rem;
+  width: 100%;
   min-width: 0;
 }
 .data-toolbar > label {
-  min-width: 12rem;
+  width: min(100%, 22rem);
 }
 .codebook {
   margin-top: var(--layout-card-padding);

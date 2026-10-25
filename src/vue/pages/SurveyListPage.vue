@@ -276,6 +276,7 @@ onMounted(load);
       {{ t("surveys.title") }}
       <InputText
         v-model="newTitle"
+        fluid
         autofocus
         :maxlength="200"
         @keyup.enter="newTitle.trim() && create()"
@@ -344,6 +345,8 @@ onMounted(load);
 .dialog-field {
   display: grid;
   gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
 }
 :global(.survey-dialog) {
   width: min(30rem, calc(100vw - 2rem));

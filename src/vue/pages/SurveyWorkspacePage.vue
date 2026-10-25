@@ -586,7 +586,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
 </script>
 <template>
   <div class="survey-workbench">
-    <SurveyWorkbenchShell :tabs="leftTabs">
+    <SurveyWorkbenchShell :tabs="stage === 'analysis' ? [] : leftTabs">
       <template #left="{ activeTab }">
         <SurveyOutlinePanel
           v-if="activeTab === 'outline' && survey"

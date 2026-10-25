@@ -60,7 +60,14 @@ function importInput(csv: string, name = "研究数据集"): ResearchDatasetImpo
     name,
     csv,
     mapping: MODEL_MAPPING,
-    source: { kind: "synthetic", title: "合成数据", note: "服务验收fixture" },
+    source: {
+      kind: "synthetic",
+      title: "合成数据",
+      citation: "Surveys deterministic fixture",
+      url: "https://example.test/research-fixture",
+      license: "CC0-1.0",
+      note: "服务验收fixture",
+    },
   };
 }
 
@@ -322,8 +329,33 @@ describe("重复记录披露", () => {
     expect(json.warnings).toContain("存在完全重复记录，本运行未删除（共 2 条）。");
 
     const html = renderResearchReportHtml(exported);
+    expect(html).toContain("MangoWrite");
+    expect(html).toContain("Surveys");
+    expect(html).toContain("合成数据");
+    expect(html).toContain("不构成真实受试者证据");
     expect(html).toContain("存在完全重复记录，本运行未删除");
-    expect(html).toContain("其中完全重复记录");
+    expect(html).toContain("完全重复记录");
+    expect(html).toContain("Surveys deterministic fixture");
+    expect(html).toContain("CC0-1.0");
+    expect(html).toContain("https://example.test/research-fixture");
+    expect(html).toContain(exported.run.inputHash);
+    expect(html).toContain(exported.run.resultHash);
+    expect(html).toContain(exported.dataset.rowsHash);
+    expect(html).toContain(exported.dataset.inputHash);
+    expect(html).toContain(exported.dataset.sourceSha256);
+    expect(html).toContain('<svg width="960"');
+    expect(html).toContain("<path");
+    expect(html).toContain('data-chart-id="reliability-alpha"');
+    expect(html.match(/<tbody>/g)).toHaveLength(exported.run.result.tables.length);
+    for (const table of exported.run.result.tables) {
+      expect(html).toContain(`data-table-id="${table.id}"`);
+      expect(html).toContain(table.title);
+      expect(html).toContain(`完整结果表 · ${table.rows.length} 行`);
+    }
+    expect(html).not.toMatch(/<script\b|<link\b|\s(?:src|href)=/i);
+    expect(html).not.toContain(MODEL_HEADER);
+    expect(html).not.toContain("normalizedRows");
+    expect(html).not.toMatch(/CanvasText|GrayText|ButtonBorder|LinkText|MarkText/);
 
     const csv = renderResearchResultCsv(exported);
     expect(csv).toContain("row_count,42");

@@ -4,6 +4,7 @@ import type { SurveyAnswers, SurveyOption, SurveyQuestion } from "../../contract
 import InputText from "primevue/inputtext";
 import Textarea from "primevue/textarea";
 import InputNumber from "primevue/inputnumber";
+import DatePicker from "primevue/datepicker";
 import RadioButton from "primevue/radiobutton";
 import Checkbox from "primevue/checkbox";
 import Select from "primevue/select";
@@ -24,7 +25,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   "update:modelValue": [value: SurveyAnswers[string] | undefined];
 }>();
-const { t, locale } = useI18n();
+const { t } = useI18n();
 const { renderMarkdown } = useSurveysHost();
 const scales = computed(() =>
   props.question.type === "scale"
@@ -198,25 +199,30 @@ function setMultiTextItem(itemId: string, value: string | undefined) {
   emit("update:modelValue", Object.keys(next).length ? next : undefined);
 }
 
-// ── 日期/时间：原生 input——移动端系统控件最顺手，值即协议值无需换算。──
 function stringValue(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
-function setStringAnswer(value: string) {
-  emit("update:modelValue", value || undefined);
-}
-// 原生日期控件按系统 locale 显示 MM/DD/YYYY，与中文阅读顺序有歧义；
-// 下方只读回显按界面 locale 展开，协议值不变。
-const dateEcho = computed(() => {
-  if (props.question.type !== "date") return "";
+function temporalValue(kind: "date" | "time"): Date | null {
   const value = stringValue(props.modelValue);
-  if (!value) return "";
+  if (!value) return null;
+  const parsed = new Date(kind === "date" ? `${value}T00:00:00` : `1970-01-01T${value}:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+function temporalBoundary(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
   const parsed = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(parsed.getTime())) return "";
-  return new Intl.DateTimeFormat(locale.value, { dateStyle: "long" }).format(
-    parsed,
-  );
-});
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+function setTemporalAnswer(kind: "date" | "time", value: unknown) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+    emit("update:modelValue", undefined);
+    return;
+  }
+  const pad = (part: number) => String(part).padStart(2, "0");
+  emit("update:modelValue", kind === "date"
+    ? `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`
+    : `${pad(value.getHours())}:${pad(value.getMinutes())}`);
+}
 const statementHtml = computed(() =>
   props.question.type === "statement" && props.question.body
     ? renderMarkdown(props.question.body)
@@ -429,30 +435,31 @@ const statementHtml = computed(() =>
       </div>
     </template>
     <template v-else-if="question.type === 'date'">
-      <input
-        :id="question.id"
-        class="native-date"
-        type="date"
-        :value="stringValue(modelValue)"
-        :min="question.min"
-        :max="question.max"
+      <DatePicker
+        :input-id="question.id"
+        :model-value="temporalValue('date')"
+        :min-date="temporalBoundary(question.min)"
+        :max-date="temporalBoundary(question.max)"
         :disabled="disabled"
+        date-format="yy-mm-dd"
+        show-icon
+        fluid
         :aria-label="question.title"
-        @change="setStringAnswer(($event.target as HTMLInputElement).value)"
+        @update:model-value="setTemporalAnswer('date', $event)"
       />
-      <small v-if="dateEcho" class="date-echo tw:text-muted">{{
-        t("surveys.dateSelected", { date: dateEcho })
-      }}</small>
     </template>
     <template v-else-if="question.type === 'time'">
-      <input
-        :id="question.id"
-        class="native-date"
-        type="time"
-        :value="stringValue(modelValue)"
+      <DatePicker
+        :input-id="question.id"
+        :model-value="temporalValue('time')"
         :disabled="disabled"
+        show-time
+        time-only
+        hour-format="24"
+        show-icon
+        fluid
         :aria-label="question.title"
-        @change="setStringAnswer(($event.target as HTMLInputElement).value)"
+        @update:model-value="setTemporalAnswer('time', $event)"
       />
     </template>
     <template v-else-if="rankingQuestion">
@@ -815,19 +822,6 @@ const statementHtml = computed(() =>
 .mt-item--invalid {
   box-shadow: 0 0 0 2px var(--color-danger-500);
   border-radius: var(--radius-sm, 6px);
-}
-.native-date {
-  max-width: 16rem;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm, 6px);
-  background: var(--color-surface-base);
-  color: var(--color-text-primary);
-  font: inherit;
-}
-.native-date:focus {
-  outline: none;
-  border-color: var(--color-brand-400);
 }
 /* 图片选项：瓦片网格自适应（390 档自动收列数），选中描边与 NPS 同族。 */
 .image-options {

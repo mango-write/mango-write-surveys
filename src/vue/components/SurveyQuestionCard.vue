@@ -7,6 +7,7 @@ import { computed, nextTick, ref, watch, type ComponentPublicInstance } from "vu
 import { useI18n } from "vue-i18n";
 import Button from "primevue/button";
 import Checkbox from "primevue/checkbox";
+import DatePicker from "primevue/datepicker";
 import InputNumber from "primevue/inputnumber";
 import InputText from "primevue/inputtext";
 import RadioButton from "primevue/radiobutton";
@@ -473,17 +474,22 @@ function setNpsLabel(bound: "minLabel" | "maxLabel", value: string | undefined) 
     emit("change", { ...props.question, minLabel: label }, `q:${props.question.id}:minLabel`);
   else emit("change", { ...props.question, maxLabel: label }, `q:${props.question.id}:maxLabel`);
 }
-function setDateBound(bound: "min" | "max", value: string) {
+function setDateBound(bound: "min" | "max", value: unknown) {
   if (props.question.type !== "date") return;
-  // 清空 = 移除该边界；非法中间值（输入一半）不动定义。
-  if (!value) {
+  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
     const next = { ...props.question };
     delete next[bound];
     emit("change", next);
     return;
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return;
-  emit("change", { ...props.question, [bound]: value });
+  const pad = (part: number) => String(part).padStart(2, "0");
+  const date = `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
+  emit("change", { ...props.question, [bound]: date });
+}
+function dateBoundary(value: string | undefined): Date | undefined {
+  if (!value) return undefined;
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
 }
 function setMatrixRows(rows: SurveyLabeledNode[]) {
   if (
@@ -685,6 +691,7 @@ function optionRef(el: unknown, index: number) {
         <Textarea
           v-if="selected && !disabled"
           ref="titleInput"
+          fluid
           class="q-card__title-input"
           :model-value="question.title"
           rows="1"
@@ -745,6 +752,7 @@ function optionRef(el: unknown, index: number) {
               <span v-if="uploading && uploadTarget === option.id" class="opt-thumb__busy" />
             </button>
             <InputText
+              fluid
               :ref="(el) => optionRef(el, index)"
               class="opt-input"
               :class="{ 'opt-input--default': isDefaultOptionLabel(option.label) }"
@@ -799,6 +807,7 @@ function optionRef(el: unknown, index: number) {
             />
             <Checkbox v-else binary :model-value="false" disabled :tabindex="-1" />
             <InputText
+              fluid
               :ref="
                 (el: Element | ComponentPublicInstance | null) => {
                   pendingInput =
@@ -1094,23 +1103,26 @@ function optionRef(el: unknown, index: number) {
         <template v-else-if="question.type === 'date'">
           <label class="advanced-field">
             {{ t("surveys.dateMin") }}
-            <input
-              class="advanced-date"
-              type="date"
-              :value="question.min ?? ''"
+            <DatePicker
+              :model-value="dateBoundary(question.min)"
+              :max-date="dateBoundary(question.max)"
+              date-format="yy-mm-dd"
+              show-icon
+              fluid
               :aria-label="t('surveys.dateMin')"
-              @change="setDateBound('min', ($event.target as HTMLInputElement).value)"
+              @update:model-value="setDateBound('min', $event)"
             />
           </label>
           <label class="advanced-field">
             {{ t("surveys.dateMax") }}
-            <input
-              class="advanced-date"
-              type="date"
-              :value="question.max ?? ''"
-              :min="question.min"
+            <DatePicker
+              :model-value="dateBoundary(question.max)"
+              :min-date="dateBoundary(question.min)"
+              date-format="yy-mm-dd"
+              show-icon
+              fluid
               :aria-label="t('surveys.dateMax')"
-              @change="setDateBound('max', ($event.target as HTMLInputElement).value)"
+              @update:model-value="setDateBound('max', $event)"
             />
           </label>
         </template>
@@ -1300,12 +1312,9 @@ function optionRef(el: unknown, index: number) {
   line-height: 1.6;
   white-space: nowrap;
 }
-.opt-input,
-:deep(.opt-input) {
-  border-color: transparent;
-  background: transparent;
-  box-shadow: none;
-  padding-block: 4px;
+.opt-input {
+  flex: 1;
+  min-width: 0;
 }
 /* 图片选项缩略图（36px 方块）：空态显图标占位，上传中转圈。 */
 .opt-thumb {
@@ -1387,19 +1396,6 @@ function optionRef(el: unknown, index: number) {
 }
 .q-card__statement--empty {
   padding: 2px 0;
-}
-.advanced-date {
-  max-width: 16rem;
-  padding: 0.45rem 0.65rem;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm, 6px);
-  background: var(--color-surface-base);
-  color: var(--color-text-primary);
-  font: inherit;
-}
-.advanced-date:focus {
-  outline: none;
-  border-color: var(--color-brand-400);
 }
 .preview-shared {
   font-size: 13px;

@@ -102,8 +102,7 @@ describe("SurveyQuestionField 新题型", () => {
     expect(lastEmit(wrapper)).toBe(8);
   });
 
-  it("日期/时间：原生 input 承载协议值，选中后回显本地格式，清空发 undefined", async () => {
-    // 回显文案由界面 locale 决定：mountSurveysComponent 固定 zh-CN，断言整句。
+  it("日期/时间：PrimeVue DatePicker 与协议字符串双向转换，清空发 undefined", async () => {
     const dateQuestion: SurveyQuestion = {
       id: "q4",
       type: "date",
@@ -112,21 +111,14 @@ describe("SurveyQuestionField 新题型", () => {
       min: "2026-01-01",
     };
     const wrapper = await renderField(dateQuestion);
-    const input = wrapper.find("input[type='date']");
-    expect(input.attributes("min")).toBe("2026-01-01");
-    // 无值不回显。
-    expect(wrapper.find(".date-echo").exists()).toBe(false);
-    await input.setValue("2026-06-01");
+    const datePicker = wrapper.findAllComponents({ name: "DatePicker" })[0]!;
+    expect(datePicker.props("minDate")).toEqual(new Date(2026, 0, 1));
+    await datePicker.vm.$emit("update:modelValue", new Date(2026, 5, 1));
     expect(lastEmit(wrapper)).toBe("2026-06-01");
-    // 回显读 props.modelValue：宿主把 emit 的值回灌后才出现。
     await wrapper.setProps({ modelValue: "2026-06-01" });
-    const echo = wrapper.find(".date-echo");
-    expect(echo.exists()).toBe(true);
-    expect(echo.text()).toBe("已选：2026年6月1日");
-    await input.setValue("");
+    expect(datePicker.props("modelValue")).toEqual(new Date(2026, 5, 1));
+    await datePicker.vm.$emit("update:modelValue", null);
     expect(lastEmit(wrapper)).toBeUndefined();
-    await wrapper.setProps({ modelValue: undefined });
-    expect(wrapper.find(".date-echo").exists()).toBe(false);
 
     const timeQuestion: SurveyQuestion = {
       id: "q5",
@@ -135,8 +127,11 @@ describe("SurveyQuestionField 新题型", () => {
       required: false,
     };
     const wrapper2 = await renderField(timeQuestion);
-    await wrapper2.find("input[type='time']").setValue("08:30");
+    const timePicker = wrapper2.findAllComponents({ name: "DatePicker" })[0]!;
+    await timePicker.vm.$emit("update:modelValue", new Date(1970, 0, 1, 8, 30));
     expect(lastEmit(wrapper2)).toBe("08:30");
+    await wrapper2.setProps({ modelValue: "08:30" });
+    expect(timePicker.props("modelValue")).toEqual(new Date(1970, 0, 1, 8, 30));
   });
 
   it("排序：初始态不显名次不记答案，移动后才形成全排列", async () => {

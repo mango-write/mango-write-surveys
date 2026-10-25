@@ -515,7 +515,7 @@ watch(slug, () => {
 .public-paper :deep(.scale-choice),
 .public-paper :deep(.consent),
 .public-paper :deep(.nps-cell),
-.public-paper :deep(.native-date) {
+.public-paper :deep(.p-datepicker) {
   min-height: 2.75rem;
   -webkit-tap-highlight-color: transparent;
 }
