@@ -14,7 +14,6 @@ import type { SurveySaveStatus } from "./useSurveyAutosave.js";
 import type { SurveyDraftState } from "./useSurveyDraftHistory.js";
 
 export type SurveyReviewDelivery = Extract<ToolSurveyDelivery, { type: "survey_review" }>;
-export type SurveyReviewRequestKind = "review" | "design";
 
 export interface SurveyReviewSessionOptions {
   /** 当前工作区问卷 id：别的问卷的诊断帧不串场。 */
@@ -69,7 +68,7 @@ export function useSurveyReviewSession(options: SurveyReviewSessionOptions) {
     report.value = null;
   }
 
-  async function request(kind: SurveyReviewRequestKind): Promise<void> {
+  async function request(): Promise<void> {
     if (busy.value || !options.canWrite()) return;
     busy.value = true;
     try {
@@ -77,16 +76,13 @@ export function useSurveyReviewSession(options: SurveyReviewSessionOptions) {
         options.notify.warn(options.t("surveys.assistant.saveFirst"));
         return;
       }
-      const prompt = options.t(kind === "review" ? "surveys.assistant.reviewPrompt" : "surveys.assistant.designPrompt");
+      const prompt = options.t("surveys.assistant.reviewPrompt");
       if (!options.copilot?.sendPrompt) {
         options.copilot?.fillComposer(prompt);
         options.copilot?.focusComposer();
         return;
       }
-      await options.copilot.sendPrompt(
-        prompt,
-        kind === "review" ? ["survey_read", "survey_review"] : ["survey_read", "survey_edit"],
-      );
+      await options.copilot.sendPrompt(prompt, ["survey_read", "survey_review"]);
     } catch {
       options.notify.error(options.t("surveys.assistant.requestFailed"));
     } finally {

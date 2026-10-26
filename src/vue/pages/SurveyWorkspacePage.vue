@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 问卷工作区（issue #217）：SurveyWorkbenchShell 三岛工作台。左岛 = 大纲 /
-// 研究 / 版本三 tab（回收上限在发放段内联编辑）；中岛顶部是生命周期轨道（设计 →
+// 版本两 tab（回收上限在发放段内联编辑）；中岛顶部是生命周期轨道（设计 →
 // 发放 → 数据 → 分析），未发布时后三段锁定，发布成功后自动落到发放段。
 // 编辑模型：中岛画布就地编辑，所有变更走 useSurveyDraftHistory.commit
 // 同一入口；自动保存防抖 PATCH（expectedVersion 乐观锁），顶栏只有保存状态与
@@ -14,9 +14,11 @@ import { useI18n } from "vue-i18n";
 import { useConfirm } from "primevue/useconfirm";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
+import InputNumber from "primevue/inputnumber";
 import Message from "primevue/message";
 import Tag from "primevue/tag";
-import { Eye, FlaskConical, History, List, Redo2, Undo2 } from "lucide-vue-next";
+import Textarea from "primevue/textarea";
+import { Eye, History, List, Redo2, Undo2 } from "lucide-vue-next";
 import type {
   SurveyDetail,
   SurveyStatus,
@@ -50,7 +52,6 @@ import SurveyPreviewOverlay from "../components/SurveyPreviewOverlay.vue";
 import SurveySwitcher from "../components/SurveySwitcher.vue";
 import SurveyReviewBar from "../components/SurveyReviewBar.vue";
 import SurveyInlineReview from "../components/SurveyInlineReview.vue";
-import SurveyResearchAssistant from "../components/SurveyResearchAssistant.vue";
 import {
   takeAiCreatedSurveyHandoff,
   setAiCreatedSurveyHandoff,
@@ -91,7 +92,6 @@ const surveyId = computed(() =>
 
 const leftTabs = computed<SurveyShellTab[]>(() => [
   { id: "outline", label: t("surveys.outlineTab"), icon: List },
-  { id: "research", label: t("surveys.researchTab"), icon: FlaskConical },
   { id: "versions", label: t("surveys.versionsTab"), icon: History },
 ]);
 
@@ -308,10 +308,9 @@ watch(
   { immediate: true },
 );
 
-// Copilot 面板呈现（issue #224 M2）：按当前阶段/选中题注册问卷专属空态与场景
-// 动作。设计段只注册「整理研究依据」——顶栏「帮我完善」是唯一 review 入口，
-// 面板不再出现第二个。run 动作收敛到 reviewSession.request 同一入口（flush/
-// busy 闸在会话内）并透出 Promise；卸载后的 surface 清理归 releasePageState。
+// Copilot 面板呈现（issue #224 M2）：按当前阶段/选中题注册问卷专属空态文案，
+// 不注册任何 run 动作——顶栏「帮我完善」是唯一 review 触发，题目旁的修改建议
+// 是主要阅读位置；卸载后的 surface 清理归 releasePageState。
 const copilotPresentation = computed<SurveysCopilotSurfacePresentation | null>(() => {
   if (!host.copilot?.setSurfacePresentation || !survey.value) return null;
   const selected = definition.value.questions.find(
@@ -328,12 +327,7 @@ const copilotPresentation = computed<SurveysCopilotSurfacePresentation | null>((
     composerPlaceholder: selected
       ? t("surveys.copilot.surfaceQuestionPlaceholder", { title: selected.title.slice(0, 40) })
       : t("surveys.copilot.surfacePlaceholder"),
-    actions:
-      stage.value === "design" && survey.value.canWrite
-        ? [
-            { id: "survey-design", label: t("surveys.assistant.addDesign"), run: () => askResearch("design") },
-          ]
-        : [],
+    actions: [],
   };
 });
 watch(
@@ -488,6 +482,57 @@ const publishNextRevision = computed(
   () => (survey.value?.revisions[0]?.revision ?? 0) + 1,
 );
 const publishDesign = computed(() => definition.value.researchDesign ?? null);
+// 「有研究设计」的发布侧判据：recordPretest 会在无设计草稿上合成空基底，
+// 只看 researchDesign 存在会把空设计当成「没有待确认事项」的绿色事实。
+const publishDesignUsable = computed(() => {
+  const design = definition.value.researchDesign;
+  return !!design && !!design.researchQuestion.trim();
+});
+// 试填记录（作者自报）：唯一数据是 definition.researchDesign.pretest；确认
+// 视图里按需展开记录，保存走 commitDefinition 同一历史/自动保存链路。
+const pretestNotes = ref("");
+const pretestCount = ref<number | null>(null);
+watch(
+  () => publishDesign.value?.pretest,
+  (value) => {
+    pretestNotes.value = value?.notes ?? "";
+    pretestCount.value = value?.participantCount ?? null;
+  },
+  { immediate: true },
+);
+function recordPretest() {
+  const target = survey.value;
+  if (!target?.canWrite || !pretestCount.value || !pretestNotes.value.trim()) return;
+  // 冲突是终态：不再提交任何变更，提示与全局冲突横幅一致，不给「已记录」假成功。
+  if (autosave.status.value === "conflict") {
+    notify.warn(t("surveys.conflict"));
+    return;
+  }
+  commitDefinition(
+    {
+      ...definition.value,
+      researchDesign: {
+        // 草稿尚无研究设计时按 schema 基底补全，避免缺字段对象流入模板/发布。
+        researchQuestion: "",
+        population: "",
+        recruitment: "",
+        purpose: "describe",
+        timeBudgetMinutes: 5,
+        constructs: [],
+        analysisPlan: "",
+        assumptions: [],
+        pendingDecisions: [],
+        ...publishDesign.value,
+        pretest: {
+          notes: pretestNotes.value.trim(),
+          participantCount: pretestCount.value,
+          recordedAt: new Date().toISOString(),
+        },
+      },
+    },
+    "pretest",
+  );
+}
 const pendingReview = computed(() =>
   reviewReport.value && reviewPlan.value
     ? {
@@ -521,6 +566,12 @@ async function confirmPublish() {
   const target = survey.value;
   if (!target || busy.value) return;
   await action(async () => {
+    // 对话框内可能刚记录了试填：确认发布前必须再落盘一次，保证版本与记录
+    // 一起进历史，失败则留在确认视图给错误反馈。
+    if (!(await autosave.flush())) {
+      publishError.value = t("surveys.assistant.saveFirst");
+      return;
+    }
     survey.value = await surveysApi.publish(target.id);
     // 发布生成不可变版本，落发放段：发布后的下一步动作就是发链接。
     publishOpen.value = false;
@@ -650,19 +701,6 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
           @select="locateQuestion"
           @cover="canvasRef?.locateCover()"
         />
-        <SurveyResearchAssistant
-          v-if="activeTab === 'research' && survey"
-          :design="definition.researchDesign"
-          :definition="definition"
-          :questions="definition.questions"
-          :busy="reviewBusy"
-          :disabled="!survey.canWrite"
-          :has-copilot="!!host.copilot"
-          @update:design="commitDefinition({ ...definition, researchDesign: $event })"
-          @design-request="askResearch('design')"
-          @locate="locateQuestion"
-          @preview="previewOpen = true"
-        />
         <SurveyVersionsPanel
           v-if="activeTab === 'versions' && survey"
           :revisions="survey.revisions"
@@ -762,7 +800,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
                 :label="t('surveys.assistant.review')" icon="pi pi-sparkles" text severity="secondary"
                 v-tooltip.bottom="t('surveys.assistant.reviewHint')"
                 :loading="reviewBusy || reviewApplying" :disabled="!survey.canWrite"
-                @click="askResearch('review')" />
+                @click="askResearch()" />
               <Button
                 severity="secondary"
                 variant="text"
@@ -936,12 +974,12 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
         </p>
         <div class="publish-reminders" role="list">
           <p class="publish-reminders-title">{{ t("surveys.publishCheck.remindersTitle") }}</p>
-          <div v-if="!publishDesign" role="listitem" class="publish-reminder">
+          <div v-if="!publishDesignUsable" role="listitem" class="publish-reminder">
             <i class="pi pi-exclamation-triangle" aria-hidden="true" />
             <span>{{ t("surveys.publishCheck.noDesign") }}</span>
           </div>
           <template v-else>
-            <div v-if="publishDesign.pendingDecisions.length" role="listitem" class="publish-reminder">
+            <div v-if="publishDesign?.pendingDecisions.length" role="listitem" class="publish-reminder">
               <i class="pi pi-exclamation-triangle" aria-hidden="true" />
               <span>
                 {{ t("surveys.publishCheck.pendingDecisions", { n: publishDesign.pendingDecisions.length }) }}
@@ -954,15 +992,15 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
               <i class="pi pi-check" aria-hidden="true" />
               <span>{{ t("surveys.publishCheck.noPending") }}</span>
             </div>
-            <div role="listitem" class="publish-reminder" :class="{ 'is-ok': !!publishDesign.pretest }">
-              <i class="pi" :class="publishDesign.pretest ? 'pi-check' : 'pi-exclamation-triangle'" aria-hidden="true" />
-              <span>
-                {{ publishDesign.pretest
-                  ? t("surveys.publishCheck.pretestDone", { n: publishDesign.pretest.participantCount })
-                  : t("surveys.publishCheck.noPretest") }}
-              </span>
-            </div>
           </template>
+          <div role="listitem" class="publish-reminder" :class="{ 'is-ok': !!publishDesign?.pretest }">
+            <i class="pi" :class="publishDesign?.pretest ? 'pi-check' : 'pi-exclamation-triangle'" aria-hidden="true" />
+            <span>
+              {{ publishDesign?.pretest
+                ? t("surveys.publishCheck.pretestDone", { n: publishDesign.pretest.participantCount })
+                : t("surveys.publishCheck.noPretest") }}
+            </span>
+          </div>
           <div v-if="pendingReview" role="listitem" class="publish-reminder" :class="{ 'is-stale': pendingReview.stale }">
             <i class="pi pi-exclamation-triangle" aria-hidden="true" />
             <span>
@@ -973,6 +1011,23 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
             </span>
           </div>
         </div>
+        <!-- 试填记录按需展开：只有作者需要留痕时才填；保存走草稿历史与自动保存。 -->
+        <details v-if="survey?.canWrite" class="publish-pretest">
+          <summary>{{ t("surveys.assistant.trialTitle") }}</summary>
+          <p class="publish-pretest-hint">{{ t("surveys.publishCheck.pretestHint") }}</p>
+          <Button :label="t('surveys.preview')" severity="secondary" @click="previewOpen = true" />
+          <label class="publish-pretest-field">
+            {{ t("surveys.assistant.trialCount") }}
+            <InputNumber v-model="pretestCount" :min="1" :max="10000" :disabled="busy" show-buttons fluid />
+          </label>
+          <label class="publish-pretest-field">
+            {{ t("surveys.assistant.trialNotes") }}
+            <Textarea v-model="pretestNotes" :maxlength="2000" rows="3" auto-resize fluid :disabled="busy" />
+          </label>
+          <Button :label="t('surveys.assistant.recordTrial')" severity="secondary"
+            :disabled="busy || !pretestCount || !pretestNotes.trim()" @click="recordPretest" />
+          <p v-if="publishDesign?.pretest" class="publish-pretest-hint">{{ t("surveys.assistant.trialRecorded") }}</p>
+        </details>
         <p class="publish-disclaimer">{{ t("surveys.publishCheck.disclaimer") }}</p>
         <Message v-if="publishError" severity="error" :closable="false">
           {{ publishError }}
@@ -1149,5 +1204,29 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
   margin: 0;
   font-size: 0.78rem;
   color: var(--color-text-tertiary);
+}
+.publish-pretest {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: 0.6rem;
+}
+.publish-pretest summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+.publish-pretest-hint {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-tertiary);
+  line-height: 1.6;
+}
+.publish-pretest-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.85rem;
 }
 </style>

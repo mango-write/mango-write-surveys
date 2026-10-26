@@ -228,7 +228,7 @@ describe("useSurveyReviewSession request", () => {
   it("先 flush 在途保存，flush 失败只警示不发话，busy 复位", async () => {
     const { session, flushResults, warns, copilot } = makeHarness();
     flushResults.push(false);
-    await session.request("review");
+    await session.request();
     expect(warns).toEqual(["surveys.assistant.saveFirst"]);
     expect(copilot.prompts).toHaveLength(0);
     expect(session.busy.value).toBe(false);
@@ -237,11 +237,11 @@ describe("useSurveyReviewSession request", () => {
   it("进入 request 即置 busy：flush 挂起时第二个请求被拒，不双发", async () => {
     const { session, flushResults, flushGates, copilot } = makeHarness();
     flushResults.push("wait");
-    const first = session.request("review");
+    const first = session.request();
     await tick();
     expect(session.busy.value).toBe(true);
 
-    await session.request("design");
+    await session.request();
     expect(flushGates).toHaveLength(1);
 
     flushGates.shift()!();
@@ -257,11 +257,11 @@ describe("useSurveyReviewSession request", () => {
       copilot.prompts.push(prompt);
       return new Promise<void>((resolve) => gates.push(resolve));
     };
-    const first = session.request("review");
+    const first = session.request();
     await tick();
     expect(session.busy.value).toBe(true);
 
-    await session.request("review");
+    await session.request();
     expect(copilot.prompts).toEqual(["surveys.assistant.reviewPrompt"]);
 
     gates.shift()!();
@@ -271,7 +271,7 @@ describe("useSurveyReviewSession request", () => {
 
   it("有 sendPrompt 走发话并带工具白名单；失败转错误提示", async () => {
     const { session, errors, copilot } = makeHarness();
-    await session.request("review");
+    await session.request();
     expect(copilot.prompts).toEqual(["surveys.assistant.reviewPrompt"]);
     expect(copilot.sendPrompt).toHaveBeenCalledWith(
       "surveys.assistant.reviewPrompt",
@@ -281,7 +281,7 @@ describe("useSurveyReviewSession request", () => {
     copilot.sendPrompt = vi.fn(async () => {
       throw new SurveysApiError(500, "server", null);
     });
-    await session.request("design");
+    await session.request();
     expect(errors).toEqual(["surveys.assistant.requestFailed"]);
     expect(session.busy.value).toBe(false);
   });
@@ -289,8 +289,8 @@ describe("useSurveyReviewSession request", () => {
   it("宿主没有 sendPrompt：回落填入输入框并聚焦，不发请求", async () => {
     const { session, copilot } = makeHarness();
     copilot.sendPrompt = undefined;
-    await session.request("design");
-    expect(copilot.prompts).toEqual(["surveys.assistant.designPrompt"]);
+    await session.request();
+    expect(copilot.prompts).toEqual(["surveys.assistant.reviewPrompt"]);
     expect(copilot.focusComposer).toHaveBeenCalled();
     expect(session.busy.value).toBe(false);
   });

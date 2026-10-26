@@ -1,6 +1,6 @@
-// 画布诊断条测试（M2 评审）：摘要/状态/放弃/唯一整批应用入口；应用前可核对
-// 候选项 before/after（definition 注入，review-change-rows 投影）；manual-only
-// details 默认展开；manual/deferred 带 questionId 的发现可定位（emit locate）。
+// 轻量批量操作条测试：默认只给「N 组修改」事实与唯一整批应用/放弃，不显示
+// 报告摘要；候选 before/after 收进 details（review-change-rows 投影）；
+// 题级人工项不在操作条（归题目旁投影），非题级事项收按需 details。
 import { describe, expect, it } from "vitest";
 import { mountSurveysComponent } from "../test-mount.js";
 import { makeDefinition } from "../../core/test-fixtures.js";
@@ -37,10 +37,12 @@ function applyButton(wrapper: ReturnType<typeof mountBar>) {
   return wrapper.findAll("button").find((button) => button.text().includes("应用 1 组修改"));
 }
 
-describe("画布诊断条", () => {
-  it("显示本次诊断摘要，ready 时提供唯一整批应用并向上发事件", async () => {
+describe("轻量批量操作条", () => {
+  it("默认只有「N 组修改」事实与唯一整批应用，不显示报告摘要与「研究助手」标题", async () => {
     const wrapper = mountBar(report());
-    expect(wrapper.text()).toContain("澄清时间范围");
+    expect(wrapper.text()).toContain("1 组修改");
+    expect(wrapper.text()).not.toContain("澄清时间范围");
+    expect(wrapper.text()).not.toContain("研究助手");
     const apply = applyButton(wrapper)!;
     expect(apply.exists()).toBe(true);
     await apply.trigger("click");
@@ -118,29 +120,57 @@ describe("画布诊断条", () => {
     wrapper.unmount();
   });
 
-  it("manual-only 的 details 默认展开；带题号的人工项可定位", async () => {
+  it("题级人工项不出现在操作条（归题目旁投影），非题级事项收按需 details 且 manual-only 默认展开", () => {
     const wrapper = mountBar(report({
-      findings: [{ ...baseFinding, suggestedOps: undefined }],
+      findings: [
+        { ...baseFinding, suggestedOps: undefined },
+        { ...baseFinding, id: "f2", questionId: undefined, suggestedOps: undefined, title: "招募渠道待定", reason: "缺少招募说明" },
+      ],
     }));
     const more = wrapper.find(".review-bar-more");
     expect(more.exists()).toBe(true);
     expect(more.element.hasAttribute("open")).toBe(true);
-    expect(more.text()).toContain("时间范围");
-    expect(more.text()).toContain("缺少时间范围");
+    // 题级发现不进操作条：题目旁的投影是主要阅读位置。
+    expect(more.text()).not.toContain("时间范围");
+    expect(more.text()).toContain("招募渠道待定");
+    expect(more.text()).toContain("缺少招募说明");
     expect(more.findAll("a").some((link) => link.attributes("href")?.startsWith("https://"))).toBe(true);
-    // manual-only 没有整批应用，但可定位到题。
     expect(applyButton(wrapper)).toBeUndefined();
-    const locate = more.findAll("button").find((button) => button.text() === "第 1 题")!;
-    await locate.trigger("click");
-    expect(wrapper.emitted("locate")).toEqual([["q1"]]);
     wrapper.unmount();
   });
 
-  it("ready 方案下的人工项 details 默认折叠，不与应用核对区抢视线", () => {
+  it("ready 方案下的非题级事项 details 默认折叠，不与应用核对区抢视线", () => {
     const wrapper = mountBar(report({
       findings: [baseFinding, { ...baseFinding, id: "f2", questionId: undefined, suggestedOps: undefined }],
     }));
     expect(wrapper.find(".review-bar-more").element.hasAttribute("open")).toBe(false);
+    wrapper.unmount();
+  });
+
+  it("方案过期后原题已删除的题级发现作为整卷遗留事项保留，明确仅供追溯", () => {
+    const wrapper = mountBar(report({
+      findings: [
+        baseFinding,
+        { ...baseFinding, id: "f-del", questionId: "q-gone", suggestedOps: undefined },
+      ],
+    }), { stale: true });
+    const more = wrapper.find(".review-bar-more");
+    expect(more.exists()).toBe(true);
+    expect(more.text()).toContain("方案已过期且部分原题已删除");
+    // 题级发现不再从所有 UI 消失：内容仍可读。
+    expect(more.text()).toContain("时间范围");
+    expect(more.text()).toContain("缺少时间范围");
+    wrapper.unmount();
+  });
+
+  it("未过期时不指向现存题目的发现不出现在操作条（正常由题目旁投影承担）", () => {
+    const wrapper = mountBar(report({
+      findings: [
+        baseFinding,
+        { ...baseFinding, id: "f-del", questionId: "q-gone", suggestedOps: undefined },
+      ],
+    }), { stale: false });
+    expect(wrapper.find(".review-bar-more").exists()).toBe(false);
     wrapper.unmount();
   });
 

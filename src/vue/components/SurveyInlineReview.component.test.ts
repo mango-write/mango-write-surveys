@@ -37,7 +37,7 @@ describe("题目旁的诊断投影", () => {
   });
   it("manual-only 方案只给阅读提示，不冒充可应用", () => {
     const wrapper = mount({ findings: [{ ...report.findings[0]!, suggestedOps: undefined }] });
-    expect(wrapper.text()).toContain("目前没有可安全自动修改的内容");
+    expect(wrapper.text()).toContain("没有可安全自动修改的内容");
     expect(wrapper.findAll("button").some((b) => b.text() === "采纳本轮修改" || b.text().startsWith("应用"))).toBe(false);
     wrapper.unmount();
   });
