@@ -3,7 +3,7 @@
 // 左岛 = tab 行 + 面板槽，中岛原位渲染，右岛 = 宿主注入的 Copilot 岛组件
 // （无 copilot 宿主不出右栏）。栏几何/激活 tab 走 useSurveysLayoutPrefs——
 // 宿主实现了持久化就交给宿主，缺省包内本地单例。
-import { computed, ref, watch } from "vue";
+import { computed, watch } from "vue";
 import type { Component } from "vue";
 
 import { useSurveysHost, useSurveysLayoutPrefs } from "../host.js";
@@ -23,7 +23,7 @@ const prefs = useSurveysLayoutPrefs({
 });
 
 // tab 集变化时激活 tab 不在集内（首挂/热切换）：回落第一项。
-const activeTab = ref(
+const activeTab = computed(() =>
   props.tabs.some((tab) => tab.id === prefs.activeLeftTab.value)
     ? prefs.activeLeftTab.value
     : (props.tabs[0]?.id ?? ""),
@@ -31,12 +31,11 @@ const activeTab = ref(
 watch(
   () => props.tabs,
   (tabs) => {
-    if (!tabs.some((tab) => tab.id === activeTab.value))
-      activeTab.value = tabs[0]?.id ?? "";
+    if (!tabs.some((tab) => tab.id === prefs.activeLeftTab.value))
+      prefs.activeLeftTab.value = tabs[0]?.id ?? "";
   },
 );
 function selectTab(id: string) {
-  activeTab.value = id;
   prefs.activeLeftTab.value = id;
 }
 const leftWidthStyle = computed(() => ({ width: `${prefs.leftRailWidth.value}px` }));

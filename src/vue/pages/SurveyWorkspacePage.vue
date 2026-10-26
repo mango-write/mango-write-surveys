@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 问卷工作区（issue #217）：SurveyWorkbenchShell 三岛工作台。左岛 = 大纲 /
-// 版本两 tab（回收上限在发放段内联编辑）；中岛顶部是生命周期轨道（设计 →
+// 研究 / 版本三 tab（回收上限在发放段内联编辑）；中岛顶部是生命周期轨道（设计 →
 // 发放 → 数据 → 分析），未发布时后三段锁定，发布成功后自动落到发放段。
 // 编辑模型：中岛画布就地编辑，所有变更走 useSurveyDraftHistory.commit
 // 同一入口；自动保存防抖 PATCH（expectedVersion 乐观锁），顶栏只有保存状态与
@@ -8,14 +8,15 @@
 // 宿主按路由 scope（survey:{surveyId}）常驻：survey_edit 交付帧在本地当前
 // 草稿上重放 ops（与手工编辑同一历史栈，撤销同源），survey_create 帧导航。
 // 导航出口一律 host.navigate；vue-router 只用于读路由参数与离开守卫。
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationNormalized } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useConfirm } from "primevue/useconfirm";
 import Button from "primevue/button";
+import Dialog from "primevue/dialog";
 import Message from "primevue/message";
 import Tag from "primevue/tag";
-import { Eye, History, List, Redo2, Undo2 } from "lucide-vue-next";
+import { Eye, FlaskConical, History, List, Redo2, Undo2 } from "lucide-vue-next";
 import type {
   SurveyDetail,
   SurveyStatus,
@@ -23,7 +24,6 @@ import type {
 } from "../../contracts/index.js";
 import {
   applySurveyOps,
-  buildSurveyReviewPlan,
   canonicalSurveyJson,
   validateSurveyDefinition,
 } from "../../core/index.js";
@@ -35,8 +35,8 @@ import SurveyWorkbenchShell, {
 import {
   SurveysApiError,
   useSurveysHost,
-  useSurveysLayoutPrefs,
   type SurveysCopilotSurface,
+  type SurveysCopilotSurfacePresentation,
 } from "../host.js";
 import { useSurveysNotify } from "../notify.js";
 import { useSurveysApi } from "../api.js";
@@ -47,7 +47,8 @@ import SurveyOutlinePanel from "../components/SurveyOutlinePanel.vue";
 import SurveyVersionsPanel from "../components/SurveyVersionsPanel.vue";
 import SurveyDistributePanel from "../components/SurveyDistributePanel.vue";
 import SurveyPreviewOverlay from "../components/SurveyPreviewOverlay.vue";
-import SurveyNavigator from "../components/SurveyNavigator.vue";
+import SurveySwitcher from "../components/SurveySwitcher.vue";
+import SurveyReviewBar from "../components/SurveyReviewBar.vue";
 import SurveyInlineReview from "../components/SurveyInlineReview.vue";
 import SurveyResearchAssistant from "../components/SurveyResearchAssistant.vue";
 import {
@@ -60,6 +61,7 @@ import {
   useSurveyDraftHistory,
   type SurveyDraftState,
 } from "../composables/useSurveyDraftHistory.js";
+import { useSurveyReviewSession } from "../composables/useSurveyReviewSession.js";
 
 type Stage = "design" | "distribute" | "data" | "analysis";
 
@@ -87,13 +89,9 @@ const surveyId = computed(() =>
   typeof route.params.surveyId === "string" ? route.params.surveyId : "",
 );
 
-useSurveysLayoutPrefs({
-  activeLeftTab: "outline",
-  leftRailWidth: 300,
-  rightRailWidth: 360,
-});
 const leftTabs = computed<SurveyShellTab[]>(() => [
   { id: "outline", label: t("surveys.outlineTab"), icon: List },
+  { id: "research", label: t("surveys.researchTab"), icon: FlaskConical },
   { id: "versions", label: t("surveys.versionsTab"), icon: History },
 ]);
 
@@ -177,59 +175,30 @@ async function redo() {
 const aiEditBanner = ref<{ applied: number; summary: string; rejected: number } | null>(null);
 type SurveyEditDelivery = Extract<ToolSurveyDelivery, { type: "survey_edit" }>;
 const aiStaleDelivery = ref<SurveyEditDelivery | null>(null);
-type SurveyReviewDelivery = Extract<ToolSurveyDelivery, { type: "survey_review" }>;
-const reviewReport = ref<SurveyReviewDelivery | null>(null);
-const reviewBusy = ref(false);
-const reviewApplying = ref(false);
-const reviewPlan = computed(() => reviewReport.value
-  ? buildSurveyReviewPlan(definition.value, reviewReport.value.findings)
-  : null);
-const reviewAddedQuestions = computed(() => reviewPlan.value?.candidateDefinition?.questions.filter(q => !definition.value.questions.some(original => original.id === q.id)) ?? []);
-const reviewStale = computed(() => !!reviewReport.value && (
-  reviewReport.value.baseDraftVersion !== draftVersion.value || !["idle", "saved"].includes(autosave.status.value)
-));
-async function askResearch(kind: "review" | "design") {
-  if (reviewBusy.value || !survey.value?.canWrite) return;
-  if (!await autosave.flush()) {
-    notify.warn(t("surveys.assistant.saveFirst"));
-    return;
-  }
-  const prompt = t(`surveys.assistant.${kind === "review" ? "reviewPrompt" : "designPrompt"}`);
-  if (!host.copilot?.sendPrompt) {
-    host.copilot?.fillComposer?.(prompt);
-    host.copilot?.focusComposer?.();
-    return;
-  }
-  reviewBusy.value = true;
-  try {
-    await host.copilot.sendPrompt(prompt, kind === "review" ? ["survey_read", "survey_review"] : ["survey_read", "survey_edit"]);
-  } catch {
-    notify.error(t("surveys.assistant.requestFailed"));
-  } finally {
-    reviewBusy.value = false;
-  }
-}
-async function applyReviewPlan() {
-  const plan = reviewPlan.value;
-  if (!plan || plan.status !== "ready" || !plan.candidateDefinition || reviewStale.value ||
-    reviewApplying.value || !survey.value?.canWrite) return;
-  reviewApplying.value = true;
-  try {
-    history.commit(
-      { ...history.current.value, definition: plan.candidateDefinition },
-      { source: "assistant", label: reviewReport.value?.summary },
-    );
-    autosave.schedule();
-    notify.success(t("surveys.assistant.applied"));
-    if (!await autosave.flush()) {
-      notify.warn(t("surveys.assistant.saveFirst"));
-      return;
-    }
-    reviewReport.value = null;
-  } finally {
-    reviewApplying.value = false;
-  }
-}
+// ── 问卷诊断会话（issue #224）：report/plan/stale 与 request/apply 的状态语义
+// 收进 useSurveyReviewSession；页面只编排——诊断帧到达不切换 tab、不展开侧栏、
+// 不动移动导航，展示位置永远跟随用户当前视图。
+const {
+  report: reviewReport,
+  busy: reviewBusy,
+  applying: reviewApplying,
+  plan: reviewPlan,
+  addedQuestions: reviewAddedQuestions,
+  stale: reviewStale,
+  receive: receiveReview,
+  discard: discardReview,
+  request: askResearch,
+  apply: applyReviewPlan,
+} = useSurveyReviewSession({
+  surveyId: () => surveyId.value,
+  canWrite: () => !!survey.value?.canWrite,
+  draftVersion: () => draftVersion.value,
+  history,
+  autosave,
+  copilot: host.copilot,
+  notify,
+  t,
+});
 // AI 建卷落地提示（issue #217）：survey_create 帧载荷经一次性单槽带进工作区，
 // load 成功后取走展示——生成会话是 global scope，落进右岛的新 survey 会话是
 // 空的，这张卡补上「AI 刚建了什么」。取走即清，刷新不重复。
@@ -256,7 +225,7 @@ function applyEditDelivery(delivery: SurveyEditDelivery) {
 
 async function applySurveyDelivery(delivery: ToolSurveyDelivery) {
   if (delivery.type === "survey_review") {
-    if (delivery.surveyId === surveyId.value) reviewReport.value = delivery;
+    receiveReview(delivery);
     return;
   }
   if (delivery.type !== "survey_edit") {
@@ -266,7 +235,14 @@ async function applySurveyDelivery(delivery: ToolSurveyDelivery) {
     host.navigate({ name: "surveys.detail", surveyId: delivery.surveyId });
     return;
   }
-  if (delivery.surveyId !== surveyId.value || !survey.value?.canWrite || stage.value !== "design") return;
+  // 交付帧只认本卷；其余卷的帧归各自页面。只读视图不静默丢弃：给可见警示。
+  if (delivery.surveyId !== surveyId.value) return;
+  if (!survey.value?.canWrite) {
+    notify.warn(t("surveys.copilot.readOnly"));
+    return;
+  }
+  // AI 不切 stage：非设计段收到的修改照常应用（横幅在所有段可见），
+  // 视图位置留给用户。
   if (autosave.status.value === "saving") await autosave.flush();
   const settled =
     autosave.status.value === "idle" || autosave.status.value === "saved";
@@ -328,6 +304,42 @@ watch(
   copilotContextRefs,
   (refs) => {
     host.copilot?.setContextRefs(refs);
+  },
+  { immediate: true },
+);
+
+// Copilot 面板呈现（issue #224 M2）：按当前阶段/选中题注册问卷专属空态与场景
+// 动作。设计段只注册「整理研究依据」——顶栏「帮我完善」是唯一 review 入口，
+// 面板不再出现第二个。run 动作收敛到 reviewSession.request 同一入口（flush/
+// busy 闸在会话内）并透出 Promise；卸载后的 surface 清理归 releasePageState。
+const copilotPresentation = computed<SurveysCopilotSurfacePresentation | null>(() => {
+  if (!host.copilot?.setSurfacePresentation || !survey.value) return null;
+  const selected = definition.value.questions.find(
+    (question) => question.id === selectedQuestionId.value,
+  );
+  return {
+    title: t("surveys.copilot.surfaceTitle"),
+    description:
+      stage.value !== "design"
+        ? t("surveys.copilot.surfaceStageDescription")
+        : selected
+          ? t("surveys.copilot.surfaceQuestionDescription", { title: selected.title.slice(0, 40) })
+          : t("surveys.copilot.surfaceDescription"),
+    composerPlaceholder: selected
+      ? t("surveys.copilot.surfaceQuestionPlaceholder", { title: selected.title.slice(0, 40) })
+      : t("surveys.copilot.surfacePlaceholder"),
+    actions:
+      stage.value === "design" && survey.value.canWrite
+        ? [
+            { id: "survey-design", label: t("surveys.assistant.addDesign"), run: () => askResearch("design") },
+          ]
+        : [],
+  };
+});
+watch(
+  copilotPresentation,
+  (value) => {
+    host.copilot?.setSurfacePresentation?.(value ?? undefined);
   },
   { immediate: true },
 );
@@ -418,7 +430,7 @@ let generation = 0;
 async function load() {
   const own = ++generation;
   forceLeave = false;
-  reviewReport.value = null;
+  discardReview();
   loading.value = true;
   error.value = "";
   try {
@@ -467,26 +479,54 @@ async function action(fn: () => Promise<void>) {
 }
 
 // 发布：先 flush 未完成的自动保存；客户端校验不过不发请求（不弹无信息量的
-// 通用错误），直接定位到第一条问题。
+// 通用错误），直接定位到第一条问题。确认走发布前检查视图（issue #224 M3）：
+// 只陈述基本事实与提醒（待确认事项/试填/未采纳 review），不宣称「全部通过」，
+// 结构校验仍是唯一阻断；失败保留对话框与错误反馈。
+const publishOpen = ref(false);
+const publishError = ref("");
+const publishNextRevision = computed(
+  () => (survey.value?.revisions[0]?.revision ?? 0) + 1,
+);
+const publishDesign = computed(() => definition.value.researchDesign ?? null);
+const pendingReview = computed(() =>
+  reviewReport.value && reviewPlan.value
+    ? {
+        summary: reviewReport.value.summary,
+        findings: reviewReport.value.findings.length,
+        stale: reviewStale.value,
+      }
+    : null,
+);
+
 async function publish() {
   const target = survey.value;
   if (!target) return;
   if (definitionIssues.value.length) {
+    // 非 design 段画布未挂载：先切回设计段等 canvas 就绪再定位第一条问题，
+    // 保证用户看得见要修什么。
+    stage.value = "design";
+    await nextTick();
     canvasRef.value?.locateIssue(0);
     return;
   }
-  if (!(await autosave.flush())) return;
-  const nextRevision = (target.revisions[0]?.revision ?? 0) + 1;
-  confirm.require({
-    header: t("surveys.publish"),
-    message: t("surveys.publishConfirm", { n: nextRevision }),
-    accept: () =>
-      void action(async () => {
-        survey.value = await surveysApi.publish(target.id);
-        // 发布生成不可变版本，落发放段：发布后的下一步动作就是发链接。
-        stage.value = "distribute";
-      }),
+  if (!(await autosave.flush())) {
+    notify.warn(t("surveys.assistant.saveFirst"));
+    return;
+  }
+  publishError.value = "";
+  publishOpen.value = true;
+}
+
+async function confirmPublish() {
+  const target = survey.value;
+  if (!target || busy.value) return;
+  await action(async () => {
+    survey.value = await surveysApi.publish(target.id);
+    // 发布生成不可变版本，落发放段：发布后的下一步动作就是发链接。
+    publishOpen.value = false;
+    stage.value = "distribute";
   });
+  if (error.value) publishError.value = error.value;
 }
 
 async function setStatus(status: "published" | "paused") {
@@ -521,6 +561,12 @@ function removeSurvey() {
         host.navigate({ name: "surveys.list" });
       }),
   });
+}
+
+async function locateQuestion(id: string) {
+  stage.value = "design";
+  await nextTick();
+  await canvasRef.value?.locateQuestion(id);
 }
 
 function severity(status: SurveyStatus) {
@@ -595,17 +641,30 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
   <div class="survey-workbench">
     <SurveyWorkbenchShell :tabs="leftTabs">
       <template #left="{ activeTab }">
-        <Button class="mobile-survey-toggle" :label="t('surveys.navigation.list')" :icon="mobileNavigationOpen ? 'pi pi-chevron-up' : 'pi pi-bars'" :aria-expanded="mobileNavigationOpen" text severity="secondary" @click="mobileNavigationOpen = !mobileNavigationOpen" />
-        <div class="survey-left-content" :class="{ 'is-open': mobileNavigationOpen }">
-        <SurveyNavigator :current-id="surveyId" :current-title="definition.title" />
+        <Button v-if="!host.workbenchShell" class="mobile-survey-toggle" :label="t('surveys.leftPanel')" :icon="mobileNavigationOpen ? 'pi pi-chevron-up' : 'pi pi-bars'" :aria-expanded="mobileNavigationOpen" text severity="secondary" @click="mobileNavigationOpen = !mobileNavigationOpen" />
+        <div class="survey-left-content" :class="{ 'is-open': !!host.workbenchShell || mobileNavigationOpen, 'is-standalone': !host.workbenchShell }">
         <SurveyOutlinePanel
           v-if="activeTab === 'outline' && survey && stage === 'design'"
           :definition="definition"
           :selected-id="selectedQuestionId"
-          @select="selectedQuestionId = $event"
+          @select="locateQuestion"
+          @cover="canvasRef?.locateCover()"
+        />
+        <SurveyResearchAssistant
+          v-if="activeTab === 'research' && survey"
+          :design="definition.researchDesign"
+          :definition="definition"
+          :questions="definition.questions"
+          :busy="reviewBusy"
+          :disabled="!survey.canWrite"
+          :has-copilot="!!host.copilot"
+          @update:design="commitDefinition({ ...definition, researchDesign: $event })"
+          @design-request="askResearch('design')"
+          @locate="locateQuestion"
+          @preview="previewOpen = true"
         />
         <SurveyVersionsPanel
-          v-else-if="activeTab === 'versions' && survey"
+          v-if="activeTab === 'versions' && survey"
           :revisions="survey.revisions"
           :current-revision-id="survey.currentRevisionId"
           :status="survey.status"
@@ -622,9 +681,18 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
         <main class="survey-stage">
           <header class="stage-topbar">
             <div class="topbar-title">
-              <h1>{{ definition.title || survey?.title || t("surveys.heading") }}</h1>
+              <div class="topbar-heading">
+                <h1 :title="definition.title || survey?.title">{{ definition.title || survey?.title || t("surveys.heading") }}</h1>
+                <div class="title-links">
+                  <span v-if="survey && stage === 'design'" class="draft-state tw:text-muted tw:text-xs"
+                    v-tooltip.bottom="t('surveys.revisionHint')">{{ t(!hasRevision ? 'surveys.draftUnpublished' : definitionDirty ? 'surveys.draftUnpublishedChanges' : 'surveys.draftMatchesPublished') }}</span>
+                  <!-- 跨卷切换：标题区轻量入口，按需拉取，不常驻第二份列表。 -->
+                  <SurveySwitcher v-if="survey" :current-id="surveyId" :current-title="definition.title || survey.title" />
+                </div>
+              </div>
+              <!-- 设计段只留草稿/发布状态一行字；状态 Tag 只在非设计段出现，不与轨道重复。 -->
               <Tag
-                v-if="survey"
+                v-if="survey && stage !== 'design'"
                 :value="t(`surveys.status.${survey.status}`)"
                 :severity="severity(survey.status)"
               />
@@ -690,6 +758,11 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
                   <template #icon><Redo2 :size="16" /></template>
                 </Button>
               </span>
+              <Button v-if="stage === 'design' && host.copilot"
+                :label="t('surveys.assistant.review')" icon="pi pi-sparkles" text severity="secondary"
+                v-tooltip.bottom="t('surveys.assistant.reviewHint')"
+                :loading="reviewBusy || reviewApplying" :disabled="!survey.canWrite"
+                @click="askResearch('review')" />
               <Button
                 severity="secondary"
                 variant="text"
@@ -783,30 +856,18 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
             @retry="load"
           >
             <template v-if="survey">
-              <SurveyResearchAssistant
-                v-if="stage === 'design'"
-                :design="definition.researchDesign"
-                :definition="definition"
-                :questions="definition.questions"
+              <SurveyReviewBar
+                v-if="stage === 'design' && reviewReport && reviewPlan"
                 :report="reviewReport"
                 :plan="reviewPlan"
+                :definition="definition"
                 :stale="reviewStale"
                 :busy="reviewBusy || reviewApplying"
                 :disabled="!survey.canWrite"
-                :has-copilot="!!host.copilot"
-                @update:design="commitDefinition({ ...definition, researchDesign: $event })"
-                @review="askResearch('review')"
-                @design-request="askResearch('design')"
                 @apply="applyReviewPlan"
-                @locate="selectedQuestionId = $event"
-                @preview="previewOpen = true"
+                @discard="discardReview"
+                @locate="locateQuestion"
               />
-              <Message
-                v-if="survey.currentRevisionId && stage === 'design'"
-                severity="info"
-                :closable="false"
-                >{{ t("surveys.revisionHint") }}</Message
-              >
               <SurveyDesignCanvas
                 v-if="stage === 'design'"
                 ref="canvasRef"
@@ -818,11 +879,11 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
                 @change="(next, label) => commitDefinition(next, label)"
               >
                 <template #question-review="{ questionId }">
-                  <SurveyInlineReview v-if="reviewReport && reviewPlan" :question-id="questionId" :definition="definition" :report="reviewReport" :plan="reviewPlan" :disabled="!survey.canWrite || reviewStale || reviewBusy || reviewApplying" @apply="applyReviewPlan" />
+                  <SurveyInlineReview v-if="reviewReport && reviewPlan" :question-id="questionId" :definition="definition" :report="reviewReport" :plan="reviewPlan" :stale="reviewStale" />
                 </template>
               </SurveyDesignCanvas>
               <div v-if="stage === 'design' && reviewReport && reviewPlan && reviewAddedQuestions.length" class="review-additions">
-                <SurveyInlineReview v-for="question in reviewAddedQuestions" :key="question.id" :question-id="question.id" :definition="definition" :report="reviewReport" :plan="reviewPlan" :disabled="!survey.canWrite || reviewStale || reviewBusy || reviewApplying" @apply="applyReviewPlan" />
+                <SurveyInlineReview v-for="question in reviewAddedQuestions" :key="question.id" :question-id="question.id" :definition="definition" :report="reviewReport" :plan="reviewPlan" :stale="reviewStale" />
               </div>
               <SurveyDistributePanel
                 v-if="stage === 'distribute'"
@@ -858,13 +919,90 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
       :survey-id="surveyId"
       @update:visible="previewOpen = $event"
     />
+    <!-- 发布前确认（issue #224 M3）：结构校验在打开前已完成并通过，这里只
+         陈述事实与提醒，区分「建议确认」与「结构阻断」，不虚构全部通过。 -->
+    <Dialog
+      v-model:visible="publishOpen"
+      modal
+      :header="t('surveys.publish')"
+      class="survey-dialog publish-dialog"
+    >
+      <div class="publish-check">
+        <p class="publish-intro">
+          {{ t("surveys.publishConfirm", { n: publishNextRevision }) }}
+        </p>
+        <p class="publish-facts">
+          {{ t("surveys.publishCheck.facts", { questions: definition.questions.length, pages: definition.pages.length }) }}
+        </p>
+        <div class="publish-reminders" role="list">
+          <p class="publish-reminders-title">{{ t("surveys.publishCheck.remindersTitle") }}</p>
+          <div v-if="!publishDesign" role="listitem" class="publish-reminder">
+            <i class="pi pi-exclamation-triangle" aria-hidden="true" />
+            <span>{{ t("surveys.publishCheck.noDesign") }}</span>
+          </div>
+          <template v-else>
+            <div v-if="publishDesign.pendingDecisions.length" role="listitem" class="publish-reminder">
+              <i class="pi pi-exclamation-triangle" aria-hidden="true" />
+              <span>
+                {{ t("surveys.publishCheck.pendingDecisions", { n: publishDesign.pendingDecisions.length }) }}
+                <span class="publish-reminder-detail">
+                  <span v-for="note in publishDesign.pendingDecisions" :key="note" class="publish-decision">{{ note }}</span>
+                </span>
+              </span>
+            </div>
+            <div v-else role="listitem" class="publish-reminder is-ok">
+              <i class="pi pi-check" aria-hidden="true" />
+              <span>{{ t("surveys.publishCheck.noPending") }}</span>
+            </div>
+            <div role="listitem" class="publish-reminder" :class="{ 'is-ok': !!publishDesign.pretest }">
+              <i class="pi" :class="publishDesign.pretest ? 'pi-check' : 'pi-exclamation-triangle'" aria-hidden="true" />
+              <span>
+                {{ publishDesign.pretest
+                  ? t("surveys.publishCheck.pretestDone", { n: publishDesign.pretest.participantCount })
+                  : t("surveys.publishCheck.noPretest") }}
+              </span>
+            </div>
+          </template>
+          <div v-if="pendingReview" role="listitem" class="publish-reminder" :class="{ 'is-stale': pendingReview.stale }">
+            <i class="pi pi-exclamation-triangle" aria-hidden="true" />
+            <span>
+              {{ pendingReview.stale
+                ? t("surveys.publishCheck.staleReview", { n: pendingReview.findings })
+                : t("surveys.publishCheck.pendingReview", { n: pendingReview.findings }) }}
+              <span class="publish-reminder-detail">{{ pendingReview.summary }}</span>
+            </span>
+          </div>
+        </div>
+        <p class="publish-disclaimer">{{ t("surveys.publishCheck.disclaimer") }}</p>
+        <Message v-if="publishError" severity="error" :closable="false">
+          {{ publishError }}
+        </Message>
+      </div>
+      <template #footer>
+        <Button
+          :label="t('surveys.cancel')"
+          text
+          severity="secondary"
+          :disabled="busy"
+          @click="publishOpen = false"
+        />
+        <Button
+          :label="t('surveys.publish')"
+          icon="pi pi-send"
+          :loading="busy"
+          @click="confirmPublish"
+        />
+      </template>
+    </Dialog>
   </div>
 </template>
 <style scoped>
+.survey-left-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 .mobile-survey-toggle { display: none; }
 @media (max-width: 767.98px) {
   .mobile-survey-toggle { display: flex; width: 100%; justify-content: space-between; }
-  .survey-left-content { display: none; max-height: 45vh; overflow-y: auto; }
+  .survey-left-content { display: none; }
+  .survey-left-content.is-standalone { max-height: 45vh; overflow-y: auto; }
   .survey-left-content.is-open { display: block; }
 }
 
@@ -885,7 +1023,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: var(--layout-card-padding);
+  gap: 4px 12px;
   flex-wrap: wrap;
   padding: 8px 14px;
   border-bottom: 1px solid var(--color-border-subtle);
@@ -897,6 +1035,9 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
   gap: 8px;
   min-width: 0;
 }
+.topbar-heading { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.title-links { display: flex; align-items: center; gap: .25rem; flex-wrap: wrap; min-width: 0; }
+.draft-state { white-space: nowrap; }
 .topbar-title h1 {
   margin: 0;
   font-size: var(--font-size-title-sm, 14px);
@@ -951,5 +1092,62 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
   .stage-body {
     padding: var(--layout-card-padding);
   }
+}
+.publish-check {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+.publish-intro,
+.publish-facts {
+  margin: 0;
+  color: var(--color-text-primary);
+}
+.publish-facts {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+}
+.publish-reminders {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--layout-card-radius, 0.5rem);
+  padding: 0.75rem 0.9rem;
+}
+.publish-reminders-title {
+  margin: 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--color-text-tertiary);
+}
+.publish-reminder {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--color-text-primary);
+}
+.publish-reminder > i {
+  color: var(--color-text-tertiary);
+  flex-shrink: 0;
+}
+.publish-reminder.is-ok > i {
+  color: var(--color-success-600);
+}
+.publish-decision {
+  display: block;
+}
+.publish-reminder-detail {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.8rem;
+  color: var(--color-text-tertiary);
+  overflow-wrap: anywhere;
+}
+.publish-disclaimer {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--color-text-tertiary);
 }
 </style>

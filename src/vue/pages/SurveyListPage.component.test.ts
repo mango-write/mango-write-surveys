@@ -33,9 +33,12 @@ interface Body {
   responseLimit?: number;
 }
 
-function makeHost(): { host: SurveysWebHost; navigate: ReturnType<typeof vi.fn>; copilot: SurveysCopilotHandlers[] } {
+function makeHost(): { host: SurveysWebHost; navigate: ReturnType<typeof vi.fn>; copilot: SurveysCopilotHandlers[]; presentation: ReturnType<typeof vi.fn>; release: ReturnType<typeof vi.fn>; fillComposer: ReturnType<typeof vi.fn> } {
   const navigate = vi.fn();
   const copilot: SurveysCopilotHandlers[] = [];
+  const presentation = vi.fn();
+  const release = vi.fn();
+  const fillComposer = vi.fn();
   const host = createTestHost({
     transport: {
       request: (async (path: string, init?: { method?: string; body?: unknown }) => {
@@ -57,12 +60,13 @@ function makeHost(): { host: SurveysWebHost; navigate: ReturnType<typeof vi.fn>;
         return () => {};
       },
       setContextRefs: () => {},
-      fillComposer: () => {},
+      fillComposer,
       focusComposer: () => {},
-      releasePageState: () => {},
+      releasePageState: release,
+      setSurfacePresentation: presentation,
     },
   });
-  return { host, navigate, copilot };
+  return { host, navigate, copilot, presentation, release, fillComposer };
 }
 
 const DialogStub = defineComponent({
@@ -111,14 +115,14 @@ const ITEMS: SurveySummary[] = [
 ];
 
 async function mountList() {
-  const { host, navigate, copilot } = makeHost();
+  const { host, navigate, copilot, presentation, release, fillComposer } = makeHost();
   const wrapper = mountSurveysComponent(
     SurveyListPage,
     { global: { stubs: { Dialog: DialogStub } } },
     host,
   );
   await flushPromises();
-  return { host, navigate, copilot, wrapper };
+  return { host, navigate, copilot, presentation, release, fillComposer, wrapper };
 }
 
 function rows(wrapper: ReturnType<typeof mountSurveysComponent>) {
@@ -187,15 +191,20 @@ describe("SurveyListPage（issue #217）", () => {
     expect(wrapper.text()).toContain(t("surveys.noMatch"));
   });
 
-  it("空库给引导新建的空态；新建跳到工作区", async () => {
+  it("空列表首访：AI 建卷起点以 hero 密度突出，空白新建仍跳工作区", async () => {
     mocks.list.mockResolvedValue({ items: [] });
     const { navigate, wrapper } = await mountList();
     expect(wrapper.text()).toContain(t("surveys.empty"));
+    const hero = wrapper.find(".create-start");
+    expect(hero.classes()).toContain("is-hero");
+    expect(hero.text()).toContain(t("surveys.createStart.question"));
+    expect(hero.find("textarea").exists()).toBe(true);
 
-    const createButtons = wrapper
+    // 空白新建是次要动作：hero 发事件，列表页打开既有新建弹层。
+    const blankButton = hero
       .findAll("button")
-      .filter((b) => b.text().includes(t("surveys.create")));
-    await createButtons[0]!.trigger("click");
+      .find((b) => b.text() === t("surveys.create"))!;
+    await blankButton.trigger("click");
     await flushPromises();
     const dialog = wrapper.find(".dialog-stub");
     expect(dialog.exists()).toBe(true);
@@ -212,17 +221,57 @@ describe("SurveyListPage（issue #217）", () => {
     });
   });
 
-  it("新建入口三选：AI 生成 / 从模板开始 / 新建问卷 都在页头", async () => {
+  it("返回态：建卷入口收敛为紧凑卡（AI 主 + 模板/空白次），页头不再平铺三按钮", async () => {
     const { wrapper } = await mountList();
-    const labels = wrapper.findAll("button").map((b) => b.text());
-    expect(labels).toContain(t("surveys.copilot.generate"));
+    const header = wrapper.find(".survey-page-header");
+    expect(header.text()).not.toContain(t("surveys.copilot.generate"));
+    expect(header.text()).not.toContain(t("surveys.templates.pick"));
+    const card = wrapper.find(".create-start");
+    expect(card.exists()).toBe(true);
+    expect(card.classes()).toContain("is-compact");
+    const labels = card.findAll("button").map((b) => b.text());
+    expect(labels).toContain(t("surveys.createStart.submit"));
     expect(labels).toContain(t("surveys.templates.pick"));
     expect(labels).toContain(t("surveys.create"));
     wrapper.unmount();
   });
 
-  it("从模板开始：选模板建卷并立即落模板定义为草稿，然后进工作区", async () => {
-    const { navigate, wrapper } = await mountList();
+  it("列表 scope 注册 Copilot 呈现，卸载清除；生成动作走 prompt 语义（M2）", async () => {
+    const { presentation, release, wrapper } = await mountList();
+    expect(presentation).toHaveBeenCalled();
+    const value = presentation.mock.calls.at(-1)![0] as {
+      title: string;
+      composerPlaceholder: string;
+      actions: Array<{ id: string; label: string; primary?: boolean; prompt?: string; run?: () => void }>;
+    };
+    expect(value.title).toBe(t("surveys.copilot.listTitle"));
+    expect(value.composerPlaceholder).toBe(t("surveys.copilot.listPlaceholder"));
+    expect(value.actions).toHaveLength(1);
+    expect(value.actions[0]!.label).toBe(t("surveys.copilot.generate"));
+    expect(value.actions[0]!.prompt).toBe(t("surveys.copilot.generateTemplate"));
+    expect(value.actions[0]!.run).toBeUndefined();
+    wrapper.unmount();
+    // 卸载清理归 releasePageState（契约上负责页面写入桥的状态，含 surface）。
+    expect(release).toHaveBeenCalled();
+    expect(presentation).toHaveBeenCalledTimes(1);
+  });
+
+  it("返回态紧凑卡输入研究想法点生成：走 fillComposer+focus（宿主无 sendPrompt 时）", async () => {
+    const { fillComposer, wrapper } = await mountList();
+    const card = wrapper.find(".create-start");
+    await card.find("textarea").setValue("科研工具使用调查");
+    await card
+      .findAll("button")
+      .find((b) => b.text() === t("surveys.createStart.submit"))!
+      .trigger("click");
+    await flushPromises();
+    expect(fillComposer).toHaveBeenCalledTimes(1);
+    expect(fillComposer.mock.calls[0]![0] as string).toContain("科研工具使用调查");
+    // survey_create 帧的交接与导航归页面 handler（见下方交付帧用例）。
+    wrapper.unmount();
+  });
+
+  it("从模板开始：选模板建卷并立即落模板定义为草稿，然后进工作区", async () => {    const { navigate, wrapper } = await mountList();
     await wrapper
       .findAll("button")
       .find((b) => b.text() === t("surveys.templates.pick"))!

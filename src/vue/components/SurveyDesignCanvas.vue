@@ -6,7 +6,7 @@
 // 交给宿主（历史栈 + 自动保存）。选中态与左岛大纲双向联动；点画布空白取消选中。
 // 换题型的载荷暂存（typeStash）不进 definition、不进历史，本组件内存 +
 // sessionStorage（按 surveyId 隔离）：切回原题型即恢复，破坏性切换先经确认。
-import { computed, onBeforeUnmount, ref, watch } from "vue";
+import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { useConfirm } from "primevue/useconfirm";
 import Button from "primevue/button";
@@ -69,8 +69,7 @@ const confirm = useConfirm();
 const describeIssue = useSurveyIssueCopy();
 
 const selectedId = ref("");
-const descriptionOpen = ref(!!props.modelValue.description);
-const consentOpen = ref(!!props.modelValue.consent);
+const coverRef = ref<HTMLElement | null>(null);
 const pageDescOpen = ref<Record<string, boolean>>({});
 const pageMenuFor = ref("");
 const addMenuAt = ref<{ pageId: string; afterId: string | null } | null>(null);
@@ -137,6 +136,18 @@ function scrollToQuestion(id: string) {
   document
     .querySelector(`[data-canvas-question="${CSS.escape(id)}"]`)
     ?.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+async function locateQuestion(id: string) {
+  if (!questionById.value.has(id)) return;
+  selectedId.value = id;
+  emit("select", id);
+  await nextTick();
+  scrollToQuestion(id);
+}
+function locateCover() {
+  selectedId.value = "";
+  emit("select", "");
+  coverRef.value?.scrollIntoView({ block: "start", behavior: "smooth" });
 }
 function selectQuestion(id: string) {
   selectedId.value = id;
@@ -642,7 +653,7 @@ function flash(id: string) {
 }
 
 // 宿主（发布被校验拦下时）滚动定位到第一条问题。
-defineExpose({ locateIssue });
+defineExpose({ locateIssue, locateQuestion, locateCover });
 </script>
 <template>
   <div
@@ -652,7 +663,8 @@ defineExpose({ locateIssue });
     @drop="onRootDrop"
     @dragover.prevent
   >
-    <header class="canvas-head">
+    <header ref="coverRef" class="survey-cover">
+      <span class="tw:text-muted tw:text-xs">{{ t("surveys.cover.audience") }}</span>
       <Textarea
         class="canvas-title"
         fluid
@@ -666,7 +678,7 @@ defineExpose({ locateIssue });
         @update:model-value="setTitle"
         @keydown="onTitleKeydown"
       />
-      <div v-if="descriptionOpen || definition.description" class="head-field">
+      <div class="head-field">
         <span class="head-field__label">{{ t("surveys.description") }}</span>
         <SurveyMarkdownField
           :model-value="definition.description"
@@ -676,18 +688,7 @@ defineExpose({ locateIssue });
           @change="setDescription"
         />
       </div>
-      <Button
-        v-else
-        severity="secondary"
-        variant="text"
-        :label="t('surveys.addDescription')"
-        :disabled="disabled"
-        :aria-label="t('surveys.addDescription')"
-        @click="descriptionOpen = true"
-      >
-        <template #icon><Plus :size="15" /></template>
-      </Button>
-      <div v-if="consentOpen || definition.consent" class="head-field">
+      <div class="head-field">
         <span class="head-field__label">{{ t("surveys.researchNotice") }}</span>
         <SurveyMarkdownField
           :model-value="definition.consent"
@@ -697,17 +698,6 @@ defineExpose({ locateIssue });
           @change="setConsent"
         />
       </div>
-      <Button
-        v-else
-        severity="secondary"
-        variant="text"
-        :label="t('surveys.addConsent')"
-        :disabled="disabled"
-        :aria-label="t('surveys.addConsent')"
-        @click="consentOpen = true"
-      >
-        <template #icon><Plus :size="15" /></template>
-      </Button>
     </header>
 
     <section
@@ -967,36 +957,28 @@ defineExpose({ locateIssue });
   margin-inline: auto;
   padding-bottom: 4rem;
 }
-.canvas-head {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding-block: 4px 12px;
-}
-.canvas-title,
-:deep(.canvas-title) {
-  border: none;
-  background: transparent;
-  box-shadow: none;
-  padding: 2px 4px;
-  font-size: 22px;
-  font-weight: 700;
-  line-height: 1.35;
-  resize: none;
-  overflow: hidden;
-}
-:deep(.canvas-title:hover) {
-  border-bottom: 1px solid var(--color-border-subtle);
-}
-:deep(.canvas-title:focus) {
-  border-bottom: 1px solid var(--color-brand-400);
-}
+.survey-cover { display: flex; flex-direction: column; gap: .5rem; padding: 0 .25rem .5rem; scroll-margin-top: 1rem; }
+.canvas-title.p-textarea { font-size: var(--font-size-title-md); font-weight: 600; line-height: 1.4; }
 .head-field {
   display: flex;
   flex-direction: column;
   gap: 2px;
   padding: 2px 4px;
 }
+.head-field :deep(.survey-markdown-field__surface) {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface-base);
+  cursor: text;
+}
+.head-field :deep(.survey-markdown-field__surface:focus-within) {
+  border-color: var(--color-brand-400);
+  box-shadow: var(--effect-focus-ring);
+}
+.head-field :deep(.survey-markdown-field__placeholder) { top: 8px; left: 12px; }
+.head-field :deep(.survey-markdown-field__content p) { margin: 0; }
 .head-field__label {
   font-size: 12px;
   font-weight: 600;

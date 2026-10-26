@@ -1,9 +1,11 @@
 <script setup lang="ts">
-// 问卷列表页（issue #217）：搜索/状态筛选 + 三个建卷入口（AI 生成 / 模板 /
-// 空白新建）。导航一律走宿主 host.navigate（spaceLink 的 u./t. 前缀是宿主
-// 语义）；survey_create 交付帧经 host.copilot 桥接：载荷交接给工作区 + toast
-// + 导航，本页不感知 copilot-island 内部。
-import { computed, onMounted, onUnmounted, ref } from "vue";
+// 问卷列表页（issue #217）：搜索/状态筛选 + 统一建卷起点。建卷入口收敛进
+// SurveyCreateStart（issue #224 M3）：空列表首访是 hero 密度，有问卷的返回态是
+// 列表上方的紧凑卡——同一组件同一业务逻辑，只按状态换密度。模板/空白弹层留在
+// 本页；导航一律走宿主 host.navigate（spaceLink 的 u./t. 前缀是宿主语义）；
+// survey_create 交付帧经 host.copilot 桥接：载荷交接给工作区 + toast + 导航，
+// 本页不感知 copilot-island 内部。
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
@@ -21,6 +23,7 @@ import { useSurveysNotify } from "../notify.js";
 import { useSurveysApi } from "../api.js";
 import { setAiCreatedSurveyHandoff } from "../lib/ai-created-handoff.js";
 import SurveyPageHeader from "../components/SurveyPageHeader.vue";
+import SurveyCreateStart from "../components/SurveyCreateStart.vue";
 import SurveyTemplatePicker from "../components/SurveyTemplatePicker.vue";
 import type { SurveyTemplate } from "../lib/templates.js";
 
@@ -50,12 +53,21 @@ const copilotHandlers: SurveysCopilotHandlers = {
   },
 };
 const unregisterCopilotHandlers = host.copilot?.registerHandlers(copilotHandlers);
-onUnmounted(() => unregisterCopilotHandlers?.());
-
-function openAiGenerate() {
-  host.copilot?.fillComposer(t("surveys.copilot.generateTemplate"));
-  host.copilot?.focusComposer();
-}
+// Copilot 面板呈现（issue #224 M2）：列表 scope 注册建卷场景文案与动作；
+// 生成动作走既有 prompt 语义（sendAgentEdit 同一管线，工具语义不变）。
+// 卸载后的 surface 清理归 releasePageState（契约上负责页面写入桥的状态）。
+host.copilot?.setSurfacePresentation?.({
+  title: t("surveys.copilot.listTitle"),
+  description: t("surveys.copilot.listDescription"),
+  composerPlaceholder: t("surveys.copilot.listPlaceholder"),
+  actions: [
+    { id: "survey-generate", label: t("surveys.copilot.generate"), primary: true, prompt: t("surveys.copilot.generateTemplate") },
+  ],
+});
+onBeforeUnmount(() => {
+  unregisterCopilotHandlers?.();
+  host.copilot?.releasePageState();
+});
 
 const statusOptions = computed(() => [
   { value: "all" as const, label: t("surveys.filterAll") },
@@ -143,30 +155,17 @@ onMounted(load);
   <main class="tw:flex tw:h-full tw:min-h-0 tw:flex-col">
     <SurveyPageHeader :title="t('surveys.heading')">
       <template #icon><ClipboardList :size="16" /></template>
-      <template #actions>
-        <Button
-          :label="t('surveys.copilot.generate')"
-          icon="pi pi-sparkles"
-          severity="secondary"
-          @click="openAiGenerate"
-        />
-        <Button
-          :label="t('surveys.templates.pick')"
-          icon="pi pi-clone"
-          severity="secondary"
-          @click="templateOpen = true"
-        />
-        <Button
-          :label="t('surveys.create')"
-          icon="pi pi-plus"
-          @click="createOpen = true"
-        />
-      </template>
     </SurveyPageHeader>
     <div class="tw:min-h-0 tw:flex-1 tw:overflow-y-auto">
     <div
       class="tw:mx-auto tw:flex tw:max-w-3xl tw:flex-col tw:gap-5 tw:px-4 tw:py-6 tw:md:px-6"
     >
+      <SurveyCreateStart
+        v-if="items.length"
+        variant="compact"
+        @pick-template="templateOpen = true"
+        @create-blank="createOpen = true"
+      />
       <div class="mw-toolbar tw:flex tw:flex-wrap tw:items-center tw:gap-1.5">
         <IconField class="tw:w-60">
           <InputIcon class="pi pi-search" />
@@ -217,19 +216,11 @@ onMounted(load);
         @retry="load"
       >
         <template #empty-action>
-          <div class="tw:flex tw:flex-wrap tw:items-center tw:justify-center tw:gap-2">
-            <Button
-              :label="t('surveys.create')"
-              icon="pi pi-plus"
-              @click="createOpen = true"
-            />
-            <Button
-              :label="t('surveys.templates.pick')"
-              icon="pi pi-clone"
-              severity="secondary"
-              @click="templateOpen = true"
-            />
-          </div>
+          <SurveyCreateStart
+            variant="hero"
+            @pick-template="templateOpen = true"
+            @create-blank="createOpen = true"
+          />
         </template>
         <p
           v-if="items.length && !filtered.length"

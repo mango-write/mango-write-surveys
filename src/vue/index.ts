@@ -13,6 +13,8 @@ export {
   type SurveysCopilotContextRef,
   type SurveysCopilotHandlers,
   type SurveysCopilotSurface,
+  type SurveysCopilotSurfaceAction,
+  type SurveysCopilotSurfacePresentation,
   type SurveysLayoutDefaults,
   type SurveysLayoutPrefs,
 } from "./host.js";

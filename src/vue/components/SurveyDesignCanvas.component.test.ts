@@ -143,6 +143,35 @@ beforeEach(() => {
 });
 
 describe("SurveyDesignCanvas 题型菜单与插入", () => {
+  it("标题、说明与参与声明直接可编辑，不需要打开另一个编辑界面", async () => {
+    const initial = { ...definition(), description: "研究简介", consent: "自愿参与说明" };
+    const harness = await mountCanvas(initial);
+    expect(harness.wrapper.find(".canvas-title").exists()).toBe(true);
+    expect(harness.wrapper.find(".cover-heading button").exists()).toBe(false);
+    const fields = harness.wrapper.findAll(".head-field textarea");
+    expect(fields).toHaveLength(2);
+    await harness.wrapper.find(".canvas-title").setValue("新的问卷标题");
+    await fields[0]!.setValue("可直接修改的**研究说明**");
+    expect(harness.current()).toMatchObject({
+      title: "新的问卷标题", description: "可直接修改的**研究说明**", consent: "自愿参与说明",
+    });
+    harness.wrapper.unmount();
+  });
+
+  it("同一道题重复定位仍会滚动，定位后不改动定义", async () => {
+    const harness = await mountCanvas(definition(), undefined, true);
+    const scroll = vi.spyOn(Element.prototype, "scrollIntoView");
+    const canvas = harness.wrapper.findComponent(SurveyDesignCanvas);
+    await canvas.vm.locateQuestion("q2");
+    await flushPromises();
+    scroll.mockClear();
+    await canvas.vm.locateQuestion("q2");
+    await flushPromises();
+    expect(scroll).toHaveBeenCalledOnce();
+    expect(harness.selectedId()).toBe("q2");
+    expect(harness.changes).toHaveLength(0);
+    scroll.mockRestore();
+  });
   it("页尾「+」展开题型菜单（图标+名称+说明），选择量表插入页尾并选中", async () => {
     const harness = await mountCanvas();
     expect(harness.wrapper.find(".survey-type-menu").exists()).toBe(false);

@@ -3,45 +3,76 @@ import { mountSurveysComponent } from "../test-mount.js";
 import SurveyResearchAssistant from "./SurveyResearchAssistant.vue";
 import InputNumber from "primevue/inputnumber";
 import Textarea from "primevue/textarea";
-import { buildSurveyReviewPlan } from "../../core/index.js";
 import { makeDefinition } from "../../core/test-fixtures.js";
-import type { ToolSurveyDelivery } from "../../contracts/index.js";
 
-const report: Extract<ToolSurveyDelivery, { type: "survey_review" }> = {
-  type: "survey_review" as const,
-  surveyId: "00000000-0000-4000-8000-000000000001",
-  operationId: "review-123",
-  baseDraftVersion: 2,
-  summary: "筛选范围需要与追问一致",
-  findings: [{
-    id: "f1", checkId: "wording.presumptive", questionId: "q1", title: "筛选不充分",
-    severity: "major" as const, reason: "用过任意 AI 不代表用它写过综述。",
-    recommendation: "精确筛选经历。",
-    suggestedOps: [{ op: "update_question" as const, questionId: "q1", patch: { title: "过去一学期是否用 ChatGPT 写过综述？" } }],
-  }],
-};
-
-function reviewProps(currentReport = report) {
-  const definition = makeDefinition();
+function design() {
   return {
-    definition,
-    report: currentReport,
-    plan: buildSurveyReviewPlan(definition, currentReport.findings),
-    stale: false,
-    busy: false,
-    disabled: false,
-    hasCopilot: true,
+    researchQuestion: "使用情况", population: "实验室成员", recruitment: "", purpose: "describe" as const,
+    timeBudgetMinutes: 5, constructs: [], analysisPlan: "描述统计", assumptions: [], pendingDecisions: [],
   };
 }
 
-describe("研究设计与诊断面板", () => {
-  it("试填反馈保存为作者记录，不伪称已完成独立验证", async () => {
-    const design = {
-      researchQuestion: "使用情况", population: "实验室成员", recruitment: "自愿招募", purpose: "describe" as const,
-      timeBudgetMinutes: 5, constructs: [], analysisPlan: "描述统计", assumptions: [], pendingDecisions: [],
-    };
+describe("研究依据面板（M2：只管研究依据，不再有诊断）", () => {
+  it("没有研究设计也能手动填写和记录试填，不依赖 AI", async () => {
     const wrapper = mountSurveysComponent(SurveyResearchAssistant, {
-      props: { design, report: null, plan: null, stale: false, busy: false, disabled: false, hasCopilot: true },
+      props: { busy: false, disabled: false, hasCopilot: false },
+    });
+    expect(wrapper.find(".design-fields").exists()).toBe(false);
+    await wrapper.findAll("button").find(button => button.text() === "修改信息")!.trigger("click");
+    const question = wrapper.find(".design-fields textarea");
+    await question.setValue("如何改善工具使用体验？");
+    await question.trigger("change");
+    expect(wrapper.emitted("update:design")?.at(-1)?.[0]).toMatchObject({
+      researchQuestion: "如何改善工具使用体验？", constructs: [], assumptions: [],
+    });
+    wrapper.findComponent(InputNumber).vm.$emit("update:modelValue", 3);
+    wrapper.findAllComponents(Textarea).at(-1)!.vm.$emit("update:modelValue", "题意需要澄清");
+    await wrapper.vm.$nextTick();
+    await wrapper.findAll("button").find(button => button.text() === "保存试填记录")!.trigger("click");
+    expect(wrapper.emitted("update:design")?.at(-1)?.[0]).toMatchObject({
+      pretest: { participantCount: 3, notes: "题意需要澄清" },
+    });
+    wrapper.unmount();
+  });
+
+  it("默认呈现已有研究摘要，AI 整理由用户发起且不伪造研究信息", async () => {
+    const wrapper = mountSurveysComponent(SurveyResearchAssistant, {
+      props: { design: design(), busy: false, disabled: false, hasCopilot: true },
+    });
+    expect(wrapper.find(".design-fields").exists()).toBe(false);
+    expect(wrapper.find(".design-summary").text()).toContain("实验室成员");
+    expect(wrapper.find(".design-summary").text()).toContain("尚未明确");
+    expect(wrapper.emitted("design-request")).toBeUndefined();
+    await wrapper.findAll("button").find(button => button.text() === "让 AI 整理研究设计")!.trigger("click");
+    expect(wrapper.emitted("design-request")).toEqual([[]]);
+    expect(wrapper.emitted("update:design")).toBeUndefined();
+    wrapper.unmount();
+  });
+
+  it("待确认事项默认可见；构念与假设收进 details 渐进披露", () => {
+    const detailed = {
+      ...design(),
+      pendingDecisions: ["招募渠道尚未确定"],
+      assumptions: ["答题者能接触目标工具"],
+      constructs: [{ id: "c1", label: "使用频率", definition: "每周使用次数", questionIds: ["q1"] }],
+    };
+    const definition = makeDefinition();
+    const wrapper = mountSurveysComponent(SurveyResearchAssistant, {
+      props: { design: detailed, definition, questions: definition.questions, busy: false, disabled: false, hasCopilot: false },
+    });
+    expect(wrapper.text()).toContain("招募渠道尚未确定");
+    const depth = wrapper.find(".design-details");
+    expect(depth.exists()).toBe(true);
+    // details 未展开时内容仍在 DOM 但默认折叠：断言结构与披露语义，不冒充摘要。
+    expect(depth.element.hasAttribute("open")).toBe(false);
+    expect(depth.text()).toContain("使用频率");
+    expect(depth.text()).toContain("答题者能接触目标工具");
+    wrapper.unmount();
+  });
+
+  it("试填反馈保存为作者记录，不伪称已完成独立验证", async () => {
+    const wrapper = mountSurveysComponent(SurveyResearchAssistant, {
+      props: { design: design(), busy: false, disabled: false, hasCopilot: true },
     });
     wrapper.findComponent(InputNumber).vm.$emit("update:modelValue", 2);
     wrapper.findAllComponents(Textarea).at(-1)!.vm.$emit("update:modelValue", "两位试填者不理解使用频率的时间范围，需改写。");
@@ -53,91 +84,25 @@ describe("研究设计与诊断面板", () => {
     wrapper.unmount();
   });
 
-  it("过期方案禁止整批应用，仍可定位和查看依据", async () => {
+  it("面板不再提供任何诊断入口：无应用/帮我完善按钮，也无过期与冲突提示", () => {
     const wrapper = mountSurveysComponent(SurveyResearchAssistant, {
-      props: { ...reviewProps(), stale: true },
+      props: { design: design(), busy: false, disabled: false, hasCopilot: true },
     });
-    const apply = wrapper.findAll("button").find((button) => button.text() === "应用 1 组修改")!;
-    expect(apply.attributes("disabled")).toBeDefined();
-    await apply.trigger("click");
-    expect(wrapper.emitted("apply")).toBeUndefined();
-    await wrapper.findAll("button").find((button) => button.text() === "第 1 题")!.trigger("click");
-    expect(wrapper.emitted("locate")).toEqual([["q1"]]);
-    expect(wrapper.findAll("a").some((link) => link.attributes("href")?.startsWith("https://"))).toBe(true);
-    wrapper.unmount();
-  });
-
-  it("预览展示真实修改前后，一次发出整批应用且不自行修改草稿", async () => {
-    const props = reviewProps();
-    const wrapper = mountSurveysComponent(SurveyResearchAssistant, { props });
-    expect(wrapper.find(".change-row").text()).toContain("单选");
-    expect(wrapper.find(".change-row").text()).toContain("过去一学期是否用 ChatGPT 写过综述？");
-    expect(wrapper.text()).not.toContain("wording.presumptive");
-    await wrapper.findAll("button").find((button) => button.text() === "应用 1 组修改")!.trigger("click");
-    expect(wrapper.emitted("apply")).toEqual([[]]);
-    expect(props.definition.questions[0]?.title).toBe("单选");
-    wrapper.unmount();
-  });
-
-  it("语义相同的显示条件不因字段顺序变化而冒充修改", () => {
-    const definition = makeDefinition();
-    definition.questions[2] = {
-      ...definition.questions[2]!,
-      showIf: { value: "a", op: "eq" as const, questionId: "q1" },
-    };
-    const reorderedReport: typeof report = {
-      ...report,
-      findings: [{
-        ...report.findings[0], questionId: "q3",
-        suggestedOps: [{ op: "update_question", questionId: "q3", patch: { title: "澄清后的文本题" } }],
-      }],
-    };
-    const wrapper = mountSurveysComponent(SurveyResearchAssistant, {
-      props: {
-        ...reviewProps(reorderedReport), definition,
-        plan: buildSurveyReviewPlan(definition, reorderedReport.findings),
-      },
-    });
-    expect(wrapper.findAll(".change-row")).toHaveLength(1);
-    expect(wrapper.find(".change-row").text()).toContain("澄清后的文本题");
-    expect(wrapper.text()).not.toContain("仅在前题满足条件时显示修改前");
-    wrapper.unmount();
-  });
-
-  it("研究设计修订也展示真实的修改前后", () => {
-    const designReport: typeof report = {
-      ...report,
-      findings: [{
-        ...report.findings[0], questionId: undefined,
-        suggestedOps: [{ op: "set_meta", researchDesign: {
-          researchQuestion: "使用情况", population: "研究生", recruitment: "自愿招募", purpose: "describe",
-          timeBudgetMinutes: 5, constructs: [], analysisPlan: "逐题报告有效数与缺失数", assumptions: [], pendingDecisions: [],
-        } }],
-      }],
-    };
-    const wrapper = mountSurveysComponent(SurveyResearchAssistant, { props: reviewProps(designReport) });
-    const analysisRow = wrapper.findAll(".change-row").find((row) => row.text().includes("预期分析"))!;
-    expect(analysisRow.text()).toContain("未设置");
-    expect(analysisRow.text()).toContain("逐题报告有效数与缺失数");
-    wrapper.unmount();
-  });
-
-  it("只有人工判断项时不显示自动应用，也不冒充没有问题", () => {
-    const manualReport = { ...report, findings: [{ ...report.findings[0], suggestedOps: undefined }] };
-    const wrapper = mountSurveysComponent(SurveyResearchAssistant, { props: reviewProps(manualReport) });
-    expect(wrapper.text()).toContain("目前没有可安全自动修改的内容");
-    expect(wrapper.text()).toContain("还需要你决定或验证");
     expect(wrapper.findAll("button").some((button) => button.text().startsWith("应用 "))).toBe(false);
+    expect(wrapper.findAll("button").some((button) => button.text() === "帮我完善")).toBe(false);
+    expect(wrapper.text()).not.toContain("问卷已修改");
+    expect(wrapper.text()).not.toContain("这些修改存在冲突");
     wrapper.unmount();
   });
 
-  it("只读状态禁止诊断，空报告不宣称已验证", () => {
+  it("只读状态禁止编辑，AI 整理入口禁用", () => {
     const wrapper = mountSurveysComponent(SurveyResearchAssistant, {
-      props: { ...reviewProps({ ...report, findings: [] }), disabled: true },
+      props: { design: design(), busy: false, disabled: true, hasCopilot: true },
     });
-    const review = wrapper.findAll("button").find((button) => button.text() === "帮我完善")!;
-    expect(review.attributes("disabled")).toBeDefined();
-    expect(wrapper.text()).toContain("不代表已完成真人验证");
+    const addDesign = wrapper.findAll("button").find((button) => button.text() === "让 AI 整理研究设计")!;
+    expect(addDesign.attributes("disabled")).toBeDefined();
+    const edit = wrapper.findAll("button").find((button) => button.text() === "修改信息")!;
+    expect(edit.attributes("disabled")).toBeDefined();
     wrapper.unmount();
   });
 });

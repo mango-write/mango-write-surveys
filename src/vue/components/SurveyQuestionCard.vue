@@ -171,7 +171,7 @@ watch(
           (active instanceof HTMLElement && active.isContentEditable))
       )
         return;
-      titleInput.value?.$el?.focus();
+      titleInput.value?.$el?.focus({ preventScroll: true });
     });
   },
 );

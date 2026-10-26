@@ -9,6 +9,7 @@ import {
   ChevronsUpDown,
   Circle,
   Clock,
+  GitBranch,
   Hash,
   Image,
   Images,
@@ -31,7 +32,7 @@ const props = defineProps<{
   definition: SurveyDefinition;
   selectedId: string;
 }>();
-const emit = defineEmits<{ select: [id: string] }>();
+const emit = defineEmits<{ select: [id: string]; cover: [] }>();
 const { t } = useI18n();
 
 const TYPE_ICONS: Record<SurveyDefinition["questions"][number]["type"], Component> = {
@@ -58,6 +59,13 @@ const TYPE_ICONS: Record<SurveyDefinition["questions"][number]["type"], Componen
 const questionsById = computed(() =>
   new Map(props.definition.questions.map((question) => [question.id, question])),
 );
+const questionNumbers = computed(() => {
+  const numbers = new Map<string, number>();
+  let number = 0;
+  for (const page of props.definition.pages)
+    for (const id of page.questionIds) numbers.set(id, ++number);
+  return numbers;
+});
 // 说明块没有题干，大纲里以题型名代称。
 function outlineTitle(id: string): string {
   const question = questionsById.value.get(id);
@@ -68,7 +76,9 @@ function outlineTitle(id: string): string {
 </script>
 <template>
   <div class="survey-outline">
-    <p class="outline-hint">{{ t("surveys.outlineHint") }}</p>
+    <button type="button" class="outline-question outline-cover" @click="emit('cover')">
+      <StickyNote :size="14" /><span>{{ t("surveys.cover.title") }}</span>
+    </button>
     <p v-if="!definition.questions.length" class="outline-empty">
       {{ t("surveys.outlineEmpty") }}
     </p>
@@ -84,10 +94,14 @@ function outlineTitle(id: string): string {
         class="outline-question"
         :class="selectedId === id && 'outline-question--active'"
         :data-outline-question="id"
+        :aria-current="selectedId === id ? 'location' : undefined"
         @click="emit('select', id)"
       >
+        <span class="question-number tw:text-muted">{{ questionNumbers.get(id) }}</span>
         <component :is="TYPE_ICONS[questionsById.get(id)!.type]" v-if="questionsById.get(id)" :size="14" />
         <span class="question-title">{{ outlineTitle(id) }}</span>
+        <span v-if="questionsById.get(id)?.required" class="tw:text-muted" :aria-label="t('surveys.required')">*</span>
+        <GitBranch v-if="questionsById.get(id)?.showIf" :size="14" v-tooltip.right="t('surveys.showCondition')" :aria-label="t('surveys.showCondition')" />
       </button>
     </section>
   </div>
@@ -99,6 +113,9 @@ function outlineTitle(id: string): string {
   gap: 2px;
   padding: 8px;
 }
+.outline-cover { margin-bottom: .5rem; }
+.question-number { flex: none; min-width: 1rem; font-variant-numeric: tabular-nums; }
+.outline-question > svg { flex: none; }
 .outline-hint {
   margin: 2px 6px 8px;
   font-size: 11.5px;
@@ -148,7 +165,9 @@ function outlineTitle(id: string): string {
   align-items: center;
   gap: 7px;
   width: 100%;
-  padding: 5px 8px;
+  padding: 8px;
+  min-height: 36px;
+  flex: none;
   border: none;
   border-radius: var(--radius-sm, 6px);
   background: transparent;
@@ -170,6 +189,7 @@ function outlineTitle(id: string): string {
   color: var(--color-brand-700);
 }
 .question-title {
+  flex: 1;
   min-width: 0;
   overflow: hidden;
   display: -webkit-box;

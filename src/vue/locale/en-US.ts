@@ -1,20 +1,32 @@
 export default {
-  navigation: {"list": "Surveys", "all": "View all surveys", "loading": "Loading surveys…", "empty": "No surveys yet. Create one above."},
-  inlineReview: {"removed": "This review proposes removing this question. Check related logic and measurement needs before accepting.","helper": "Improve this survey","title": "Suggested change", "preview": "Preview after changes", "accept": "Accept this review", "linked": "Related changes apply together. Use Undo to restore.", "details": "All suggestions and sources", "context": "Research context and pretest"},
+  researchTab: "Research",
+  draftUnpublished: "Not published yet",
+  draftUnpublishedChanges: "Unpublished changes",
+  draftMatchesPublished: "Matches published version",
+  cover: {
+    title: "Survey cover",
+    audience: "Survey cover · Visible to respondents",
+  },
+
+  inlineReview: {"removed": "This review proposes removing this question. Check related logic and measurement needs before accepting.","title": "Suggested change", "preview": "Preview after changes", "basis": "Method basis"},
   assistant: {
+    editDesign: "Edit details",
+    finishEditing: "Done editing",
+    notSpecified: "Not yet specified",
+    authorOnly: "Only authors can see this. It is not shown to respondents.",
+    reviewHint: "Check wording, options, and logic. Suggestions appear beside the relevant questions.",
     "questionIndex": "Question {n}",
     "unmapped": "Mapping needs updating",
 
     "trialTitle": "Respondent tryout and feedback",
+    "noteSeparator": "; ",
     "trialCount": "Participant count (author reported)",
     "trialNotes": "Misunderstandings, response difficulties and proposed revisions",
     "recordTrial": "Save tryout record",
     "trialRecorded": "This record is author reported and has not been independently verified. It does not establish measurement validity.",
 
   "title": "Research assistant",
-  "subtitle": "Make the key choices; let Copilot handle the checks and revisions.",
   "review": "Improve my survey",
-  "reviewAgain": "Check again",
   "design": "Design rationale",
   "question": "Research question",
   "population": "Target population",
@@ -22,24 +34,19 @@ export default {
   "analysis": "Planned analysis",
   "assumptions": "Assumptions:",
   "pending": "Please confirm:",
-  "designEmpty": "Clarify the goal, population and analysis before assessing coverage.",
-  "addDesign": "Ask Copilot to add a design",
-  "planSummary": "Start with these {n} improvements. Expand to compare before and after, then confirm once to apply them together.",
+  "designEmpty": "This summarizes the research goals and design. Ask AI to organize the existing questions, then confirm what is missing. No form is required to begin.",
+  "addDesign": "Organize research design with AI",
   "stale": "The survey has changed. Check it again before applying this plan.",
   "noFindings": "No changes identified in this review. This does not establish validation with real respondents.",
-  "locate": "Locate question",
   "applyPlan": "Apply {n} improvements",
-  "previewChanges": "Before and after",
-  "before": "Before",
-  "after": "After",
+  "manualTitle": "Findings that still need your decision or validation",
+  "depthTitle": "Constructs and assumptions",
   "unchangedValue": "Not set",
   "yes": "Yes",
   "no": "No",
   "options": "Options",
   "position": "Question order",
   "conditionSummary": "Shown when {question} is {value}",
-  "manualTitle": "Decisions or validation still needed",
-  "remainingTitle": "View other findings",
   "noAutoFix": "There are no changes Copilot can safely apply. The items below need your decision or evidence from real respondents.",
   "planUnavailable": "These changes conflict, so the batch was not applied and your survey is unchanged. Check again.",
   "evidenceNote": "AI methodological advice. Source links support checking the principles, not claims of respondent testing or measurement validity.",
@@ -49,11 +56,11 @@ export default {
     "minor": "Suggestion"
   },
   "uncatalogued": "Outside the checklist; its basis needs independent verification.",
-  "reviewPrompt": "Help the user improve the current survey rather than merely listing problems. First use survey_read to read the full definition and research design. Check alignment, coverage, wording, options, eligibility and analysis fit. Read full criteria, applicability and exceptions for proposed checks using survey_read(checkIds); optional answers, single items or absent pretesting do not alone prove bias. Report only evidence-backed findings worth acting on, merge duplicates with the same cause, and distinguish confirmed issues, risks and missing evidence. Submit structured findings with survey_review. Every safely fixable finding must include complete, directly applicable suggestedOps rather than advice alone; do not edit the survey directly. Never invent operations for research trade-offs or evidence that requires real respondents.",
+  "reviewPrompt": "Help the user improve the current survey rather than merely listing problems. First use survey_read to read the full definition and research design. Check alignment, coverage, wording, options, eligibility and analysis fit. Read full criteria, applicability and exceptions for proposed checks using survey_read(checkIds); optional answers, single items or absent pretesting do not alone prove bias. Report only evidence-backed findings worth acting on, merge duplicates with the same cause, and distinguish confirmed issues, risks and missing evidence. Submit structured findings with survey_review. Every safely fixable finding must include complete, directly applicable suggestedOps rather than advice alone; do not edit the survey directly. Never invent operations for research trade-offs or evidence that requires real respondents. After the tool succeeds, reply in only one or two sentences with the number of change groups delivered and whether anything still needs the user's decision, then direct the user to the canvas. Do not repeat individual findings, reasons, operations or the full report in the conversation.",
   "designPrompt": "First read the current survey with survey_read, then use survey_edit set_meta to add researchDesign covering the research question, population, recruitment, construct-to-question mapping and supported analysis plan. Record unknowns in pendingDecisions and assumptions explicitly. Do not edit existing questions or invent sources or validation.",
   "saveFirst": "Resolve the save failure or version conflict before requesting AI work.",
   "requestFailed": "The AI request did not complete. Check the conversation for details and retry.",
-  "applied": "Changes applied and undoable. Copilot will check again after saving.",
+  "applied": "Changes applied and undoable. This review is cleared once the save succeeds.",
   "applyFailed": "The batch could not be applied, so the survey is unchanged. Check again.",
   "analysisPrompt": "Use research_read to inspect the current survey publication and data. Select supported descriptive, grouped or crosstab analysis to answer the research question, then compute and save a fixed run with research_analyze. Use the returned runId to call research_run_read and read back that same run before explaining valid samples, missing values, filters and limitations. Actually call all three tools. Do not exclude responses by default or invent significance or causality.",
   "analyze": "Analyze with Copilot",
@@ -317,6 +324,37 @@ export default {
   empty: "Start with a survey",
   emptyHint:
     "Create questions and share a link. Analyze responses and use results in your paper.",
+  createStart: {
+    question: "What do you want to study?",
+    hint: "Describe your research idea in a sentence or two and AI drafts the survey with its research design. Templates and a blank start are also here.",
+    placeholder:
+      "e.g. I want to learn how graduate students use research tools and where they struggle",
+    submit: "Generate survey",
+    failed: "Sending didn't complete. Try again — your description is kept.",
+    noDelivery:
+      "The AI assistant replied in the conversation; if a survey was generated it opens automatically. Otherwise refine your description and retry.",
+    noCopilot:
+      "No AI assistant in this environment. Start from a template or a blank survey.",
+  },
+  publishCheck: {
+    facts: "{questions} questions across {pages} pages.",
+    remindersTitle: "Before you publish (reminders, not blockers)",
+    noDesign:
+      "No research design rationale yet. Ask AI to organize it or fill it in on the Research tab.",
+    pendingDecisions:
+      "The research design still has {n} item(s) awaiting your decision:",
+    noPending: "The research design has no pending decisions.",
+    pretestDone:
+      "Pretest recorded ({n} participant(s); author-reported, not independently verified).",
+    noPretest:
+      "No pretest recorded yet: consider inviting your target population before publishing.",
+    pendingReview:
+      "{n} AI review suggestion(s) are unhandled; view them on the canvas.",
+    staleReview:
+      "{n} AI review suggestion(s) are outdated — the survey changed since; kept for traceability only, trust the current draft.",
+    disclaimer:
+      "These are pre-publish reminders only; they do not mean the survey passed human pretesting or validity checks.",
+  },
   copilot: {
     generate: "AI generate",
     generateTemplate:
@@ -336,6 +374,25 @@ export default {
       "The AI edits were based on an older draft (the canvas changed meanwhile); auto-apply is paused.",
     staleApply: "Apply anyway",
     staleDiscard: "Discard",
+    surfaceTitle: "Survey assistant",
+    surfaceDescription: "Editing this survey. Ask me to revise questions, check wording, or organize the research design.",
+    surfaceQuestionDescription: "Editing question “{title}”. Describe the change you want for this question.",
+    surfacePlaceholder: "Describe what to change and I'll edit it",
+    surfaceQuestionPlaceholder: "e.g. make “{title}” clearer",
+    surfaceStageDescription: "This survey is distributing or collecting data; I can read responses and run analyses, but won't change questions.",
+    listTitle: "Survey assistant",
+    listDescription: "Describe what you want to learn and I'll draft the survey with its research design.",
+    listPlaceholder: "e.g. design a research-tool usage survey",
+    createIdea:
+      "Draft a survey from the research idea below: save it with survey_create (do not publish), put unknown facts into pendingDecisions, and keep the research design rationale.\nResearch idea: {idea}",
+    readOnly:
+      "This is a read-only view; AI changes were not applied to this survey. Handle them from a window with edit access.",
+  },
+  reviewBar: {
+    discard: "Discard review",
+    changesTitle: "Before and after",
+    before: "Before",
+    after: "After",
   },
   responsesCount: "{n} submitted responses",
   summaryTab: "Per-question summary",
@@ -769,9 +826,17 @@ export default {
   previewMobile: "Phone",
   previewDevice: "Preview device",
   previewRestart: "Restart preview",
+  leftPanel: "Panels",
   outlineTab: "Outline",
   versionsTab: "Versions",
   listFilterTab: "Filter",
+  switcher: {
+    back: "Back to survey list",
+    open: "Switch survey",
+    all: "View all surveys",
+    noMatch: "No matching surveys",
+    loading: "Loading surveys…",
+  },
   stage: {
     design: "Design",
     distribute: "Distribute",

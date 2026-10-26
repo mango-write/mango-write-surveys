@@ -44,7 +44,7 @@ const editor: Ref<Editor | undefined> = canEdit.value
       content: host.renderMarkdownEditable!(normalizeStored(props.modelValue || "")),
       editable: !props.disabled,
       editorProps: {
-        attributes: { class: "survey-markdown-field__content", "aria-label": props.ariaLabel ?? "" },
+        attributes: { class: "survey-markdown-field__content", role: "textbox", "aria-multiline": "true", "aria-label": props.ariaLabel ?? "" },
         handleDOMEvents: {
           blur: () => {
             emit("commit");
@@ -100,6 +100,11 @@ function onPlainInput(value: string | undefined) {
   emit("change", next);
 }
 
+function focusEditor(event: MouseEvent) {
+  if (!props.disabled && !(event.target as HTMLElement).closest("[contenteditable]"))
+    editor.value?.commands.focus();
+}
+
 watch(
   () => props.disabled,
   (next) => editor.value?.setEditable(!next),
@@ -108,7 +113,7 @@ watch(
 onBeforeUnmount(() => editor.value?.destroy());
 </script>
 <template>
-  <div class="survey-markdown-field" :class="{ 'is-empty': empty && !!placeholder && !plainEditing }">
+  <div class="survey-markdown-field" :class="{ 'is-empty': empty && !!placeholder && !plainEditing }" @click="focusEditor">
     <EditorContent v-if="editor" :editor="editor" class="survey-markdown-field__surface" />
     <!-- textarea 直编（宿主缺富文本往返转换器）：markdown 源文本进出，无转换。 -->
     <Textarea

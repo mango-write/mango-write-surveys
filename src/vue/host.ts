@@ -62,6 +62,42 @@ export interface SurveysCopilotSurface {
   id: string;
 }
 
+/** 页面配置的 Copilot 面板场景动作。结构与主仓通用契约（CopilotSurfaceAction）
+ *  一致的判别联合：prompt 分支走宿主既有发送管线（sendAgentEdit 同源，
+ *  toolNames 收窄）；run 分支是页面本地回调，返回 Promise 让宿主可跟踪完成。
+ *  至多一个 primary，面板不做强制。 */
+export type SurveysCopilotSurfaceAction =
+  | {
+      /** 页面内稳定的 id（渲染 key 与测试定位用），不需要跨页全局唯一。 */
+      id: string;
+      label: string;
+      primary?: boolean;
+      /** 点击后作为消息内容发送的 prompt（不写入 composer）。 */
+      prompt: string;
+      toolNames?: string[];
+      run?: never;
+    }
+  | {
+      id: string;
+      label: string;
+      primary?: boolean;
+      prompt?: never;
+      toolNames?: never;
+      /** 页面本地回调：由页面自律保证幂等/防重（如经 reviewSession 的 busy 闸）；
+       *  透出返回的 Promise，宿主可跟踪动作完成。 */
+      run: () => void | Promise<void>;
+    };
+
+/** 页面对常驻 Copilot 面板空态与输入区的呈现配置（包内窄型；宿主适配成自己的
+ *  CopilotSurfacePresentation）。全部字段可选，未配置的回落面板默认。 */
+export interface SurveysCopilotSurfacePresentation {
+  title?: string;
+  description?: string;
+  /** 覆盖 composer 的输入占位文案（页面自备 i18n 后的字符串）。 */
+  composerPlaceholder?: string;
+  actions?: SurveysCopilotSurfaceAction[];
+}
+
 /** 右栏 Copilot 岛的最小注入面：包页面只经它 emit/登记，不感知岛内部。 */
 export interface SurveysCopilotHost {
   /** 右栏岛组件（宿主持有单实例与 scope 切换）；缺省 = 该宿主没有 Copilot，
@@ -78,7 +114,12 @@ export interface SurveysCopilotHost {
   fillComposer(text: string): void;
   focusComposer(): void;
   sendPrompt?(text: string, toolNames?: string[]): Promise<void>;
-  /** 页面卸载时清掉它写进桥的状态（桥是宿主单例，脏状态会漏给下一页）。 */
+  /** 页面按 scope 注册面板呈现（空态文案/场景动作/composer 占位）；undefined =
+   *  清除。换 scope/换页由页面重新注册；页面卸载后的清理归 releasePageState。
+   *  缺省 = 该宿主不消费 surface 呈现（页面照常工作）。 */
+  setSurfacePresentation?(presentation: SurveysCopilotSurfacePresentation | undefined): void;
+  /** 页面卸载时清掉它写进桥的状态（含 surface 呈现）——桥是宿主单例，不清会
+   *  把上一页的空态/动作漏给下一页。 */
   releasePageState(): void;
 }
 
