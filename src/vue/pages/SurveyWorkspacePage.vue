@@ -719,20 +719,14 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
         <main class="survey-stage">
           <header class="stage-topbar">
             <div class="topbar-title">
-              <div class="topbar-heading">
-                <div class="title-row">
-                  <!-- 跨卷切换：返回箭头 + 标题即切换入口，按需拉取，不常驻第二份列表。 -->
-                  <SurveySwitcher v-if="survey" :current-id="surveyId" :current-title="definition.title || survey.title" />
-                  <h1 v-else>{{ definition.title || t("surveys.heading") }}</h1>
-                </div>
-                <div class="title-links">
-                  <span v-if="survey && stage === 'design'" class="draft-state tw:text-muted tw:text-xs"
-                    v-tooltip.bottom="t('surveys.revisionHint')">{{ t(!hasRevision ? 'surveys.draftUnpublished' : definitionDirty ? 'surveys.draftUnpublishedChanges' : 'surveys.draftMatchesPublished') }}</span>
-                </div>
-              </div>
-              <!-- 设计段只留草稿/发布状态一行字；状态 Tag 只在非设计段出现，不与轨道重复。 -->
+              <!-- 跨卷切换：返回箭头 + 标题即切换入口，按需拉取，不常驻第二份列表。 -->
+              <SurveySwitcher v-if="survey" :current-id="surveyId" :current-title="definition.title || survey.title" />
+              <h1 v-else>{{ definition.title || t("surveys.heading") }}</h1>
+              <!-- 状态唯一展示位：设计段 muted 状态字，非设计段同位置换 Tag；不与轨道徽标重复。 -->
+              <span v-if="survey && stage === 'design'" class="draft-state tw:text-muted tw:text-xs"
+                v-tooltip.bottom="t('surveys.revisionHint')">{{ t(!hasRevision ? 'surveys.draftUnpublished' : definitionDirty ? 'surveys.draftUnpublishedChanges' : 'surveys.draftMatchesPublished') }}</span>
               <Tag
-                v-if="survey && stage !== 'design'"
+                v-else-if="survey"
                 :value="t(`surveys.status.${survey.status}`)"
                 :severity="severity(survey.status)"
               />
@@ -1089,12 +1083,9 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
 .topbar-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: .4rem;
   min-width: 0;
 }
-.topbar-heading { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.title-row { display: flex; align-items: center; gap: .15rem; min-width: 0; }
-.title-links { display: flex; align-items: center; gap: .25rem; flex-wrap: wrap; min-width: 0; }
 .draft-state { white-space: nowrap; }
 .topbar-title h1 {
   margin: 0;
