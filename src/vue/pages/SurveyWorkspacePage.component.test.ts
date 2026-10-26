@@ -1634,15 +1634,14 @@ describe("SurveyWorkspacePage 导航收敛与 surface 呈现（issue #224 M2）"
     wrapper.unmount();
   });
 
-  it("标题区提供返回列表与切换问卷入口（轻量按需，不恢复 surveys tab）", async () => {
+  it("标题区提供返回箭头与标题切换问卷入口（轻量按需，不恢复 surveys tab）", async () => {
     const { wrapper } = await mountWorkspace();
-    const links = wrapper.find(".title-links");
-    expect(links.exists()).toBe(true);
-    expect(links.text()).toContain(t("surveys.switcher.back"));
     const switcher = wrapper.findComponent(SurveySwitcher);
     expect(switcher.exists()).toBe(true);
     expect(switcher.props("currentId")).toBe("s-1");
     expect(switcher.props("currentTitle")).toBe("问卷");
+    expect(wrapper.find(".switcher-back").attributes("aria-label")).toBe(t("surveys.switcher.back"));
+    expect(wrapper.find(".switcher-trigger").text()).toContain("问卷");
     wrapper.unmount();
   });
 

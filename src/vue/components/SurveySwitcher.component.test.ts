@@ -77,8 +77,8 @@ async function mountSwitcher(list: ReturnType<typeof makeList>, props = { curren
 function triggers(wrapper: ReturnType<typeof mountSurveysComponent>) {
   const buttons = wrapper.findAll("button");
   return {
-    back: buttons.find((b) => b.text() === "返回问卷列表")!,
-    open: buttons.find((b) => b.attributes("aria-label") === "切换问卷")!,
+    back: buttons.find((b) => b.classes().includes("switcher-back"))!,
+    open: buttons.find((b) => b.classes().includes("switcher-trigger"))!,
   };
 }
 
@@ -88,8 +88,12 @@ describe("问卷切换器（工作台标题区）", () => {
     const { wrapper } = await mountSwitcher(list);
     expect(list).not.toHaveBeenCalled();
     const { open } = triggers(wrapper);
+    // 标题本身即切换触发器：展示当前卷标题，展开态经 aria-expanded 暴露。
+    expect(open.text()).toContain("当前卷新标题");
+    expect(open.attributes("aria-expanded")).toBe("false");
     await open.trigger("click");
     await flushPromises();
+    expect(open.attributes("aria-expanded")).toBe("true");
     expect(list).toHaveBeenCalledTimes(1);
     expect(wrapper.find(".popover-stub").exists()).toBe(true);
     await open.trigger("click");
@@ -141,7 +145,7 @@ describe("问卷切换器（工作台标题区）", () => {
     wrapper.unmount();
   });
 
-  it("底部「查看全部问卷」与标题区「返回问卷列表」都直达列表页", async () => {
+  it("底部「查看全部问卷」与标题区返回箭头都直达列表页", async () => {
     const list = makeList([summary({ id: "s-2", title: "问卷乙" })]);
     const { navigate, wrapper } = await mountSwitcher(list);
     await triggers(wrapper).back.trigger("click");

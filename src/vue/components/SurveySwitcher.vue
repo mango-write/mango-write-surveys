@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 问卷切换器（M2 补）：工作台标题区的轻量跨卷切换。不常驻第二份完整列表——
+// 问卷切换器（M2 补）：工作台标题区的轻量跨卷切换，移动端头部范式——最左
+// 返回箭头，标题本身即切换触发器（▾）。不常驻第二份完整列表——
 // 面板打开时才 api.list（结果缓存，重开不重拉），当前卷置顶并标记，支持按
 // 标题过滤；选择沿用 host.navigate（未保存保护由既有路由守卫承担，这里不写
 // 保存旁路），底部「查看全部问卷」直达列表页主入口。
@@ -82,10 +83,15 @@ function select(id: string) {
 </script>
 <template>
   <span class="survey-switcher">
-    <Button :label="t('surveys.switcher.back')" text severity="secondary" class="switcher-action"
-      @click="host.navigate({ name: 'surveys.list' })" />
-    <Button :label="t('surveys.switcher.open')" icon="pi pi-chevron-down" icon-pos="right" text severity="secondary"
-      class="switcher-action" :aria-expanded="opened" :aria-label="t('surveys.switcher.open')" @click="toggle" />
+    <Button icon="pi pi-arrow-left" text severity="secondary" class="switcher-back"
+      :aria-label="t('surveys.switcher.back')" @click="host.navigate({ name: 'surveys.list' })" />
+    <h1 class="switcher-heading">
+      <button type="button" class="switcher-trigger" :title="currentTitle" :aria-expanded="opened"
+        :aria-haspopup="true" @click="toggle">
+        <span class="switcher-current">{{ currentTitle }}</span>
+        <i class="pi pi-chevron-down switcher-caret" aria-hidden="true"></i>
+      </button>
+    </h1>
     <Popover ref="panel" :aria-label="t('surveys.switcher.open')" @show="opened = true; void load();" @hide="opened = false">
       <div class="switcher-panel">
         <InputText v-model="search" :placeholder="t('surveys.searchPlaceholder')"
@@ -115,7 +121,17 @@ function select(id: string) {
 </template>
 <style scoped>
 .survey-switcher { display: inline-flex; align-items: center; gap: .15rem; min-width: 0; }
-.switcher-action { font-size: 12.5px; padding: .15rem .45rem; }
+.switcher-back { font-size: .9rem; padding: .15rem .3rem; }
+.switcher-heading { margin: 0; min-width: 0; display: flex; }
+.switcher-trigger {
+  display: inline-flex; align-items: center; gap: .3rem; min-width: 0; max-width: 14rem;
+  margin: 0; padding: .1rem .4rem; border: none; border-radius: var(--radius-sm);
+  font-size: var(--font-size-title-sm, 14px); font-weight: 600; color: inherit;
+  background: none; cursor: pointer; text-align: start;
+}
+.switcher-trigger:hover { background: var(--color-surface-muted); }
+.switcher-current { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.switcher-caret { font-size: 12px; color: var(--color-text-tertiary); }
 .switcher-panel { display: flex; flex-direction: column; gap: .5rem; width: 17rem; max-width: calc(100vw - 2.5rem); }
 .switcher-panel :deep(.p-inputtext) { font-size: .85rem; padding-block: .35rem; }
 .switcher-links { display: flex; flex-direction: column; }
