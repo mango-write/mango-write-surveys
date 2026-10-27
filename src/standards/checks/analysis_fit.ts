@@ -16,7 +16,7 @@ export const analysisFitChecks: StandardsCheck[] = [
       },
       {
         source: "aapor",
-        note: "Analyzing and reporting your survey：分析口径须与题目形式及测量水平一致",
+        note: "Analyzing and reporting the survey results：交叉表按数据形态选择报告法、报告口径透明",
       },
     ],
     appliesTo: {
@@ -81,7 +81,7 @@ export const analysisFitChecks: StandardsCheck[] = [
       },
       {
         source: "aapor",
-        note: "Analyzing and reporting your survey：子群样本不足时须说明局限，不能过度解读",
+        note: "Analyzing and reporting the survey results：以抽样误差（MoE）与 credibility interval 刻画估计精度、报告口径透明",
       },
     ],
     appliesTo: {
@@ -178,7 +178,7 @@ export const analysisFitChecks: StandardsCheck[] = [
     citations: [
       {
         source: "aapor",
-        note: "Fielding your Survey：item nonresponse 与 breakoff 须在设计阶段控制并在报告中交代",
+        note: "Analyzing and reporting the survey results：break-off 须编码并在报告中交代；Designing your questionnaire（protect respondents）：敏感题允许跳过",
       },
       {
         source: "product",
@@ -242,11 +242,11 @@ export const analysisFitChecks: StandardsCheck[] = [
     citations: [
       {
         source: "product",
-        note: "research-data 的固定运行、变量字典与 CSV 导出是分析输出的边界；不支持的输出须在计划中另行安排（docs/product/research-data.md）",
+        note: "research-data 的固定运行与变量字典是分析输出的边界，CSV 导出是 surveys 侧原始数据出口；不支持的输出须在计划中另行安排（docs/product/research-data.md）",
       },
       {
         source: "aapor",
-        note: "Planning Your Survey：研究问题、样本与分析计划须在采集前确定，不能事后补设计",
+        note: "Planning Your Survey：研究问题先行，问卷不得用于产出预定结果",
       },
     ],
     appliesTo: {

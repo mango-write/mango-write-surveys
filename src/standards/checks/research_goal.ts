@@ -42,7 +42,7 @@ export const researchGoalChecks: StandardsCheck[] = [
     citations: [
       {
         source: "aapor",
-        note: "Planning Your Survey：按研究问题选择方法，焦点小组、既有数据或实验设计可能比问卷更合适",
+        note: "Planning Your Survey：按研究问题选择方法，焦点小组、内容分析可能更合适，或补充既有数据",
       },
       {
         source: "product",
@@ -132,15 +132,15 @@ export const researchGoalChecks: StandardsCheck[] = [
     dimension: "research_goal",
     title: "单卷塞入多个不相关目标",
     claim:
-      "一份问卷只承载一个主研究问题及其必要子问题；新增模块若对应不同人群、不同构念或不同决策用途，必须拆卷。目标过多会拉长问卷、稀释预测试深度，并使单一分析计划无法覆盖全部数据。",
+      "一份问卷只承载一个主研究问题及其必要子问题；新增模块若对应不同人群、不同构念或不同决策用途，必须拆卷。目标过多会拉长问卷、稀释预测试深度，并使单一分析计划无法覆盖全部数据。一卷聚焦单一主目标是本目录的方法学标准，由上述来源原则推导。",
     citations: [
       {
         source: "aapor",
-        note: "Planning Your Survey：先明确单一调查目的；Designing your questionnaire：题目须服务研究问题",
+        note: "Planning Your Survey：目标须 unambiguous and specific；Designing your questionnaire：单题一次只问一个概念、保持题量短",
       },
       {
         source: "product",
-        note: "单卷题数 ≤50、页数 ≤20 的硬上限（docs/product/surveys.md）；上限内仍应受目标收敛约束",
+        note: "单卷题数与页数硬上限由 SURVEY_LIMITS 定义（docs/product/surveys.md 按约定链接源码）；上限内仍应受目标收敛约束",
       },
     ],
     appliesTo: {
@@ -171,7 +171,7 @@ export const researchGoalChecks: StandardsCheck[] = [
     citations: [
       {
         source: "aapor",
-        note: "Planning Your Survey：按问题性质选择方法，焦点小组、观察或既有记录可能更合适",
+        note: "Planning Your Survey：按问题性质选择方法，焦点小组、内容分析或既有行政记录可能更合适",
       },
       {
         source: "cosmin",

@@ -14,10 +14,6 @@ export const flowChecks: StandardsCheck[] = [
         source: "pew",
         note: "Question order 节：顺序效应——contrast effects 与 assimilation effects，前序题改变后序题参照系",
       },
-      {
-        source: "cdc_cognitive",
-        note: "judgment 过程：受访者拿前序题目作参照完成后续判断，无法回到无上下文状态",
-      },
     ],
     appliesTo: {
       notes: "适用于含评价/满意度/重要性序列的问卷；仅当前后题测量同一构念的不同层级时命中。",
@@ -72,7 +68,7 @@ export const flowChecks: StandardsCheck[] = [
     citations: [
       {
         source: "pew",
-        note: "Question order 节：敏感题放后段——受访者先建立信任再面对敏感提问",
+        note: "Question order 节：开卷用简单题、难题不连续堆叠",
       },
       {
         source: "aapor",
@@ -106,10 +102,6 @@ export const flowChecks: StandardsCheck[] = [
         source: "pew",
         note: "Question order 节：人口学题放卷末——前置推高早期退出并框定后续作答",
       },
-      {
-        source: "aapor",
-        note: "Fielding your Survey：题目放置位置影响完成率与无应答偏差",
-      },
     ],
     appliesTo: {
       notes: "分组比较研究需在卷首筛分（如先确认年级再走 showIf）时，前置的只保留驱动跳页的最小集合，其余描述性人口学题仍放卷末。",
@@ -136,11 +128,11 @@ export const flowChecks: StandardsCheck[] = [
     citations: [
       {
         source: "aapor",
-        note: "Designing your questionnaire：题序逻辑与跳转——追问只向符合条件的受访者呈现",
+        note: "Designing your questionnaire：题序对受访者合乎逻辑且不影响作答",
       },
       {
-        source: "cdc_cognitive",
-        note: "response 过程：前提不成立时受访者选最近似选项而非指出问题，假数据静默进入",
+        source: "product",
+        note: "服务端按绑定版本校验 showIf 条件引用与选项对齐（core/validate-definition），链条断裂可在结构层暴露",
       },
     ],
     appliesTo: {
@@ -173,7 +165,7 @@ export const flowChecks: StandardsCheck[] = [
       },
       {
         source: "aapor",
-        note: "Designing your questionnaire：题序逻辑自洽，受访者不遇到与己无关的题、不遗漏与己相关的题",
+        note: "Designing your questionnaire：题序合乎逻辑且不影响作答",
       },
     ],
     appliesTo: {
@@ -229,7 +221,7 @@ export const flowChecks: StandardsCheck[] = [
     citations: [
       {
         source: "cdc_cognitive",
-        note: "认知访谈以目的抽样 20-50 人找问题而非估计——题序影响在访谈中方可直接观察",
+        note: "认知访谈以目的抽样 20-50 人找问题而非估计，参与者须与目标人群相似",
       },
       {
         source: "aapor",

@@ -44,7 +44,7 @@ export const edgeCases: EdgeCase[] = [
     relatedCheckIds: ["wording.timeframe"],
     expected: "not_flag",
     rationale:
-      "该条 conditions 允许研究说明统一声明口径、题目未写也不产生歧义时降级豁免。口径已在受访者可见处声明，不应按缺失回忆期上报。",
+      "该条 conditions 规定卷首统一声明回忆期且各题口径一致时不报本项。口径已在受访者可见处声明，不应按缺失回忆期上报。",
   },
   {
     id: "edge.single_object_with_qualifier",

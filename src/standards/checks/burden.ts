@@ -16,7 +16,7 @@ export const burdenChecks: StandardsCheck[] = [
       },
       {
         source: "aapor",
-        note: "问卷长度主题：长问卷推高无应答与中途退出，长度能短则短",
+        note: "Keep respondent burden low by keeping questionnaires and individual questions short（负担最小化原则）",
       },
     ],
     appliesTo: {
@@ -72,15 +72,15 @@ export const burdenChecks: StandardsCheck[] = [
     dimension: "burden",
     title: "矩阵行数超载",
     claim:
-      "矩阵题行数应按单次判断的认知负担收敛：每行是一次独立判断，建议不超过 10 行；系统上限 20 行是承载边界不是质量标准——贴上限的矩阵在自填场景下后段行的直线作答与随机勾选比例显著上升。",
+      "矩阵题行数应按单次判断的认知负担收敛：负担随行数增长，后段行作答质量风险须经预测试核查。每行是一次独立判断，「不超过 10 行」是本仓约定；系统上限 20 行是承载边界不是质量标准。",
     citations: [
       {
         source: "product",
-        note: "系统硬上限：矩阵行 ≤20、列 ≤10——承载能力边界，不构成设计建议（硬上限不等于好标准）",
+        note: "系统硬上限：矩阵行 ≤20、列 ≤10——承载能力边界，不构成设计建议（硬上限不等于好标准）；≤10 行为本仓约定",
       },
       {
         source: "cdc_cognitive",
-        note: "judgment 过程：连续同类判断的疲劳使后段行作答质量下降，受访者用最少策略收尾",
+        note: "judgment 过程：连续同类判断的作答质量是 judgment 探针的核查点",
       },
     ],
     appliesTo: {
@@ -105,7 +105,7 @@ export const burdenChecks: StandardsCheck[] = [
     dimension: "burden",
     title: "开放题数量过多",
     claim:
-      "全卷开放作答（text/multi_text）题应控制在 3 题以内：每题开放作答的成本是选择题的数倍，开放题过多把完成时长与弃答率一起推高，且文本数据的分析出口当前只有人工阅读。",
+      "全卷开放作答（text/multi_text）题控制在 3 题以内——本仓约定，理由：开放题单题作答成本显著高于封闭选项，且文本数据的分析出口当前只有人工阅读；超出该数的开放题拉长完成时长并推高弃答。",
     citations: [
       {
         source: "product",
@@ -113,7 +113,7 @@ export const burdenChecks: StandardsCheck[] = [
       },
       {
         source: "aapor",
-        note: "问卷长度主题：开放作答成本远高于封闭选项，数量须克制",
+        note: "Keep respondent burden low by keeping questionnaires and individual questions short（负担最小化原则）；≤3 题为本仓约定",
       },
     ],
     appliesTo: {
@@ -142,11 +142,11 @@ export const burdenChecks: StandardsCheck[] = [
     citations: [
       {
         source: "aapor",
-        note: "Designing your questionnaire：避免冗余提问——每一题都要有存在的理由",
+        note: "Designing your questionnaire：one concept at a time、keep questions short；重复题判据由此延伸",
       },
       {
         source: "cdc_cognitive",
-        note: "recall 过程：同卷重复询问迫使受访者二次回忆，后一次作答受前一次锚定",
+        note: "recall 过程：同卷重复询问同一段记忆属 recall 探针的关注点",
       },
     ],
     appliesTo: {
@@ -178,7 +178,7 @@ export const burdenChecks: StandardsCheck[] = [
       },
       {
         source: "pew",
-        note: "Open- and closed-ended questions：select-all 与 forced-choice 的选择须服务研究口径",
+        note: "Question wording 节：select-all 与 forced-choice 的选择须服务研究口径",
       },
     ],
     appliesTo: {
@@ -207,7 +207,7 @@ export const burdenChecks: StandardsCheck[] = [
     citations: [
       {
         source: "cdc_cognitive",
-        note: "comprehension 过程：长嵌套句超出工作记忆负荷，自填场景无访员可追问",
+        note: "comprehension 过程：认知访谈以理解探针暴露长题干的理解问题",
       },
       {
         source: "aapor",
@@ -240,11 +240,7 @@ export const burdenChecks: StandardsCheck[] = [
     citations: [
       {
         source: "aapor",
-        note: "Fielding your Survey：pretest/pilot 实测完成时间与卡点，是发放前规定动作",
-      },
-      {
-        source: "cdc_cognitive",
-        note: "认知访谈可直接观察各题耗时分布，20-50 人样本即可暴露超时题",
+        note: "Fielding your Survey：发放前认知访谈与试点是规定动作",
       },
     ],
     appliesTo: {
@@ -261,6 +257,6 @@ export const burdenChecks: StandardsCheck[] = [
       why: "实测中位 18 分钟；声明偏差让大量受访者在第 10 题附近退出，且退出集中在低耐受人群，完成样本自选择。",
     },
     handling:
-      "发布前跑 5-10 人试点取中位时长，按实测值声明并留 20% 余量；卷首与发放页用同一实测口径；试点记录各题耗时，超时题回负担维度处理。",
+      "发布前跑 5-10 人试点取中位时长并留 20% 余量（中位时长+20% 为本仓操作约定）；卷首与发放页用同一实测口径；试点记录各题耗时，超时题回负担维度处理。",
   },
 ];

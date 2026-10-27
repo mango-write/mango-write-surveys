@@ -155,7 +155,7 @@ const groupComparisonMapping: MappingEntry[] = [
     questionId: "q_freq",
     researchQuestion: "过去一学期，参与过与未参与过跨学科科研项目的研究生在科研工具使用频率与使用广度上的分布有何差异？",
     concept: "总体使用频率",
-    indicator: "过去一学期科研工具使用频率（时间锚定四档）",
+    indicator: "过去一学期科研工具使用频率（时间锚定四档，另设「从未使用」零使用出口）",
     variableKind: "categorical",
     plannedAnalysis: "按 q_group 分组报告频数与比例（行比例），两组并排描述，不作推断检验",
   },
@@ -163,9 +163,9 @@ const groupComparisonMapping: MappingEntry[] = [
     questionId: "q_tools",
     researchQuestion: "过去一学期，参与过与未参与过跨学科科研项目的研究生在科研工具使用频率与使用广度上的分布有何差异？",
     concept: "工具类别广度",
-    indicator: "过去一学期使用过的科研工具类别集合",
+    indicator: "过去一学期使用过的科研工具类别集合（未使用者选互斥项「从未使用」）",
     variableKind: "multiple",
-    plannedAnalysis: "按 q_group 分组以有效答卷为分母报告各类别选择率，另报人均选择类别数",
+    plannedAnalysis: "按 q_group 分组以有效答卷为分母报告各类别选择率，另报人均选择类别数；「从未使用」互斥项单独报告",
   },
   {
     questionId: "q_scenarios",
@@ -635,6 +635,7 @@ const groupComparisonCase: ExcellentCase = {
           { id: "weekly", label: "每周数次" },
           { id: "monthly", label: "每月数次" },
           { id: "rarely", label: "每月不足一次" },
+          { id: "never", label: "从未使用" },
         ],
       },
       {
@@ -649,6 +650,7 @@ const groupComparisonCase: ExcellentCase = {
           { id: "lang", label: "翻译与语言润色工具" },
           { id: "genai", label: "生成式 AI 工具（如 ChatGPT、文心一言）" },
           { id: "other", label: "其他" },
+          { id: "never_used", label: "从未使用过任何科研工具", exclusive: true },
         ],
       },
       {

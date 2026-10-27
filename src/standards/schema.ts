@@ -41,19 +41,19 @@ export const SOURCES: Record<
     label: "AAPOR 调查最佳实践",
     url: "https://aapor.org/standards-and-ethics/best-practices/",
     covers:
-      "Planning Your Survey（目标先行、已有数据是否够用）/ Designing Your Sample（抽样框、概率与非概率样本）/ Designing your questionnaire（一次一个概念、选项互斥完备、题序、预测试）/ Fielding your Survey（认知访谈、试点、全过程质控）",
+      "Planning Your Survey（目标先行、已有数据是否够用）/ Designing Your Sample（抽样框、概率与非概率样本）/ Designing your questionnaire（一次一个概念、选项互斥完备、题序、预测试；protect respondents：敏感话题披露与可跳答、求助资源、负担控制、再识别警示）/ Fielding your Survey（认知访谈、试点、全过程质控）/ Analyzing and reporting the survey results（交叉表报告、抽样误差与 credibility interval、加权、透明报告）",
   },
   pew: {
     label: "Pew 问卷题目设计",
     url: "https://www.pewresearch.org/writing-survey-questions/",
     covers:
-      "Question development / Open- and closed-ended questions（选项、轮换、互斥完备、逐项是/否与多选格式差异）/ Question wording（双重提问、具体语言、否定、情绪化措辞、默许与社会期许风险）/ Question order（顺序效应）",
+      "Question development / Open- and closed-ended questions（选项、轮换、互斥完备）/ Question wording（双重提问、具体语言、否定、情绪化措辞、默许与社会期许风险、forced-choice 与 select-all 格式取舍（2019 Center study））/ Question order（顺序效应）/ Measuring change over time（同措辞同位置比较）",
   },
   cdc_cognitive: {
     label: "CDC 认知访谈",
     url: "https://www.cdc.gov/nchs/ccqder/question-evaluation/cognitive-interviewing.html",
     covers:
-      "作答复核模型四过程：comprehension（理解）/ recall（回忆）/ judgment（判断）/ response（选项匹配）；目的抽样 20-50 人找问题而非估计",
+      "作答复核模型四过程：comprehension（理解）/ recall（回忆）/ judgment（判断）/ response（选项匹配）；目的抽样 20-50 人找问题而非估计，参与者须与目标人群相似",
   },
   cosmin: {
     label: "COSMIN 方法手册 V2",

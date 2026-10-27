@@ -84,7 +84,7 @@ export const wordingChecks: StandardsCheck[] = [
       },
       {
         source: "cosmin",
-        note: "内容效度 comprehensibility 要素（借自健康测量工具语境，术语可理解性判据通用）",
+        note: "内容效度 comprehensibility 要素（借自健康测量工具语境，术语可理解性判据通用）；全文可在 cosmin.nl 官网获取",
       },
     ],
     appliesTo: {
@@ -116,7 +116,7 @@ export const wordingChecks: StandardsCheck[] = [
       },
       {
         source: "cdc_cognitive",
-        note: "recall 过程：回忆期越长、事件越密集，遗漏与压缩越严重，口径不一致直接破坏可比性",
+        note: "recall 过程：时间口径是 recall 探针关注的作答要素；「回忆期越长、遗漏与压缩越严重」属本目录推断",
       },
     ],
     appliesTo: {
@@ -125,7 +125,7 @@ export const wordingChecks: StandardsCheck[] = [
     classification: "judgment",
     severity: {
       level: "major",
-      conditions: "研究说明已统一声明全卷时间口径、题目未写也不产生歧义时降 minor。",
+      conditions: "卷首统一声明回忆期且各题口径一致时不报本项；仅部分题缺参照或口径不一致时保持 major。",
     },
     errorExample: {
       description: "频率题没有任何时间参照。",
@@ -148,7 +148,7 @@ export const wordingChecks: StandardsCheck[] = [
       },
       {
         source: "cdc_cognitive",
-        note: "comprehension 过程：否定翻转加重理解负担，自填场景尤甚",
+        note: "comprehension 过程：否定翻转加重理解负担",
       },
     ],
     appliesTo: {
@@ -185,7 +185,7 @@ export const wordingChecks: StandardsCheck[] = [
     classification: "judgment",
     severity: {
       level: "minor",
-      conditions: "仅提供格式改进建议，不因自拟题自动升 major；有适用证据的既有量表不为规避格式风险而擅改。声称沿用但缺可核验来源时，记录来源证据不足，不视为已验证。",
+      conditions: "仅提供格式改进建议，不因自拟题自动升 major；有适用证据的既有量表不为规避格式风险而擅改。声称沿用但缺可核验来源时，记录来源证据不足，不视为已验证。同意度格式仅构成风险提示，不单独作为缺陷报告；与加重因素（如目标人群理解差异大且宣称精确测量）叠加时以提示形式呈现。",
     },
     errorExample: {
       description: "自拟态度题使用同意度刻度，需要评估默许风险。",
@@ -208,7 +208,7 @@ export const wordingChecks: StandardsCheck[] = [
       },
       {
         source: "cdc_cognitive",
-        note: "comprehension/response 过程：受访者对不成立的预设倾向于选最近似选项而非指出前提错误",
+        note: "comprehension/response 过程：预设不成立的题目可在理解与选项匹配探针下暴露问题",
       },
     ],
     appliesTo: {

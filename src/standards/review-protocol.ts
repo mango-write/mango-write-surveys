@@ -72,6 +72,6 @@ export const REVIEW_PROTOCOL = {
     "SEVERITY_LEVELS 三级定义与「严重问题 = blocker+major」口径。",
     "diagnosisMatching 的位置重叠判定是否足够（是否需要更细的选项级位置）。",
     "首批八维检查条目的 claim 表述与严重级别（目录随专家意见修订）。",
-    "评测集缺陷案例的标注真值（planted 是否确为该 check 的典型表现）。",
+    "[已核验 2026-10-27，独立 Agent 按原始来源逐条核验 60 条检查与全部 planted/mustNotFlag/edge 标签；修正 3 处标签错误、统一 acquiescence 口径、新增 4 例盲区案例——代理证据，人类专家复核仍未发生] 评测集缺陷案例的标注真值（planted 是否确为该 check 的典型表现）。",
   ],
 } as const;

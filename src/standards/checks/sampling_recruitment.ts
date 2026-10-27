@@ -72,7 +72,7 @@ export const samplingRecruitmentChecks: StandardsCheck[] = [
     citations: [
       {
         source: "aapor",
-        note: "Designing Your Sample：样本设计须按子群规划可执行性与覆盖",
+        note: "Designing Your Sample：抽样框须覆盖目标人群全域（covers all or almost all the population of interest）、样本须与总体匹配；按子群规划样本量是本仓由覆盖要求推导的落地要求",
       },
       {
         source: "product",

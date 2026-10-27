@@ -12,11 +12,11 @@ export const optionsChecks: StandardsCheck[] = [
     citations: [
       {
         source: "pew",
-        note: "Open- and closed-ended questions 节：选项须穷尽（exhaustive）——每个受访者都要有符合自己情况的选项",
+        note: "Question wording 节：选项须穷尽（exhaustive）——每个受访者都要有符合自己情况的选项",
       },
       {
         source: "cdc_cognitive",
-        note: "response 过程：选项里找不到符合自己情况的答案时，受访者选最近似项而非放弃，误差静默进入数据",
+        note: "response 过程：选项与受访者情况的匹配是 response 探针检查的作答要素",
       },
     ],
     appliesTo: {
@@ -52,7 +52,7 @@ export const optionsChecks: StandardsCheck[] = [
     citations: [
       {
         source: "pew",
-        note: "Open- and closed-ended questions 节：选项须互斥（mutually exclusive）——边界重叠使选择不可归因",
+        note: "Question wording 节：选项须互斥（mutually exclusive）——边界重叠使选择不可归因",
       },
       {
         source: "aapor",
@@ -122,15 +122,11 @@ export const optionsChecks: StandardsCheck[] = [
     dimension: "options",
     title: "量表正负不对称",
     claim:
-      "含正负向的评价刻度必须正负对称：一侧堆砌档位（三个负向档对一个正向档）时，受访者把不同程度压进档少的一侧，均值与分布系统性偏离真实态度。",
+      "含正负向的评价刻度必须正负对称：一侧堆砌档位（三个负向档对一个正向档）时，受访者把不同程度压进档少的一侧，均值与分布系统性偏离真实态度。该判据是量表设计文献的方法学共识（正负对称、档位等距），本仓不引具体 URL 级来源。",
     citations: [
       {
-        source: "pew",
-        note: "量表设计主题：response scales 应正负对称（balanced scales）——一侧多档使回答分布偏移",
-      },
-      {
-        source: "cdc_cognitive",
-        note: "judgment 过程：档位宽度不均时受访者把不同程度归入同一档，区分度丢失",
+        source: "product",
+        note: "本条主张是量表设计文献的方法学共识（正负对称、档位等距），非引自所登记 URL 来源；挂 product 仅登记系统内量表题型承载（scale/rating/matrix_single）",
       },
     ],
     appliesTo: {
@@ -159,7 +155,7 @@ export const optionsChecks: StandardsCheck[] = [
     citations: [
       {
         source: "pew",
-        note: "Open- and closed-ended questions 及其 2019 格式研究：forced-choice 指逐项明确是/否，不是整题只选一项；格式影响选中率，排序研究并非一律禁用多选。",
+        note: "Question wording 节：forced-choice（radio button 整题单选）与 select-all（多选）格式影响结果；2019 Center study 发现 forced-choice 对敏感题更准确，Center 一般避免 select-all；本目录不跟随该一般性回避，仅当研究问题需要「最主要项/排序」而采用多选时命中。",
       },
     ],
     appliesTo: {
@@ -188,7 +184,7 @@ export const optionsChecks: StandardsCheck[] = [
     citations: [
       {
         source: "product",
-        note: "系统能力：exclusive 只定义在 multiple/image_multiple 的选项上，与 minChoices/maxChoices 的组合可达性可静态校验",
+        note: "exclusive 的选择语义只在 multiple/image_multiple 生效，单选上残留属无效配置；与 minChoices/maxChoices 的组合可达性可静态校验",
       },
       {
         source: "aapor",
@@ -221,11 +217,11 @@ export const optionsChecks: StandardsCheck[] = [
     citations: [
       {
         source: "cdc_cognitive",
-        note: "response 过程：锚点体系不一致时受访者按各自理解归入不同档，频次分布不可比",
+        note: "response 过程：选项锚点是 response 探针检查的作答要素",
       },
       {
         source: "pew",
-        note: "Question wording 节：量化频率词须有明确定义锚点，否则同一词多种理解",
+        note: "Question wording 节：问题须 clear and specific；量化频率词配统一锚点是该原则的具体化",
       },
     ],
     appliesTo: {
@@ -254,7 +250,7 @@ export const optionsChecks: StandardsCheck[] = [
     citations: [
       {
         source: "pew",
-        note: "Open- and closed-ended questions 节：轮换/翻转选项顺序抵消 order effects；有序量表不轮换",
+        note: "Open- and closed-ended questions 节：轮换/翻转选项顺序摊薄 order effects（不必然消除）；有序量表不轮换",
       },
     ],
     appliesTo: {

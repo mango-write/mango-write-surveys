@@ -14,10 +14,6 @@ export const coverageChecks: StandardsCheck[] = [
         source: "cosmin",
         note: "内容效度 comprehensiveness：题目须覆盖构念全域、不缺维度（借自健康测量工具语境，构念覆盖判据通用）",
       },
-      {
-        source: "aapor",
-        note: "Designing your questionnaire：题目设计须与研究问题的各个组成部分对应",
-      },
     ],
     appliesTo: {
       notes:
@@ -107,7 +103,7 @@ export const coverageChecks: StandardsCheck[] = [
     citations: [
       {
         source: "cosmin",
-        note: "内容效度 comprehensiveness 不等于题量堆叠：重复题不扩大覆盖（借自健康测量工具语境）",
+        note: "内容效度判据含 no unnecessary items（too many items）：重复题属不必要题项（Table 6.6 relevance 判据；借自健康测量工具语境）",
       },
     ],
     appliesTo: {
@@ -143,7 +139,7 @@ export const coverageChecks: StandardsCheck[] = [
       },
       {
         source: "aapor",
-        note: "Designing Your Sample：比较的子群须在样本设计中定义并可识别",
+        note: "Designing Your Sample：抽样框须覆盖目标人群全域（covers all or almost all the population of interest）、样本须与总体匹配；分组变量须可识别是本仓由覆盖要求推导的落地要求",
       },
     ],
     appliesTo: {
@@ -171,11 +167,11 @@ export const coverageChecks: StandardsCheck[] = [
     dimension: "coverage",
     title: "关键混杂变量未采集",
     claim:
-      "群体比较或态度研究须采集能解释组间差异的主要替代变量（如使用经历、年级、资源条件），否则观察到的差异无法与选择偏差区分。混杂变量应少而准，每条都要写清它解释哪个关系。",
+      "群体比较或态度研究须采集能解释组间差异的主要替代变量（如使用经历、年级、资源条件），否则观察到的差异无法与选择偏差区分。混杂变量应少而准，每条都要写清它解释哪个关系；描述性组间差异不构成因果结论，这是本目录自身的方法学判断。",
     citations: [
       {
         source: "aapor",
-        note: "Analyzing and reporting your survey：子群差异须交代构成差异与局限，不能把描述差异当因果",
+        note: "Analyzing and reporting the survey results：加权使样本构成匹配总体特征、报告口径透明",
       },
       {
         source: "product",
