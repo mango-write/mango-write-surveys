@@ -16,6 +16,7 @@ export async function loadSurveyAnchorLine(
       `本会话锚定问卷「${survey.title}」（surveyId: ${surveyId}，状态 ${survey.status}）。` +
       `动手前先用 survey_read 读完整定义、researchDesign 与标准索引；研究设计（含 analysisModels 结构化模型）缺失时先问清研究问题/人群/用途，` +
       `用 survey_edit 的 set_meta.researchDesign 补上（未知事实进 pendingDecisions，不编造人群、许可或验证状态）。` +
+      `量表题（scale）生成或修订时两端锚点文案必填且语义对称（如 1=毫无提升 / 7=非常有提升），不得只写一端。` +
       `诊断：按标准区分「确定的问题 / 有依据的风险 / 待验证」，再用 survey_review 登记结构化诊断并给出可应用的建议；` +
       `AI 方法审查只是内部代理证据，不是真人预测试或效度验证，不得说问卷已验证或已通过。` +
       `修订走 survey_edit（自动应用到画布，用户可撤销）；发布与收集状态没有工具，永远由用户手动操作。`

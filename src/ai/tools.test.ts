@@ -9,7 +9,12 @@ import type { SurveysService } from "../server/service.js";
 import type { SurveyAiContext, SurveyAiToolSpec } from "./tools.js";
 
 import { surveyDeliveryFromResult } from "./delivery.js";
-import { createSurveyAiTools, idempotentSurveyId, registerSurveyAiTools } from "./tools.js";
+import {
+  createSurveyAiTools,
+  idempotentSurveyId,
+  QUESTION_PAYLOAD_HINT,
+  registerSurveyAiTools,
+} from "./tools.js";
 
 const SURVEY_ID = "33333333-3333-4333-8333-333333333333";
 const ACTOR: SurveyAiContext["actor"] = { userId: "user-1", space: { kind: "personal" } };
@@ -111,6 +116,12 @@ describe("问卷 AI 工具 — 规格面", () => {
     // 诊断不变更问卷：write=false（发布与改卷仍是 survey_edit 的事）。
     expect(tools.surveyReview.write).toBe(false);
     expect(tools.surveyEdit.write).toBe(true);
+  });
+
+  it("量表载荷提示词硬约束：两端锚点必填且语义对称（P1-8a）", () => {
+    expect(QUESTION_PAYLOAD_HINT).toContain("两端锚点必填且语义对称");
+    expect(QUESTION_PAYLOAD_HINT).toContain("1=毫无提升/7=非常有提升");
+    expect(QUESTION_PAYLOAD_HINT).toContain("只写一端或两端不对称");
   });
 });
 
@@ -568,22 +579,28 @@ describe("survey_review run", () => {
     expect(surveyDeliveryFromResult("survey_review", result)).toBeNull();
   });
 
-  it("未知 checkId / 未知 questionId 被拒，不静默登记", async () => {
+  it("未知 checkId / 未知 questionId 被剥离而非整份拒绝（P0 宽容归一化）", async () => {
     const unknownCheck = await tools.surveyReview.run(
       { baseDraftVersion: 3, summary: "诊断", findings: [{ ...finding, checkId: "wording.invented" }] },
       SURVEY_CTX,
     );
-    expect(String(unknownCheck.error)).toContain("未知 checkId");
+    expect(unknownCheck.ok).toBe(true);
+    expect((unknownCheck.findings as Array<{ checkId?: string }>)[0]).not.toHaveProperty("checkId");
+    expect(unknownCheck.strippedCheckIds).toEqual(["wording.invented"]);
+    expect(String(unknownCheck.note)).toContain("目录外发现");
+    expect(service.recordReview).toHaveBeenCalledTimes(1);
 
     const unknownQuestion = await tools.surveyReview.run(
       { baseDraftVersion: 3, summary: "诊断", findings: [{ ...finding, questionId: "ghost" }] },
       SURVEY_CTX,
     );
-    expect(String(unknownQuestion.error)).toContain("不存在的题目");
-    expect(unknownQuestion.unknownQuestions).toEqual([{ findingId: "f1", questionId: "ghost" }]);
+    expect(unknownQuestion.ok).toBe(true);
+    const finding0 = (unknownQuestion.findings as Array<{ questionId?: string }>)[0]!;
+    expect(finding0.questionId).toBeUndefined();
+    expect(unknownQuestion.reanchoredQuestions).toEqual([{ findingId: "f1", questionId: "ghost" }]);
   });
 
-  it("suggestedOps 全部可应用才登记；replace_all 与不可应用操作被拒", async () => {
+  it("suggestedOps 可应用则保留；replace_all 与不可应用操作剥成人工待办", async () => {
     const applied = await tools.surveyReview.run(
       {
         baseDraftVersion: 3,
@@ -598,6 +615,7 @@ describe("survey_review run", () => {
       SURVEY_CTX,
     );
     expect(applied.ok).toBe(true);
+    expect((applied.findings as Array<{ suggestedOps?: unknown }>)[0]!.suggestedOps).toHaveLength(1);
 
     const ghost = await tools.surveyReview.run(
       {
@@ -609,7 +627,11 @@ describe("survey_review run", () => {
       },
       SURVEY_CTX,
     );
-    expect(String(ghost.error)).toContain("未通过可应用性校验");
+    expect(ghost.ok).toBe(true);
+    expect((ghost.findings as Array<{ suggestedOps?: unknown }>)[0]).not.toHaveProperty("suggestedOps");
+    expect(ghost.strippedOps).toEqual(["f1"]);
+    // 诊断本体保留：reason/recommendation 不丢。
+    expect((ghost.findings as Array<{ reason: string }>)[0]!.reason).toBe(finding.reason);
 
     const replace = await tools.surveyReview.run(
       {
@@ -619,10 +641,11 @@ describe("survey_review run", () => {
       },
       SURVEY_CTX,
     );
-    expect(String(replace.error)).toContain("未通过可应用性校验");
+    expect(replace.ok).toBe(true);
+    expect(replace.strippedOps).toEqual(["f1"]);
   });
 
-  it("发布类操作不是合法 op：形状校验直接拒绝", async () => {
+  it("发布类操作不是合法 op：剥掉 suggestedOps 保留诊断，不整份拒绝", async () => {
     const result = await tools.surveyReview.run(
       {
         baseDraftVersion: 3,
@@ -633,10 +656,96 @@ describe("survey_review run", () => {
       },
       SURVEY_CTX,
     );
-    expect(String(result.error)).toContain("findings 形状不合法");
+    expect(result.ok).toBe(true);
+    expect((result.findings as Array<{ suggestedOps?: unknown }>)[0]).not.toHaveProperty("suggestedOps");
+    expect(String(result.note)).toContain("人工待办");
   });
 
-  it("缺 summary / 条数超限 / 重复 id 给出可自愈错误", async () => {
+  it("宽容归一化：trim、severity 大小写、缺/重 id 补造，坏条目只丢自己", async () => {
+    const messy = await tools.surveyReview.run(
+      {
+        baseDraftVersion: 3,
+        summary: "混合",
+        findings: [
+          { ...finding, title: "  双重提问  ", severity: "MAJOR" },
+          { ...finding }, // id 与第一条重复 → 服务端补造新 id
+          { id: "f9", title: "", severity: "major", reason: "r", recommendation: "c" }, // 空 title → 只丢这条
+        ],
+      },
+      SURVEY_CTX,
+    );
+    expect(messy.ok).toBe(true);
+    const registered = messy.findings as Array<{ id: string; title: string; severity: string }>;
+    expect(registered.map((item) => item.id)).toEqual(["f1", "f2"]);
+    expect(registered[0]).toMatchObject({ title: "双重提问", severity: "major" });
+    expect(messy.dropped).toEqual([{ index: 2, reason: expect.stringContaining("必填") }]);
+    expect(String(messy.note)).toContain("宽容归一化");
+  });
+
+  it("全部条目无法解析才拒绝登记（空数组是合法零发现，不受影响）", async () => {
+    const garbage = await tools.surveyReview.run(
+      {
+        baseDraftVersion: 3,
+        summary: "全坏",
+        findings: [
+          "不是对象",
+          { id: "f1", title: "t", severity: "extreme", reason: "r", recommendation: "c" },
+        ],
+      },
+      SURVEY_CTX,
+    );
+    expect(garbage.ok).toBeUndefined();
+    expect(String(garbage.error)).toContain("全部无法解析");
+    expect(garbage.invalid).toEqual([
+      { index: 0, reason: "条目不是对象" },
+      { index: 1, reason: expect.stringContaining("severity") },
+    ]);
+    expect(service.recordReview).not.toHaveBeenCalled();
+
+    const zero = await tools.surveyReview.run(
+      { baseDraftVersion: 3, summary: "零发现", findings: [] },
+      SURVEY_CTX,
+    );
+    expect(zero.ok).toBe(true);
+  });
+
+  it("evidence 逐字守卫：题干/选项 label 的连续子串保留，内部 id 缩写剥离（P1-11）", async () => {
+    const result = await tools.surveyReview.run(
+      {
+        baseDraftVersion: 3,
+        summary: "证据核对",
+        findings: [
+          { ...finding, evidence: "单选" }, // 题干「单选」的子串 → 保留
+          { ...finding, id: "f2", evidence: "A" }, // 选项 label「A」 → 保留
+          { ...finding, id: "f3", evidence: "options: a/b，无「其他」出口" }, // 内部 id 缩写 → 剥离
+        ],
+      },
+      SURVEY_CTX,
+    );
+    expect(result.ok).toBe(true);
+    const registered = result.findings as Array<{ id: string; evidence?: string }>;
+    expect(registered.find((item) => item.id === "f1")!.evidence).toBe("单选");
+    expect(registered.find((item) => item.id === "f2")!.evidence).toBe("A");
+    expect(registered.find((item) => item.id === "f3")!.evidence).toBeUndefined();
+    expect(result.droppedEvidence).toEqual(["f3"]);
+    expect(String(result.note)).toContain("逐字摘录");
+  });
+
+  it("evidence 无题可锚（questionId 缺失）时不保留，宁缺毋假", async () => {
+    const result = await tools.surveyReview.run(
+      {
+        baseDraftVersion: 3,
+        summary: "整卷级发现",
+        findings: [{ id: "f1", title: "覆盖缺口", severity: "minor", reason: "r", recommendation: "c", evidence: "单选" }],
+      },
+      SURVEY_CTX,
+    );
+    expect(result.ok).toBe(true);
+    expect((result.findings as Array<{ evidence?: string }>)[0]).not.toHaveProperty("evidence");
+    expect(result.droppedEvidence).toEqual(["f1"]);
+  });
+
+  it("缺 summary / 条数超限给出可自愈错误", async () => {
     const noSummary = await tools.surveyReview.run({ baseDraftVersion: 3, findings: [] }, SURVEY_CTX);
     expect(String(noSummary.error)).toContain("summary");
 
@@ -649,12 +758,6 @@ describe("survey_review run", () => {
       SURVEY_CTX,
     );
     expect(String(tooMany.error)).toContain("上限");
-
-    const duplicate = await tools.surveyReview.run(
-      { baseDraftVersion: 3, summary: "重复", findings: [finding, { ...finding }] },
-      SURVEY_CTX,
-    );
-    expect(String(duplicate.error)).toContain("重复");
   });
 });
 

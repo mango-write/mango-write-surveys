@@ -85,7 +85,7 @@ export const RESEARCH_DESIGN_HINT =
   "因子数、被试量这类没有依据的数字不编造——留空并写进 pendingDecisions。" +
   "人群、招募渠道、许可与既有验证状态不了解时写进 pendingDecisions（或留空并在 analysisPlan/assumptions 说明），不要编造；" +
   "已有问卷补设计用 survey_edit 的 set_meta.researchDesign（null = 清除）。" +
-  "可选 pretest:{participantCount,notes,recordedAt} 是作者自报的试填记录，引用它不等于做完独立核验或量表验证。";
+  "可选 pretest:{participantCount,notes,recordedAt,revisionId?,itemFeedback?} 是作者自报的试填记录，引用它不等于做完独立核验或量表验证。";
 
 // 题型词表（与 core definition.ts 同步；描述里给模型载荷要点）。工具参数与
 // runner 的 system 提示词共用这一份，不复制两份。
@@ -94,7 +94,8 @@ export const QUESTION_PAYLOAD_HINT =
   "（multiple 可加 minChoices/maxChoices）；image_single/image_multiple→options:[{label,imageFileId?}]" +
   "（imageFileId 只能引用用户已上传的媒体 id，不要发明 id；image_multiple 可加 minChoices/maxChoices）；" +
   "text→multiline?,maxLength?；number→min?,max?；" +
-  "scale→min,max(跨度≤10),minLabel?,maxLabel?；rating→max(3–10)；nps→minLabel?,maxLabel?(0–10 固定)；" +
+  "scale→min,max(跨度≤10),minLabel,maxLabel——两端锚点必填且语义对称（如 1=毫无提升/7=非常有提升）；" +
+  "只写一端或两端不对称，受访者会按不同参照作答；rating→max(3–10)；nps→minLabel?,maxLabel?(0–10 固定，两端有默认锚点可省略)；" +
   "date→min?,max?(YYYY-MM-DD)；time→无载荷；matrix_single/matrix_multiple→rows:[{label}](1–20),columns:[{label}](2–10)；" +
   "matrix_text→rows:[{label}](1–20)，每行一个文本框，无 columns；" +
   "multi_text→items:[{label}](1–20)；statement→body(markdown 说明，非题目，required 必须为 false)。" +
@@ -168,6 +169,79 @@ function summarizeDefinition(definition: SurveyDefinition): string {
 
 const issuesBrief = (issues: SurveyIssue[]): string =>
   issues.map((issue) => `${issue.path} ${issue.code}: ${issue.message}`).join("；");
+
+const REVIEW_SEVERITIES = new Set(["blocker", "major", "minor"]);
+// 归一化时可选文本字段的截断上限（与 SurveyReviewFindingSchema 同口径）；
+// 超限字段直接剥除而不是连累整条诊断。
+const FINDING_TEXT_LIMITS = {
+  id: 64,
+  checkId: 120,
+  questionId: 64,
+  impact: 1000,
+  evidence: 200,
+} as const;
+
+/** 单条诊断的宽容归一化（#224 P0）：能修的修——文本 trim、severity 大小写、
+ *  必填文本截断到上限、缺/重/超长 id 由服务端确定性补造；只有 title/severity/
+ *  reason/recommendation 缺失或无法识别才整条丢弃。 */
+function normalizeFindingDraft(
+  raw: unknown,
+  index: number,
+  usedIds: Set<string>,
+): { finding: SurveyReviewFinding } | { reason: string } {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return { reason: "条目不是对象" };
+  const source = raw as Record<string, unknown>;
+  const text = (key: string): string =>
+    typeof source[key] === "string" ? (source[key] as string).trim() : "";
+  const title = text("title").slice(0, 200);
+  const severity = text("severity").toLowerCase();
+  const reason = text("reason").slice(0, 1000);
+  const recommendation = text("recommendation").slice(0, 1000);
+  if (!title || !reason || !recommendation) {
+    return { reason: "title/severity/reason/recommendation 必填且不能为空白" };
+  }
+  if (!REVIEW_SEVERITIES.has(severity)) return { reason: `severity 不可识别：${severity || "(空)"}` };
+  let id = text("id");
+  if (!id || id.length > FINDING_TEXT_LIMITS.id || usedIds.has(id)) {
+    let n = index + 1;
+    while (usedIds.has(`f${n}`)) n += 1;
+    id = `f${n}`;
+  }
+  usedIds.add(id);
+  const finding: SurveyReviewFinding = {
+    id,
+    title,
+    severity: severity as SurveyReviewFinding["severity"],
+    reason,
+    recommendation,
+  };
+  for (const key of ["checkId", "questionId", "impact", "evidence"] as const) {
+    const value = text(key);
+    if (value && value.length <= FINDING_TEXT_LIMITS[key]) finding[key] = value;
+  }
+  if (Array.isArray(source["suggestedOps"]) && source["suggestedOps"].length > 0) {
+    finding.suggestedOps = source["suggestedOps"].slice(0, 5) as SurveyReviewFinding["suggestedOps"];
+  }
+  // schema 是形状权威：带 ops 解析不过先剥 ops（坏操作不该连累整条诊断），
+  // 再不过才整条丢弃。
+  const parsed = SurveyReviewFindingSchema.safeParse(finding);
+  if (parsed.success) return { finding: parsed.data };
+  delete finding.suggestedOps;
+  const reparsed = SurveyReviewFindingSchema.safeParse(finding);
+  return reparsed.success ? { finding: reparsed.data } : { reason: "条目形状无法修复" };
+}
+
+/** evidence 逐字守卫（#224 P1-11）的文本源：该题所有会展示给作答者的真实文案。 */
+function verbatimQuestionTexts(question: SurveyQuestion): string[] {
+  const texts: string[] = [question.title];
+  if ("options" in question) for (const option of question.options) texts.push(option.label);
+  if ("rows" in question) for (const row of question.rows) texts.push(row.label);
+  if ("columns" in question) for (const column of question.columns) texts.push(column.label);
+  if ("items" in question) for (const item of question.items) texts.push(item.label);
+  if ("minLabel" in question && question.minLabel) texts.push(question.minLabel);
+  if ("maxLabel" in question && question.maxLabel) texts.push(question.maxLabel);
+  return texts.filter((text) => text.length > 0);
+}
 
 export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
   const surveyRead: SurveyAiToolSpec = {
@@ -487,9 +561,12 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
           maxItems: REVIEW_FINDINGS_LIMIT,
           items: findingParameters,
           description:
-            `诊断条目（最多 ${REVIEW_FINDINGS_LIMIT} 条；确无发现时给空数组）。每项 {id,checkId,questionId?,title,severity,reason,recommendation,suggestedOps?}：` +
+            `诊断条目（最多 ${REVIEW_FINDINGS_LIMIT} 条；确无发现时给空数组）。每项 {id,checkId,questionId?,title,severity,reason,recommendation,suggestedOps?,impact?,evidence?}：` +
             "checkId 必须是本次 survey_read 返回的标准索引里真实存在的 id；questionId 必须是定义里存在的题目 id。" +
             "severity 用 blocker/major/minor 的目录定义判断；reason 写判据与原文依据，recommendation 写怎么改。" +
+            "有 questionId 的条目必须给 evidence：从该题题干或选项/行/列/项 label 逐字复制一段连续原文（≤200 字）。" +
+            "逐字 = 与 survey_read 返回的定义里的真实文本完全一致：不要用内部 id（如 option id）、缩写、翻译、转述或自创结构（如「options: a/b/c」）；" +
+            "不是逐字摘录的 evidence 会被剥离。并给 impact：一句话说明这个问题若不修会怎样影响测量或结论。" +
             "suggestedOps 只放能安全自动应用的修订（全部会在当前草稿上校验可应用），无法自动修就只写 recommendation。" +
             "每条 finding 独立确认、独立应用；操作只服务当前 finding，不让用户猜测如何合并或修改。" +
             "目录外发现省略 checkId，仍留在 findings 并写清依据与待核验限制，不编造目录依据。",
@@ -514,33 +591,34 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
       if (rawFindings.length > REVIEW_FINDINGS_LIMIT) {
         return { error: `findings 上限 ${REVIEW_FINDINGS_LIMIT} 条，请合并同类问题或拆成多次诊断。` };
       }
+      // 宽容归一化（P0）：能修的修，只有完全无法解析的条目被丢弃；全部条目都
+      // 无法解析才拒绝登记（空 findings 是「零发现」结论，不是解析失败）。
+      const usedIds = new Set<string>();
       const findings: SurveyReviewFinding[] = [];
-      const invalid: Array<{ index: number; reason: string }> = [];
+      const dropped: Array<{ index: number; reason: string }> = [];
       rawFindings.forEach((raw, index) => {
-        const parsed = SurveyReviewFindingSchema.safeParse(raw);
-        if (parsed.success) findings.push(parsed.data);
-        else {
-          const head = parsed.error.issues[0];
-          invalid.push({
-            index,
-            reason: head ? `${head.path.join(".") || "finding"}: ${head.message}` : "条目不合法",
-          });
-        }
+        const outcome = normalizeFindingDraft(raw, index, usedIds);
+        if ("finding" in outcome) findings.push(outcome.finding);
+        else dropped.push({ index, reason: outcome.reason });
       });
-      if (invalid.length > 0) return { error: "findings 形状不合法（诊断未登记）", invalid };
-      const seenIds = new Set<string>();
-      for (const finding of findings) {
-        if (seenIds.has(finding.id)) return { error: `诊断 id 重复：${finding.id}` };
-        seenIds.add(finding.id);
-      }
-      // 引用闭合在查库前先做掉静态部分：checkId 必须真的在标准目录里。
-      const knownChecks = new Set(STANDARDS_CHECK_IDS);
-      const unknownCheckIds = [...new Set(findings.flatMap((f) => f.checkId ? [f.checkId] : []).filter((id) => !knownChecks.has(id)))];
-      if (unknownCheckIds.length > 0) {
+      if (rawFindings.length > 0 && findings.length === 0) {
         return {
-          error: `未知 checkId：${unknownCheckIds.join("、")}`,
-          hint: "用 survey_read 返回的 standards.checks 索引里的 id；目录外发现省略 checkId，不要发明依据。",
+          error: "findings 全部无法解析（诊断未登记）",
+          invalid: dropped,
+          hint: "按 parameters.findings 形状重试：id 可省略，title/severity(blocker|major|minor)/reason/recommendation 必填。",
         };
+      }
+      // 未知 checkId 按既有设计剥成目录外发现（保留原因与建议），不连累整份诊断。
+      const knownChecks = new Set(STANDARDS_CHECK_IDS);
+      const strippedCheckIds = [
+        ...new Set(
+          findings.flatMap((f) => (f.checkId && !knownChecks.has(f.checkId) ? [f.checkId] : [])),
+        ),
+      ];
+      if (strippedCheckIds.length > 0) {
+        for (const finding of findings) {
+          if (finding.checkId && !knownChecks.has(finding.checkId)) delete finding.checkId;
+        }
       }
       const baseDraftVersion = args["baseDraftVersion"];
       if (typeof baseDraftVersion !== "number" || !Number.isInteger(baseDraftVersion) || baseDraftVersion < 1) {
@@ -555,45 +633,39 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
           };
         }
         const definition = asDefinition(survey.draftJson);
-        const questionIds = new Set(definition.questions.map((question) => question.id));
-        const unknownQuestions = findings.flatMap((finding) =>
-          finding.questionId && !questionIds.has(finding.questionId)
-            ? [{ findingId: finding.id, questionId: finding.questionId }]
-            : [],
-        );
-        if (unknownQuestions.length > 0) {
-          return {
-            error: "诊断引用了不存在的题目（诊断未登记）",
-            unknownQuestions,
-            hint: "重新 survey_read 拿到当前 questionIds 后重试；不要凭对话记忆猜 id。",
-          };
-        }
-        // suggestedOps 只允许「能安全自动应用」的修订：全部在当前草稿上可应用，
-        // 且不允许整卷替换（那是换卷不是修订，也没有发布口子）。
-        const opProblems: Array<{ findingId: string; reason: string }> = [];
+        const questionById = new Map(definition.questions.map((question) => [question.id, question]));
+        // 未知题目引用剥成整卷级发现（题目旁锚点没有，诊断本体保留）。
+        const reanchoredQuestions: Array<{ findingId: string; questionId: string }> = [];
         for (const finding of findings) {
-          if (!finding.suggestedOps || finding.suggestedOps.length === 0) continue;
-          const replaced = finding.suggestedOps.find((op) => op.op === "replace_all");
-          if (replaced) {
-            opProblems.push({ findingId: finding.id, reason: "replace_all 是整卷替换，不是可安全自动应用的修订" });
+          if (finding.questionId && !questionById.has(finding.questionId)) {
+            reanchoredQuestions.push({ findingId: finding.id, questionId: finding.questionId });
+            delete finding.questionId;
+          }
+        }
+        // evidence 逐字守卫（P1-11）：不是该题真实文案的连续子串就剥离，宁缺毋假。
+        const droppedEvidence: string[] = [];
+        for (const finding of findings) {
+          if (!finding.evidence) continue;
+          const question = finding.questionId ? questionById.get(finding.questionId) : undefined;
+          const verbatim = question ? verbatimQuestionTexts(question) : [];
+          if (!verbatim.some((text) => text.includes(finding.evidence!))) {
+            droppedEvidence.push(finding.id);
+            delete finding.evidence;
+          }
+        }
+        // suggestedOps 只保留「能安全自动应用」的修订（整体可应用、非整卷替换）；
+        // 不可应用的剥成人工待办，不连累整份诊断。
+        const strippedOps: string[] = [];
+        for (const finding of findings) {
+          if (!finding.suggestedOps?.length) continue;
+          const isReplace = finding.suggestedOps.some((op) => op.op === "replace_all");
+          const result = isReplace ? null : applySurveyOps(definition, finding.suggestedOps);
+          if (isReplace || result === null || result.rejected.length > 0) {
+            delete finding.suggestedOps;
+            strippedOps.push(finding.id);
             continue;
           }
-          const result = applySurveyOps(definition, finding.suggestedOps);
-          if (result.rejected.length > 0) {
-            opProblems.push({
-              findingId: finding.id,
-              reason: result.rejected.map((entry) => entry.reason).join("；"),
-            });
-          } else {
-            finding.suggestedOps = result.applied;
-          }
-        }
-        if (opProblems.length > 0) {
-          return {
-            error: "suggestedOps 未通过可应用性校验（诊断未登记）",
-            opProblems,
-            hint: "无法安全自动修的条目只保留 recommendation；能修的按 survey_edit 词表给出可应用操作。",
-          };
+          finding.suggestedOps = result.applied;
         }
         await service.recordReview(ctx.actor.userId, surveyId, {
           operationId: ctx.operationId,
@@ -601,6 +673,13 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
           summary,
           findings,
         });
+        const repairs = [
+          dropped.length > 0 ? `${dropped.length} 条完全无法解析已丢弃` : "",
+          strippedCheckIds.length > 0 ? `${strippedCheckIds.length} 个未知 checkId 已按目录外发现处理` : "",
+          reanchoredQuestions.length > 0 ? `${reanchoredQuestions.length} 个不存在的题目引用已改为整卷级` : "",
+          droppedEvidence.length > 0 ? `${droppedEvidence.length} 条 evidence 不是问卷原文逐字摘录，已剥离` : "",
+          strippedOps.length > 0 ? `${strippedOps.length} 条 suggestedOps 不可安全应用，已改为人工待办` : "",
+        ].filter(Boolean);
         return {
           ok: true,
           surveyId,
@@ -608,8 +687,16 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
           baseDraftVersion,
           summary,
           findings,
+          ...(dropped.length > 0 ? { dropped } : {}),
+          ...(strippedCheckIds.length > 0 ? { strippedCheckIds } : {}),
+          ...(reanchoredQuestions.length > 0 ? { reanchoredQuestions } : {}),
+          ...(droppedEvidence.length > 0 ? { droppedEvidence } : {}),
+          ...(strippedOps.length > 0 ? { strippedOps } : {}),
           note:
             "诊断已登记并展示在对应题目旁；每条可自动修订的建议都由用户独立确认后应用，没有 suggestedOps 的条目只作人工待办。" +
+            (repairs.length > 0
+              ? `本次登记对模型输出做了宽容归一化：${repairs.join("；")}。请如实向用户转述这些降级。`
+              : "") +
             `${AGENT_REVIEW_DISCLAIMER}向用户转述结论与建议时不得声称问卷已验证、已通过或已发布；` +
             "只概括交付数量并引导用户查看画布，不在对话中重复完整诊断。",
         };
