@@ -1,4 +1,5 @@
-// 设计画布组件测试（issue #217）：题型菜单定位插入、换题型可逆（载荷暂存/恢复
+// 设计画布组件测试（issue #217）：题型菜单定位插入、末题后插入带与页尾入口去重、
+// 换题型可逆（载荷暂存/恢复
 // + 破坏性确认）、菜单外点/Esc/滚动关闭、复制（新 id）、Enter 加选项与最少 2 项、
 // 默认选项聚焦全选、上移/下移顺序、空页保留、校验点击定位与双向高亮、点画布空白取消选中。
 // 拖拽的纯变换在 lib/definition-ops.test.ts，DnD 手势在浏览器实测覆盖。
@@ -71,6 +72,7 @@ async function mountCanvas(
   initial: SurveyDefinition = definition(),
   surveyId?: string,
   attachToBody = false,
+  reviewQuestionIds?: readonly string[],
 ) {
   const changes: Array<{ next: SurveyDefinition; label?: string }> = [];
   const selections: string[] = [];
@@ -84,6 +86,7 @@ async function mountCanvas(
           modelValue: current.value,
           activeQuestionId: selectedId.value,
           ...(surveyId ? { surveyId } : {}),
+          reviewQuestionIds,
           onChange: (next: SurveyDefinition, label?: string) => {
             changes.push({ next, label });
             current.value = next;
@@ -186,7 +189,7 @@ describe("SurveyDesignCanvas 题型菜单与插入", () => {
     expect(menu.text()).toContain(t("surveys.type.scale"));
     expect(menu.text()).toContain(t("surveys.typeHint.scale"));
 
-    await insertType(harness, 2, t("surveys.type.scale"));
+    await insertType(harness, 1, t("surveys.type.scale"));
     const next = harness.current();
     expect(next.pages[0]!.questionIds).toHaveLength(3);
     const inserted = next.questions.at(-1)!;
@@ -195,6 +198,19 @@ describe("SurveyDesignCanvas 题型菜单与插入", () => {
     expect(harness.selectedId()).toBe(inserted.id);
     // 菜单已收起。
     expect(harness.wrapper.find(".survey-type-menu").exists()).toBe(false);
+  });
+
+  it("两题只渲染两个加题入口（题间 + 页尾各一），页尾入口仍可加题", async () => {
+    const harness = await mountCanvas();
+    // 末题后的插入带与页尾入口重合：只保留页尾一份，不再出现第 3 个 zone。
+    const zones = harness.wrapper.findAll(".add-zone");
+    expect(zones).toHaveLength(2);
+    expect(zones[0]!.find(".add-zone__btn").exists()).toBe(true);
+    expect(zones[1]!.find(".add-zone__btn").exists()).toBe(true);
+
+    await insertType(harness, 1, t("surveys.type.scale"));
+    expect(harness.current().pages[0]!.questionIds).toHaveLength(3);
+    expect(harness.current().questions.at(-1)!.type).toBe("scale");
   });
 
   it("卡片之间的「+」在该位置插入", async () => {
@@ -214,6 +230,12 @@ describe("SurveyDesignCanvas 题型菜单与插入", () => {
 });
 
 describe("SurveyDesignCanvas 题目卡片", () => {
+  it("AI 建议题目由数据显式驱动 warning 状态", async () => {
+    const harness = await mountCanvas(definition(), undefined, false, ["q1"]);
+    expect(harness.wrapper.find('[data-canvas-question="q1"]').classes()).toContain("q-card--review");
+    expect(harness.wrapper.find('[data-canvas-question="q2"]').classes()).not.toContain("q-card--review");
+  });
+
   it("点卡片选中（select 事件给大纲联动），工具条常驻，题干变就地输入", async () => {
     const harness = await mountCanvas();
     await selectCard(harness, "q1");
@@ -397,6 +419,44 @@ describe("SurveyDesignCanvas 题目卡片", () => {
     expect(next.questions[0]!.showIf).toBeUndefined();
   });
 
+  it("没有可配置项时不显示更多设置或空规则分组", async () => {
+    const harness = await mountCanvas(definition(), undefined, true);
+    await selectCard(harness, "q1");
+    expect(
+      harness.wrapper.find('button[aria-label="' + t("surveys.moreSettings") + '"]').exists(),
+    ).toBe(false);
+
+    await selectCard(harness, "q2");
+    await harness.wrapper
+      .find('button[aria-label="' + t("surveys.moreSettings") + '"]')
+      .trigger("click");
+    await flushPromises();
+    expect(document.querySelector(".survey-question-settings")?.textContent).toContain(
+      t("surveys.answerRules"),
+    );
+  });
+
+  it("文本题可清空可选的最大字符数", async () => {
+    const initial = definition();
+    const question = initial.questions[1]!;
+    if (question.type !== "text") throw new Error("fixture");
+    question.maxLength = 120;
+    const harness = await mountCanvas(initial, undefined, true);
+    await selectCard(harness, "q2");
+    await harness.wrapper
+      .find('button[aria-label="' + t("surveys.moreSettings") + '"]')
+      .trigger("click");
+    await flushPromises();
+    const clear = document.querySelector<HTMLElement>(
+      ".survey-question-settings .p-inputnumber-clear-icon",
+    )!;
+    clear.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    await flushPromises();
+    const updated = harness.current().questions[1]!;
+    if (updated.type !== "text") throw new Error("question type changed");
+    expect(updated.maxLength).toBeUndefined();
+  });
+
   it("scale 卡片显示两端文案，更多设置里可编辑 min/max 与两端文案", async () => {
     const initial = definition();
     initial.questions.push({
@@ -416,13 +476,16 @@ describe("SurveyDesignCanvas 题目卡片", () => {
     await card
       .find('button[aria-label="' + t("surveys.moreSettings") + '"]')
       .trigger("click");
-    const minLabelInput = card.find(
-      'input[aria-label="' + t("surveys.scaleMinLabel") + '"]',
+    await flushPromises();
+    const minLabelInput = document.querySelector(
+      `.survey-question-settings input[aria-label="${t("surveys.scaleMinLabel")}"]`,
     );
-    expect(minLabelInput.exists()).toBe(true);
-    await card
-      .find('input[aria-label="' + t("surveys.scaleMaxLabel") + '"]')
-      .setValue("非常同意");
+    expect(minLabelInput).not.toBeNull();
+    const maxLabelInput = document.querySelector<HTMLInputElement>(
+      `.survey-question-settings input[aria-label="${t("surveys.scaleMaxLabel")}"]`,
+    )!;
+    maxLabelInput.value = "非常同意";
+    maxLabelInput.dispatchEvent(new Event("input", { bubbles: true }));
     await flushPromises();
     const q5 = harness.current().questions.find((q) => q.id === "q5")! as Extract<
       SurveyQuestion,
@@ -942,7 +1005,7 @@ describe("SurveyDesignCanvas 新题型", () => {
 
   it("插入矩阵单选：默认 2 行 + Likert 5 列；行编辑器 Enter 加行、下限守卫", async () => {
     const harness = await mountCanvas();
-    await insertType(harness, 2, t("surveys.type.matrix_single"));
+    await insertType(harness, 1, t("surveys.type.matrix_single"));
     const inserted = harness.current().questions.at(-1)!;
     expect(inserted.type).toBe("matrix_single");
     expect(inserted.required).toBe(false);
@@ -989,7 +1052,7 @@ describe("SurveyDesignCanvas 新题型", () => {
 
   it("插入说明块：不是题目——无必答开关、markdown 就地编辑、题干输入不渲染", async () => {
     const harness = await mountCanvas();
-    await insertType(harness, 2, t("surveys.type.statement"));
+    await insertType(harness, 1, t("surveys.type.statement"));
     const inserted = harness.current().questions.at(-1)!;
     expect(inserted.type).toBe("statement");
     expect(inserted.required).toBe(false);
@@ -1038,10 +1101,9 @@ describe("SurveyDesignCanvas 新题型", () => {
     const harness = await mountCanvas(initial);
     await selectCard(harness, "q2");
     const card = harness.wrapper.find('[data-canvas-question="q2"]');
-    // 打开「更多设置」展开高级属性，再点开条件源 Select（浮层挂在 body）。
     await card.findAll("footer button").at(0)!.trigger("click");
     await flushPromises();
-    await card.find(".advanced .p-select").trigger("click");
+    document.querySelector<HTMLElement>(".survey-question-settings .p-select")!.click();
     await flushPromises();
     const labels = [...document.querySelectorAll(".p-select-option")].map(
       (node) => node.textContent ?? "",
@@ -1065,7 +1127,7 @@ describe("SurveyDesignCanvas 新题型", () => {
     ).toEqual(["o1", "o2"]);
 
     // 矩阵族互切不确认。
-    await insertType(harness, 2, t("surveys.type.matrix_single"));
+    await insertType(harness, 1, t("surveys.type.matrix_single"));
     const matrixId = harness.current().questions.at(-1)!.id;
     const before = harness.current().questions.find((q) => q.id === matrixId)!;
     await openCardTypeMenu(harness, matrixId);
@@ -1085,7 +1147,7 @@ describe("SurveyDesignCanvas 新题型", () => {
     const harness = await mountCanvas();
     // zh 里 type.rating「评分」是 scale 提示「量表评分…」的子串，菜单按文案找项
     // 会错配量表——用 hint（星形评分，3–10 档）做匹配键，zh/en 下都唯一指向评分。
-    await insertType(harness, 2, t("surveys.typeHint.rating"));
+    await insertType(harness, 1, t("surveys.typeHint.rating"));
     const ratingId = harness.current().questions.at(-1)!.id;
     await openCardTypeMenu(harness, ratingId);
     await pickType(harness, ratingId, t("surveys.type.text"));
@@ -1101,7 +1163,7 @@ describe("SurveyDesignCanvas 新题型", () => {
 
   it("插入矩阵填空：默认 2 行、无列编辑器；作答值形状与行随族保留（issue #217）", async () => {
     const harness = await mountCanvas();
-    await insertType(harness, 2, t("surveys.type.matrix_text"));
+    await insertType(harness, 1, t("surveys.type.matrix_text"));
     const inserted = harness.current().questions.at(-1)!;
     expect(inserted.type).toBe("matrix_text");
     const asText = inserted as Extract<SurveyQuestion, { type: "matrix_text" }>;
@@ -1116,7 +1178,7 @@ describe("SurveyDesignCanvas 新题型", () => {
 
   it("矩阵单选→矩阵填空：列从生效载荷拿掉先确认，切回恢复原行列（暂存）", async () => {
     const harness = await mountCanvas();
-    await insertType(harness, 2, t("surveys.type.matrix_single"));
+    await insertType(harness, 1, t("surveys.type.matrix_single"));
     const matrixId = harness.current().questions.at(-1)!.id;
     const before = harness.current().questions.find((q) => q.id === matrixId)!;
 
@@ -1162,7 +1224,7 @@ describe("SurveyDesignCanvas 新题型", () => {
 
   it("图片单选/多选：默认 2 选项；与纯文本选项族互切不确认、options 原样保留（issue #217）", async () => {
     const harness = await mountCanvas();
-    await insertType(harness, 2, t("surveys.type.image_single"));
+    await insertType(harness, 1, t("surveys.type.image_single"));
     const inserted = harness.current().questions.at(-1)!;
     expect(inserted.type).toBe("image_single");
     expect(

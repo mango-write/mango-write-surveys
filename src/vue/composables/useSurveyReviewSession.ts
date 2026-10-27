@@ -1,37 +1,34 @@
-// 问卷诊断会话（issue #224 stage1）：survey_review 帧的状态机。report 是唯一
-// 持有物——request 发起检查、receive 收帧（同卷才收）、apply 整批写入草稿
-// 历史（一次撤销步骤）且保存成功才清 report；草稿已变（版本不齐或自动保存
-// 未落定）即 stale，应用被拒、方案保留给用户自行判断。草稿历史、自动保存与
-// Copilot 发话能力经显式参数注入；本 composable 不碰布局偏好——诊断到达只
-// 落状态，展示位置永远跟随用户当前视图。
+// 问卷诊断会话：活流只负责通知，SurveyDetail.review 是刷新后的事实源。
+// 应用与忽略由服务端逐条处理；本 composable 只在回包后对齐页面，不在本地
+// 先改报告。版本不齐或自动保存未落定即 stale，失败保留建议供重试或忽略。
 import { computed, ref, type ComputedRef, type Ref } from "vue";
 
-import { buildSurveyReviewPlan, type SurveyDefinition, type SurveyReviewPlan } from "../../core/index.js";
-import type { ToolSurveyDelivery } from "../../contracts/index.js";
+import { buildSurveyReviewPlan, type SurveyReviewPlan } from "../../core/index.js";
+import type {
+  SurveyDetail,
+  SurveyReviewDelivery,
+} from "../../contracts/index.js";
+import type { SurveysApi } from "../api.js";
 import type { SurveysCopilotHost } from "../host.js";
 import { useSurveysNotify } from "../notify.js";
 import type { SurveySaveStatus } from "./useSurveyAutosave.js";
 import type { SurveyDraftState } from "./useSurveyDraftHistory.js";
 
-export type SurveyReviewDelivery = Extract<ToolSurveyDelivery, { type: "survey_review" }>;
+export type { SurveyReviewDelivery };
 
 export interface SurveyReviewSessionOptions {
-  /** 当前工作区问卷 id：别的问卷的诊断帧不串场。 */
   surveyId: () => string;
   canWrite: () => boolean;
-  /** 本地已落盘草稿版本：stale 判定与过期拒绝的基点。 */
   draftVersion: () => number;
-  history: {
-    current: Ref<SurveyDraftState>;
-    commit(next: SurveyDraftState, options: { source: "assistant"; label?: string }): void;
-  };
+  history: { current: Ref<SurveyDraftState> };
   autosave: {
     status: Ref<SurveySaveStatus>;
     flush(): Promise<boolean>;
-    schedule(): void;
   };
+  api: Pick<SurveysApi, "applyReviewFinding" | "dismissReviewFinding">;
+  onApply: (detail: SurveyDetail, label: string) => void;
+  onDismiss: (detail: SurveyDetail) => void;
   copilot: Pick<SurveysCopilotHost, "sendPrompt" | "fillComposer" | "focusComposer"> | undefined;
-  /** 页面的 useSurveysNotify() 实例：warn 未实现时已回落 error，警示不静默丢。 */
   notify: ReturnType<typeof useSurveysNotify>;
   t: (key: string) => string;
 }
@@ -57,15 +54,28 @@ export function useSurveyReviewSession(options: SurveyReviewSessionOptions) {
         !["idle", "saved"].includes(options.autosave.status.value)),
   );
 
-  /** survey_review 帧到达：只收同卷的帧，不切换任何视图状态。 */
   function receive(delivery: SurveyReviewDelivery): void {
     if (delivery.surveyId !== options.surveyId()) return;
     report.value = delivery;
   }
 
-  /** 丢弃当前诊断（换卷重载 / 用户关闭）。应用成功落盘后的清理不走这里。 */
   function discard(): void {
     report.value = null;
+  }
+
+  async function discardFinding(findingId: string): Promise<void> {
+    const current = report.value;
+    if (!current || applying.value || !options.canWrite()) return;
+    applying.value = true;
+    try {
+      const detail = await options.api.dismissReviewFinding(options.surveyId(), findingId);
+      options.onDismiss(detail);
+      if (report.value === current) report.value = detail.review ?? null;
+    } catch {
+      options.notify.warn(options.t("surveys.assistant.requestFailed"));
+    } finally {
+      applying.value = false;
+    }
   }
 
   async function request(): Promise<void> {
@@ -76,13 +86,13 @@ export function useSurveyReviewSession(options: SurveyReviewSessionOptions) {
         options.notify.warn(options.t("surveys.assistant.saveFirst"));
         return;
       }
-      const prompt = options.t("surveys.assistant.reviewPrompt");
+      const prompt = options.t("surveys.assistant.reviewRequest");
       if (!options.copilot?.sendPrompt) {
         options.copilot?.fillComposer(prompt);
         options.copilot?.focusComposer();
         return;
       }
-      await options.copilot.sendPrompt(prompt, ["survey_read", "survey_review"]);
+      await options.copilot.sendPrompt(prompt, ["survey_read", "survey_review"], { skillId: "survey-review" });
     } catch {
       options.notify.error(options.t("surveys.assistant.requestFailed"));
     } finally {
@@ -90,32 +100,27 @@ export function useSurveyReviewSession(options: SurveyReviewSessionOptions) {
     }
   }
 
-  async function apply(): Promise<void> {
-    // 入口捕获本次应用的方案：保存期间新 report 到达时只清旧的那份。
+  async function applyFinding(findingId: string): Promise<void> {
     const applied = report.value;
-    const current = plan.value;
-    if (!applied || !current || current.status !== "ready" || !current.candidateDefinition || stale.value ||
-      applying.value || !options.canWrite()) return;
+    if (!applied || stale.value || applying.value || !options.canWrite()) return;
+    const finding = applied.findings.find((item) => item.id === findingId);
+    if (!finding?.suggestedOps?.length) return;
     applying.value = true;
     try {
-      // 整批一次 commit：一个撤销步骤，绝不逐组落历史。
-      options.history.commit(
-        { ...options.history.current.value, definition: current.candidateDefinition },
-        { source: "assistant", label: applied.summary },
+      const detail = await options.api.applyReviewFinding(
+        options.surveyId(),
+        findingId,
+        options.draftVersion(),
       );
-      options.autosave.schedule();
-      // 保存失败（含冲突）时方案保留：用户还得靠它知道刚才改了什么、为何没落盘；
-      // 成功提示在落盘确认后才发，不虚报。
-      if (!await options.autosave.flush()) {
-        options.notify.warn(options.t("surveys.assistant.saveFirst"));
-        return;
-      }
+      options.onApply(detail, finding.title);
+      if (report.value === applied) report.value = detail.review ?? null;
       options.notify.success(options.t("surveys.assistant.applied"));
-      if (report.value === applied) discard();
+    } catch {
+      options.notify.warn(options.t("surveys.assistant.planUnavailable"));
     } finally {
       applying.value = false;
     }
   }
 
-  return { report, busy, applying, plan, addedQuestions, stale, receive, discard, request, apply };
+  return { report, busy, applying, plan, addedQuestions, stale, receive, discard, discardFinding, request, applyFinding };
 }

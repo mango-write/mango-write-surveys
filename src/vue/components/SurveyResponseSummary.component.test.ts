@@ -62,7 +62,7 @@ describe("SurveyResponseSummary（issue #217）", () => {
         row({ q1: "a" }),
       ]),
     );
-    expect(withRows.text()).toContain("口径：发布版本 3");
+    expect(withRows.text()).not.toContain("口径：发布版本 3");
     expect(withRows.findAll(".summary-card")).toHaveLength(1);
     withRows.unmount();
   });
@@ -88,7 +88,10 @@ describe("SurveyResponseSummary（issue #217）", () => {
     expect(card.text()).toContain("Web");
     expect(card.text()).toContain("2 · 66.7%");
     expect(card.text()).toContain("1 · 33.3%");
-    expect(card.text()).toContain("已答 3 / 3 份");
+    expect(card.text()).toContain("已答 3 / 3");
+    const bars = card.findAll(".bar-row");
+    expect(bars[0]!.attributes("style")).toContain("--bar-color: var(--color-brand-500)");
+    expect(bars[1]!.attributes("style")).toContain("--bar-color: var(--color-info-500)");
     wrapper.unmount();
   });
 
@@ -114,7 +117,8 @@ describe("SurveyResponseSummary（issue #217）", () => {
     const card = wrapper.find(".summary-card");
     expect(card.text()).toContain("推荐者（9–10）");
     expect(card.text()).toContain("50%");
-    expect(card.text()).toContain("净推荐值（NPS）= 25");
+    expect(card.find(".summary-metric").text()).toBe("25NPS");
+    expect(card.find(".nps-distribution").attributes("open")).toBeUndefined();
     // 徽章按发布定义题型，不出「按变量形状推断」角标。
     expect(card.find(".summary-kind").text()).toBe("NPS");
     expect(card.find(".summary-kind--inferred").exists()).toBe(false);
@@ -142,9 +146,12 @@ describe("SurveyResponseSummary（issue #217）", () => {
     );
     const card = wrapper.find(".summary-card");
     expect(card.find(".summary-kind").text()).toBe("量表");
-    expect(card.text()).toContain("均值 5.5");
+    expect(card.find(".summary-metric").text()).toBe("5.5均值");
     expect(card.find(".nps-segments").exists()).toBe(false);
     expect(card.find(".summary-kind--inferred").exists()).toBe(false);
+    const bars = card.findAll(".bar-row");
+    expect(bars).toHaveLength(11);
+    expect(bars.every((bar) => bar.attributes("style")?.includes("--bar-color: var(--color-brand-500)"))).toBe(true);
     wrapper.unmount();
   });
 

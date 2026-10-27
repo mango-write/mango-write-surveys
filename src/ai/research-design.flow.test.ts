@@ -90,6 +90,10 @@ function memoryStorage() {
           if (patch.currentRevisionId !== undefined) row.currentRevisionId = patch.currentRevisionId;
           if (patch.deletedAt !== undefined) row.deletedAt = patch.deletedAt;
         },
+        review: () => Promise.resolve(null),
+        upsertReview: () => Promise.resolve(),
+        updateReview: () => Promise.resolve(),
+        deleteReview: () => Promise.resolve(),
         findRevisionById: unimplemented,
         latestRevisionNumber: unimplemented,
         insertRevision: unimplemented,
@@ -101,6 +105,7 @@ function memoryStorage() {
         deleteMediaBindings: unimplemented,
       });
     },
+    findReview: () => Promise.resolve(null),
     findRevisionOfSurvey: unimplemented,
     listFinishedResponses: unimplemented,
     findMediaBinding: unimplemented,
@@ -206,7 +211,7 @@ describe("研究设计与诊断 — 真实 service facade 往返", () => {
       { actor, scopeSurveyId: surveyId, operationId: "op-review-1" },
     );
     expect(review.ok).toBe(true);
-    // 诊断不落库：草稿版本不变，建议留给用户确认。
+    // 诊断不改草稿：版本不变，建议持久化留给用户确认。
     expect(rows.get(surveyId)!.draftVersion).toBe(2);
     expect(surveyDeliveryFromResult("survey_review", review)).toMatchObject({
       type: "survey_review",

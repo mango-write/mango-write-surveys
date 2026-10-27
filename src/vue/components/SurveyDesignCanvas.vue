@@ -32,6 +32,7 @@ import type {
 import { SURVEY_LIMITS, validateSurveyDefinition } from "../../core/index.js";
 
 import SurveyMarkdownField from "./SurveyMarkdownField.vue";
+import SurveyAddZone from "./SurveyAddZone.vue";
 import SurveyQuestionCard from "./SurveyQuestionCard.vue";
 import SurveyTypeMenu from "./SurveyTypeMenu.vue";
 import { useSurveyIssueCopy } from "../lib/issue-copy.js";
@@ -59,6 +60,7 @@ const props = defineProps<{
   activeQuestionId?: string;
   /** 换题型载荷暂存的隔离键：按问卷维度存取，跨刷新可恢复。 */
   surveyId?: string;
+  reviewQuestionIds?: readonly string[];
 }>();
 const emit = defineEmits<{
   select: [id: string];
@@ -665,6 +667,7 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
   >
     <header ref="coverRef" class="survey-cover">
       <span class="tw:text-muted tw:text-xs">{{ t("surveys.cover.audience") }}</span>
+      <div class="cover-review"><slot name="cover-review" /></div>
       <Textarea
         class="canvas-title"
         fluid
@@ -850,6 +853,7 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
             :dragging="draggingId === q.id"
             :drop-side="dropSideOf(q.id)"
             :survey-id="surveyId"
+            :has-review="reviewQuestionIds?.includes(q.id)"
             @select="selectQuestion"
             @change="onQuestionChange"
             @change-type="(type) => onChangeType(q.id, type)"
@@ -859,60 +863,41 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
             @drop-on="onCardDropOn"
             @drag-start="onCardDragStart"
             @drag-end="onDragEnd"
-          />
-          <slot name="question-review" :question-id="q.id" />
-          <div
-            v-if="!disabled"
-            class="add-zone"
-            :class="{ 'add-zone--active': draggingId }"
+          >
+            <template #review>
+              <slot name="question-review" :question-id="q.id" :page-id="page.id" />
+            </template>
+          </SurveyQuestionCard>
+          <!-- 末题不再渲染卡后插入带：与页尾入口位置重合，只留页尾一份。 -->
+          <SurveyAddZone
+            v-if="!disabled && q.id !== pageQuestions(page).at(-1)?.id"
+            :menu-open="addMenuAt?.pageId === page.id && addMenuAt?.afterId === q.id"
+            :active="!!draggingId"
+            @toggle="toggleAddMenu(page.id, q.id)"
             @dragover="onGapDragOver(page.id, q.id, $event)"
             @drop="onRootDrop"
+            @select="(type) => insertAt(page.id, q.id, type)"
+            @close="addMenuAt = null"
           >
-            <span class="add-zone__line" aria-hidden="true" />
-            <div class="menu-anchor">
-              <button
-                type="button"
-                class="add-zone__btn"
-                :aria-label="t('surveys.addQuestion')"
-                v-tooltip.top="t('surveys.addQuestion')"
-                @click="toggleAddMenu(page.id, q.id)"
-              >
-                <Plus :size="15" />
-              </button>
-              <SurveyTypeMenu
-                :open="addMenuAt?.pageId === page.id && addMenuAt?.afterId === q.id"
-                @select="(type) => insertAt(page.id, q.id, type)"
-                @close="addMenuAt = null"
-              />
-            </div>
-            <span class="add-zone__line" aria-hidden="true" />
-          </div>
+            <template #review>
+              <slot name="insert-review" :page-id="page.id" :after-id="q.id" />
+            </template>
+          </SurveyAddZone>
         </template>
-        <div
+        <SurveyAddZone
           v-if="!disabled"
-          class="add-zone"
-          :class="{ 'add-zone--active': draggingId }"
+          :menu-open="addMenuAt?.pageId === page.id && addMenuAt?.afterId === null"
+          :active="!!draggingId"
+          @toggle="toggleAddMenu(page.id, null)"
           @dragover="onPageDragOver(page.id, $event)"
           @drop="onRootDrop"
+          @select="(type) => insertAt(page.id, null, type)"
+          @close="addMenuAt = null"
         >
-          <span class="add-zone__line" aria-hidden="true" />
-          <div class="menu-anchor">
-            <button
-              type="button"
-              class="add-zone__btn"
-              :aria-label="t('surveys.addQuestion')"
-              @click="toggleAddMenu(page.id, null)"
-            >
-              <Plus :size="15" />
-            </button>
-            <SurveyTypeMenu
-              :open="addMenuAt?.pageId === page.id && addMenuAt?.afterId === null"
-              @select="(type) => insertAt(page.id, null, type)"
-              @close="addMenuAt = null"
-            />
-          </div>
-          <span class="add-zone__line" aria-hidden="true" />
-        </div>
+          <template #review>
+            <slot name="insert-review" :page-id="page.id" :after-id="null" />
+          </template>
+        </SurveyAddZone>
       </div>
     </section>
 
@@ -951,25 +936,51 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
   isolation: isolate;
   display: flex;
   flex-direction: column;
-  gap: var(--layout-card-padding-lg);
+  gap: 24px;
   width: 100%;
-  max-width: 46rem;
+  max-width: 48rem;
   margin-inline: auto;
-  padding-bottom: 4rem;
+  padding-bottom: 64px;
 }
-.survey-cover { display: flex; flex-direction: column; gap: .5rem; padding: 0 .25rem .5rem; scroll-margin-top: 1rem; }
-.canvas-title.p-textarea { font-size: var(--font-size-title-md); font-weight: 600; line-height: 1.4; }
+.survey-cover {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--elevation-2-surface);
+  box-shadow: var(--elevation-2-shadow);
+  scroll-margin-top: 16px;
+}
+.cover-review {
+  position: absolute;
+  top: 16px;
+  right: 20px;
+}
+.canvas-title.p-textarea {
+  padding-inline: 0;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  font-size: var(--font-size-title-md);
+  font-weight: 600;
+  line-height: 1.4;
+}
+.canvas-title.p-textarea:focus {
+  border-color: var(--color-brand-400);
+}
 .head-field {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 2px 4px;
+  gap: 8px;
 }
 .head-field :deep(.survey-markdown-field__surface) {
   min-height: 44px;
   padding: 8px 12px;
   border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius);
   background: var(--color-surface-base);
   cursor: text;
 }
@@ -980,18 +991,15 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
 .head-field :deep(.survey-markdown-field__placeholder) { top: 8px; left: 12px; }
 .head-field :deep(.survey-markdown-field__content p) { margin: 0; }
 .head-field__label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-tertiary);
+  font-size: var(--font-size-caption);
+  font-weight: 500;
+  color: var(--color-text-secondary);
 }
 .canvas-page {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 12px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-lg, 14px);
-  background: var(--color-surface-base);
+  gap: 16px;
+  padding: 0;
 }
 .canvas-page.is-flash {
   animation: canvas-flash 2s ease-out;
@@ -1000,10 +1008,12 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
   display: flex;
   align-items: center;
   gap: 8px;
+  padding: 0 4px 12px;
+  border-bottom: 1px solid var(--color-border-subtle);
 }
 .page-index {
   flex: none;
-  font-size: 11.5px;
+  font-size: var(--font-size-caption);
   font-weight: 600;
   color: var(--color-text-tertiary);
   white-space: nowrap;
@@ -1013,7 +1023,6 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
   border-color: transparent;
   background: transparent;
   box-shadow: none;
-  padding-block: 3px;
   font-weight: 600;
   min-width: 0;
 }
@@ -1033,14 +1042,14 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
 }
 .page-menu {
   position: absolute;
-  top: calc(100% + 6px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 20;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   width: min(300px, 78vw);
-  padding: 10px;
+  padding: 12px;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md, 10px);
   background: var(--color-surface-overlay, var(--color-surface-base));
@@ -1049,31 +1058,31 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
 .jump-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
+  gap: 8px;
+  font-size: var(--font-size-caption);
   color: var(--color-text-secondary);
 }
 .jump-config {
   display: grid;
-  gap: 6px;
-  padding-left: 22px;
+  gap: 8px;
+  padding-left: 20px;
 }
 .page-menu__divider {
   height: 1px;
   background: var(--color-border-subtle);
-  margin-block: 2px;
+  margin-block: 4px;
 }
 .page-menu__item {
   display: flex;
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 6px 8px;
+  padding: 8px;
   border: 0;
   border-radius: var(--radius-sm, 6px);
   background: transparent;
   color: var(--color-text-secondary);
-  font-size: 13px;
+  font-size: var(--font-size-body-sm);
   text-align: start;
   cursor: pointer;
 }
@@ -1089,7 +1098,7 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
   cursor: not-allowed;
 }
 .page-desc {
-  padding: 0 2px;
+  padding: 0 4px;
 }
 .page-desc-add {
   justify-content: flex-start;
@@ -1097,68 +1106,22 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
 .page-questions {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-.add-zone {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 22px;
-}
-.add-zone__line {
-  flex: 1;
-  height: 1px;
-  background: transparent;
-}
-.add-zone:hover .add-zone__line,
-.add-zone--active .add-zone__line {
-  background: var(--color-border-strong);
-}
-.add-zone__btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-pill, 999px);
-  background: var(--color-surface-base);
-  color: var(--color-text-tertiary);
-  cursor: pointer;
-}
-/* 触屏/窄屏把「+」的点击热区抬到 ≥44px（视觉尺寸不变，桌面不受影响）；
-   -11px 让 24px 按钮的命中带宽出 2px 余量，边界取整不吃掉达标线。 */
-@media (max-width: 767.98px), (pointer: coarse) {
-  .add-zone {
-    min-height: 44px;
-  }
-  .add-zone__btn::after {
-    content: "";
-    position: absolute;
-    inset: -11px;
-    border-radius: var(--radius-pill, 999px);
-  }
-}
-.add-zone__btn:hover {
-  border-color: var(--color-brand-400);
-  color: var(--color-brand-600);
-  background: var(--color-brand-50);
+  gap: 12px;
 }
 .add-page-btn {
   align-self: center;
 }
 .issue-list ul {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   padding: 0;
   list-style: none;
   display: grid;
-  gap: 2px;
+  gap: 4px;
 }
 .issue-item {
   border: 0;
   background: transparent;
-  padding: 2px 4px;
+  padding: 4px;
   border-radius: var(--radius-sm, 6px);
   color: inherit;
   font: inherit;
@@ -1185,8 +1148,8 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
   }
 }
 @media (max-width: 767.98px) {
-  .canvas-page {
-    padding: 10px;
+  .survey-cover {
+    padding: 16px;
   }
   .page-menu {
     position: fixed;
@@ -1196,7 +1159,7 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
     left: 0;
     width: auto;
     border-radius: var(--radius-lg, 14px) var(--radius-lg, 14px) 0 0;
-    padding-bottom: max(10px, env(safe-area-inset-bottom));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
   }
 }
 </style>

@@ -60,6 +60,27 @@ export interface SurveyRecord {
   deletedAt: Date | null;
 }
 
+export interface SurveyReviewRecord {
+  id: string;
+  surveyId: string;
+  operationId: string;
+  baseDraftVersion: number;
+  summary: string;
+  findingsJson: unknown;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SurveyReviewInput {
+  userId: string;
+  teamId: string | null;
+  surveyId: string;
+  operationId: string;
+  baseDraftVersion: number;
+  summary: string;
+  findings: unknown;
+}
+
 export interface SurveyRevisionRecord {
   id: string;
   surveyId: string;
@@ -117,6 +138,13 @@ export interface SurveysLock {
     completedCountIncrement?: number;
     deletedAt?: Date;
   }): Promise<void>;
+  review(): Promise<SurveyReviewRecord | null>;
+  upsertReview(input: SurveyReviewInput): Promise<void>;
+  updateReview(
+    surveyId: string,
+    patch: { findings: unknown; baseDraftVersion?: number },
+  ): Promise<void>;
+  deleteReview(surveyId: string): Promise<void>;
   /** 调用方负责校验返回的 revision 属于当前 survey（跨卷 revisionId 不可借道）。 */
   findRevisionById(id: string): Promise<SurveyRevisionRecord | null>;
   latestRevisionNumber(surveyId: string): Promise<number>;
@@ -169,6 +197,7 @@ export interface SurveysStoragePort {
   countStarted(surveyId: string): Promise<number>;
   countFinished(surveyId: string, revisionId: string): Promise<number>;
   listRevisions(surveyId: string): Promise<SurveyRevisionMeta[]>;
+  findReview(surveyId: string): Promise<SurveyReviewRecord | null>;
   findRevisionOfSurvey(
     surveyId: string,
     revisionId: string,

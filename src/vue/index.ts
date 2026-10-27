@@ -35,6 +35,11 @@ export {
   type SurveySampleExclusion,
 } from "./research-host.js";
 export { surveysMessages } from "./locale/index.js";
+export type {
+  SurveyStageNavigation,
+  SurveyStageNavigationGroup,
+  SurveyStageNavigationItem,
+} from "./workspace-navigation.js";
 export type { ToolSurveyDelivery } from "../contracts/index.js";
 export { default as SurveyListPage } from "./pages/SurveyListPage.vue";
 export { default as SurveyWorkspacePage } from "./pages/SurveyWorkspacePage.vue";

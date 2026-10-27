@@ -1,7 +1,7 @@
 // 问卷 AI 工具四件套（issue #217/#224）：survey_read（完整定义 + 标准索引）/
 // survey_edit（ops 批量改卷，host-applied：服务端只校验不落库，宿主页面应用并
 // 走撤销栈与自动保存）/ survey_create（新资源直写：建行 + 存草稿定义）/
-// survey_review（模型阅读后登记结构化诊断，不落库、不改卷、不冒充真人验证）。
+// survey_review（模型阅读后登记并持久化待处理诊断，不改问卷正文、不冒充真人验证）。
 // AI 永不触碰发布与状态机——模块里没有这类工具，描述里也明说。工具契约是包自
 // 有的 SurveyAiToolSpec；宿主（主站 copilot、独立站）各自映射到自己的声明格式。
 // 交付载荷经 surveyDeliveryFromResult 摘出 UI 面：随 tool_step done 帧下发、
@@ -491,14 +491,14 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
             "checkId 必须是本次 survey_read 返回的标准索引里真实存在的 id；questionId 必须是定义里存在的题目 id。" +
             "severity 用 blocker/major/minor 的目录定义判断；reason 写判据与原文依据，recommendation 写怎么改。" +
             "suggestedOps 只放能安全自动应用的修订（全部会在当前草稿上校验可应用），无法自动修就只写 recommendation。" +
-            "各条 suggestedOps 由画布按共同原因合并成整批候选、一次确认后整批应用，无需逐条给出替代方案。" +
+            "每条 finding 独立确认、独立应用；操作只服务当前 finding，不让用户猜测如何合并或修改。" +
             "目录外发现省略 checkId，仍留在 findings 并写清依据与待核验限制，不编造目录依据。",
         },
       },
       required: ["baseDraftVersion", "summary", "findings"],
       additionalProperties: false,
     },
-    // 诊断不改问卷、不落库：登记后随 done 帧交付给画布侧栏展示。
+    // 不改问卷正文；待处理建议由领域服务持久化，活流只负责通知画布。
     write: false,
     hostApplied: true,
     async run(args, ctx) {
@@ -595,6 +595,12 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
             hint: "无法安全自动修的条目只保留 recommendation；能修的按 survey_edit 词表给出可应用操作。",
           };
         }
+        await service.recordReview(ctx.actor.userId, surveyId, {
+          operationId: ctx.operationId,
+          baseDraftVersion,
+          summary,
+          findings,
+        });
         return {
           ok: true,
           surveyId,
@@ -603,11 +609,9 @@ export function createSurveyAiTools(service: SurveysService): SurveyAiTools {
           summary,
           findings,
           note:
-            "诊断已登记并展示在用户的问卷画布：画布会把可自动修订的 suggestedOps 按共同原因合并成至多 3 组候选，" +
-            "用户一次确认即整批应用（不是逐条应用，也没有只应用一部分的中间态）；没有 suggestedOps 的条目只作人工待办。" +
+            "诊断已登记并展示在对应题目旁；每条可自动修订的建议都由用户独立确认后应用，没有 suggestedOps 的条目只作人工待办。" +
             `${AGENT_REVIEW_DISCLAIMER}向用户转述结论与建议时不得声称问卷已验证、已通过或已发布；` +
-            "按组概括改动，不要把建议拆成逐条确认；" +
-            "要把「确定的问题」「有依据的风险」「还缺证据的判断」说清楚。",
+            "只概括交付数量并引导用户查看画布，不在对话中重复完整诊断。",
         };
       } catch (err) {
         if (err instanceof SurveyError) return { error: `问卷不可读（${err.code}）` };

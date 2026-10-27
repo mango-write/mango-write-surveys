@@ -50,8 +50,9 @@ import SurveyVersionsPanel from "../components/SurveyVersionsPanel.vue";
 import SurveyDistributePanel from "../components/SurveyDistributePanel.vue";
 import SurveyPreviewOverlay from "../components/SurveyPreviewOverlay.vue";
 import SurveySwitcher from "../components/SurveySwitcher.vue";
-import SurveyReviewBar from "../components/SurveyReviewBar.vue";
 import SurveyInlineReview from "../components/SurveyInlineReview.vue";
+import SurveyStageNavigation from "../components/SurveyStageNavigation.vue";
+import type { SurveyStageNavigation as SurveyStageNavigationModel } from "../workspace-navigation.js";
 import {
   takeAiCreatedSurveyHandoff,
   setAiCreatedSurveyHandoff,
@@ -78,22 +79,38 @@ const survey = ref<SurveyDetail | null>(null);
 const loading = ref(true);
 const busy = ref(false);
 const error = ref("");
-const stage = ref<Stage>(
-  typeof route.query.run === "string" ? "analysis" : "design",
+function stageFromRoute(): Stage {
+  if (typeof route.query.run === "string") return "analysis";
+  const value = route.query.stage;
+  return value === "distribute" || value === "data" || value === "analysis" ? value : "design";
+}
+const stage = ref<Stage>(stageFromRoute());
+const workspaceRevisionId = ref(
+  typeof route.query.revisionId === "string" ? route.query.revisionId : "",
 );
 const selectedQuestionId = ref("");
 const previewOpen = ref(false);
 const mobileNavigationOpen = ref(false);
 const canvasRef = ref<InstanceType<typeof SurveyDesignCanvas> | null>(null);
+const dataAnalysisRef = ref<InstanceType<typeof SurveyDataAnalysis> | null>(null);
+const stageNavigation = ref<SurveyStageNavigationModel | null>(null);
 
 const surveyId = computed(() =>
   typeof route.params.surveyId === "string" ? route.params.surveyId : "",
 );
 
-const leftTabs = computed<SurveyShellTab[]>(() => [
-  { id: "outline", label: t("surveys.outlineTab"), icon: List },
-  { id: "versions", label: t("surveys.versionsTab"), icon: History },
-]);
+const leftTabs = computed<SurveyShellTab[]>(() => {
+  if (stage.value === "data") return [{ id: "data", label: t("surveys.dataViewLabel"), icon: List }];
+  if (stage.value === "analysis") return [{ id: "analysis", label: t("surveys.savedAnalysis"), icon: List }];
+  if (stage.value === "distribute") return [{ id: "versions", label: t("surveys.versionsTab"), icon: History }];
+  return [
+    { id: "outline", label: t("surveys.outlineTab"), icon: List },
+    { id: "versions", label: t("surveys.versionsTab"), icon: History },
+  ];
+});
+function updateWorkspaceQuery(patch: Record<string, string | undefined>) {
+  void router.replace({ query: { ...route.query, ...patch } });
+}
 
 // ── 草稿状态：历史栈 + 自动保存 ──────────────────────────────────────────
 const history = useSurveyDraftHistory({
@@ -147,10 +164,22 @@ const autosave = useSurveyAutosave({
 function commit(next: SurveyDraftState, label?: string) {
   history.commit(next, { source: "user", label });
   autosave.schedule();
-  aiEditBanner.value = null;
 }
 function commitDefinition(next: SurveyDetail["definition"], label?: string) {
   commit({ ...history.current.value, definition: next }, label);
+}
+function onReviewApply(next: SurveyDetail, label: string) {
+  survey.value = next;
+  draftVersion.value = next.draftVersion;
+  history.commit(
+    { definition: next.definition, responseLimit: next.responseLimit },
+    { source: "assistant", label },
+  );
+  autosave.settled();
+}
+function onReviewDismiss(next: SurveyDetail) {
+  survey.value = next;
+  draftVersion.value = next.draftVersion;
 }
 // 撤销/重做改写历史：先把在途保存落盘，保证 PATCH 的 expectedVersion 以
 // 落盘后的版本为基点单调、最终落盘内容 = 当前画布内容；否则撤销后的保存与
@@ -159,7 +188,6 @@ function commitDefinition(next: SurveyDetail["definition"], label?: string) {
 async function undo() {
   if (autosave.status.value === "saving") await autosave.flush();
   if (history.undo()) autosave.schedule();
-  aiEditBanner.value = null;
 }
 async function redo() {
   if (autosave.status.value === "saving") await autosave.flush();
@@ -172,33 +200,48 @@ async function redo() {
 // 新鲜度闸（#223 §6）：交付带 baseDraftVersion（服务端校验 ops 的草稿版本），
 // 与本地已落盘版本不一致或本地有未保存编辑时不自动重放——推理期间的人工
 // 改动不能被迟到的结果覆盖，转横幅让用户决定。
-const aiEditBanner = ref<{ applied: number; summary: string; rejected: number } | null>(null);
 type SurveyEditDelivery = Extract<ToolSurveyDelivery, { type: "survey_edit" }>;
 const aiStaleDelivery = ref<SurveyEditDelivery | null>(null);
-// ── 问卷诊断会话（issue #224）：report/plan/stale 与 request/apply 的状态语义
-// 收进 useSurveyReviewSession；页面只编排——诊断帧到达不切换 tab、不展开侧栏、
-// 不动移动导航，展示位置永远跟随用户当前视图。
 const {
   report: reviewReport,
   busy: reviewBusy,
   applying: reviewApplying,
   plan: reviewPlan,
-  addedQuestions: reviewAddedQuestions,
   stale: reviewStale,
   receive: receiveReview,
   discard: discardReview,
+  discardFinding,
   request: askResearch,
-  apply: applyReviewPlan,
+  applyFinding,
 } = useSurveyReviewSession({
   surveyId: () => surveyId.value,
   canWrite: () => !!survey.value?.canWrite,
   draftVersion: () => draftVersion.value,
   history,
   autosave,
+  api: surveysApi,
+  onApply: onReviewApply,
+  onDismiss: onReviewDismiss,
   copilot: host.copilot,
   notify,
   t,
 });
+const reviewQuestionIds = computed(() => [
+  ...new Set((reviewReport.value?.findings ?? []).flatMap((finding) => finding.questionId ? [finding.questionId] : [])),
+]);
+const reviewAdditions = computed(() => (reviewReport.value?.findings ?? []).flatMap((finding) =>
+  (finding.suggestedOps ?? []).flatMap((op) => {
+    if (op.op !== "add_question" || typeof op.question.id !== "string") return [];
+    const page = definition.value.pages.find((item) => item.id === op.pageId);
+    const index = op.index ?? page?.questionIds.length ?? 0;
+    return [{
+      questionId: op.question.id,
+      pageId: op.pageId,
+      afterId: index > 0 && page && index < page.questionIds.length ? page.questionIds[index - 1]! : null,
+      beforeQuestionId: index === 0 ? page?.questionIds[0] : undefined,
+    }];
+  }),
+));
 // AI 建卷落地提示（issue #217）：survey_create 帧载荷经一次性单槽带进工作区，
 // load 成功后取走展示——生成会话是 global scope，落进右岛的新 survey 会话是
 // 空的，这张卡补上「AI 刚建了什么」。取走即清，刷新不重复。
@@ -212,12 +255,8 @@ function applyEditDelivery(delivery: SurveyEditDelivery) {
       { source: "assistant", label: delivery.summary },
     );
     autosave.schedule();
+    notify.success(t("surveys.copilot.applied", { n: result.applied.length }));
   }
-  aiEditBanner.value = {
-    applied: result.applied.length,
-    summary: delivery.summary,
-    rejected: result.rejected.length,
-  };
   if (result.rejected.length > 0) {
     notify.warn(t("surveys.copilot.rejected", { n: result.rejected.length }));
   }
@@ -229,23 +268,18 @@ async function applySurveyDelivery(delivery: ToolSurveyDelivery) {
     return;
   }
   if (delivery.type !== "survey_edit") {
-    // survey_create：导航到新问卷工作区（列表页与工作区共用同一入口语义）。
     setAiCreatedSurveyHandoff(delivery);
     notify.success(t("surveys.copilot.created", { title: delivery.title }));
     host.navigate({ name: "surveys.detail", surveyId: delivery.surveyId });
     return;
   }
-  // 交付帧只认本卷；其余卷的帧归各自页面。只读视图不静默丢弃：给可见警示。
   if (delivery.surveyId !== surveyId.value) return;
   if (!survey.value?.canWrite) {
     notify.warn(t("surveys.copilot.readOnly"));
     return;
   }
-  // AI 不切 stage：非设计段收到的修改照常应用（横幅在所有段可见），
-  // 视图位置留给用户。
   if (autosave.status.value === "saving") await autosave.flush();
-  const settled =
-    autosave.status.value === "idle" || autosave.status.value === "saved";
+  const settled = autosave.status.value === "idle" || autosave.status.value === "saved";
   if (!settled || delivery.baseDraftVersion !== draftVersion.value) {
     aiStaleDelivery.value = delivery;
     return;
@@ -257,11 +291,6 @@ function confirmStaleDelivery() {
   const delivery = aiStaleDelivery.value;
   aiStaleDelivery.value = null;
   if (delivery) applyEditDelivery(delivery);
-}
-
-function undoAiEdit() {
-  aiEditBanner.value = null;
-  void undo();
 }
 
 const copilotSurface = (): SurveysCopilotSurface | null =>
@@ -308,9 +337,8 @@ watch(
   { immediate: true },
 );
 
-// Copilot 面板呈现（issue #224 M2）：按当前阶段/选中题注册问卷专属空态文案，
-// 不注册任何 run 动作——顶栏「帮我完善」是唯一 review 触发，题目旁的修改建议
-// 是主要阅读位置；卸载后的 surface 清理归 releasePageState。
+// Copilot 面板呈现（issue #224 M2）：诊断由面板动作经 Skill 发起，题目旁的
+// 修改建议是主要阅读位置；卸载后的 surface 清理归 releasePageState。
 const copilotPresentation = computed<SurveysCopilotSurfacePresentation | null>(() => {
   if (!host.copilot?.setSurfacePresentation || !survey.value) return null;
   const selected = definition.value.questions.find(
@@ -324,10 +352,25 @@ const copilotPresentation = computed<SurveysCopilotSurfacePresentation | null>((
         : selected
           ? t("surveys.copilot.surfaceQuestionDescription", { title: selected.title.slice(0, 40) })
           : t("surveys.copilot.surfaceDescription"),
-    composerPlaceholder: selected
-      ? t("surveys.copilot.surfaceQuestionPlaceholder", { title: selected.title.slice(0, 40) })
-      : t("surveys.copilot.surfacePlaceholder"),
-    actions: [],
+    composerPlaceholder:
+      stage.value === "data" || stage.value === "analysis"
+        ? t("surveys.copilot.surfaceAnalysisPlaceholder")
+        : selected
+          ? t("surveys.copilot.surfaceQuestionPlaceholder", { title: selected.title.slice(0, 40) })
+          : t("surveys.copilot.surfacePlaceholder"),
+    actions:
+      stage.value === "design" && survey.value.canWrite
+        ? [{ id: "survey-review", label: t("surveys.assistant.review"), primary: true, run: askResearch }]
+        : stage.value === "data" || stage.value === "analysis"
+          ? [{
+              id: "survey-analysis",
+              label: t("surveys.assistant.analyze"),
+              primary: true,
+              prompt: t("surveys.assistant.analysisRequest"),
+              skillId: "survey-analysis",
+              toolNames: ["research_read", "research_analyze", "research_run_read"],
+            }]
+          : [],
   };
 });
 watch(
@@ -439,6 +482,7 @@ async function load() {
     dataBadgeCount.value = null;
     aiCreatedCard.value = takeAiCreatedSurveyHandoff(surveyId.value);
     autosave.settled();
+    if (next.review) receiveReview(next.review);
   } catch (e) {
     if (own === generation) error.value = errorMessage(e);
   } finally {
@@ -596,6 +640,10 @@ function closeSurvey() {
   confirm.require({
     header: t("surveys.close"),
     message: t("surveys.closeConfirm"),
+    acceptLabel: t("surveys.close"),
+    rejectLabel: t("surveys.cancel"),
+    rejectProps: { severity: "secondary", text: true },
+    acceptProps: { severity: "danger" },
     accept: () => void closeCollection(),
   });
 }
@@ -654,15 +702,30 @@ function onPageHide() {
 }
 watch(surveyId, () => {
   mobileNavigationOpen.value = false;
-  stage.value = typeof route.query.run === "string" ? "analysis" : "design";
+  stage.value = stageFromRoute();
+  workspaceRevisionId.value = typeof route.query.revisionId === "string" ? route.query.revisionId : "";
   selectedQuestionId.value = "";
   void load();
 });
 
-// 离开数据/分析段后徽标回到采集口径（数据段的版本选择随组件卸载重置）。
-watch(stage, (value) => {
+watch(stage, (value, previous) => {
   if (value !== "data" && value !== "analysis") dataBadgeCount.value = null;
+  if (value === previous) return;
+  stageNavigation.value = null;
+  updateWorkspaceQuery({
+    stage: value === "design" ? undefined : value,
+    run: value === "analysis" ? route.query.run as string | undefined : undefined,
+    revisionId: value === "data" || value === "analysis" ? workspaceRevisionId.value || undefined : undefined,
+  });
 });
+watch(
+  () => [route.query.stage, route.query.run, route.query.revisionId],
+  () => {
+    const next = stageFromRoute();
+    if (stage.value !== next) stage.value = next;
+    workspaceRevisionId.value = typeof route.query.revisionId === "string" ? route.query.revisionId : "";
+  },
+);
 
 // ── 离开保护：有未落盘内容先落盘后放行；落不了盘（失败/冲突）才拦 ────────
 let forceLeave = false;
@@ -694,6 +757,11 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
       <template #left="{ activeTab }">
         <Button v-if="!host.workbenchShell" class="mobile-survey-toggle" :label="t('surveys.leftPanel')" :icon="mobileNavigationOpen ? 'pi pi-chevron-up' : 'pi pi-bars'" :aria-expanded="mobileNavigationOpen" text severity="secondary" @click="mobileNavigationOpen = !mobileNavigationOpen" />
         <div class="survey-left-content" :class="{ 'is-open': !!host.workbenchShell || mobileNavigationOpen, 'is-standalone': !host.workbenchShell }">
+        <SurveyStageNavigation
+          v-if="stageNavigation && (stage === 'data' || stage === 'analysis')"
+          :model="stageNavigation"
+          @select="dataAnalysisRef?.selectStageNavigation($event)"
+        />
         <SurveyOutlinePanel
           v-if="activeTab === 'outline' && survey && stage === 'design'"
           :definition="definition"
@@ -792,11 +860,6 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
                   <template #icon><Redo2 :size="16" /></template>
                 </Button>
               </span>
-              <Button v-if="stage === 'design' && host.copilot"
-                :label="t('surveys.assistant.review')" icon="pi pi-sparkles" text severity="secondary"
-                v-tooltip.bottom="t('surveys.assistant.reviewHint')"
-                :loading="reviewBusy || reviewApplying" :disabled="!survey.canWrite"
-                @click="askResearch()" />
               <Button
                 severity="secondary"
                 variant="text"
@@ -864,19 +927,6 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
               severity="secondary"
               @click="aiStaleDelivery = null"
           /></Message>
-          <Message
-            v-else-if="aiEditBanner"
-            severity="info"
-            :closable="true"
-            @close="aiEditBanner = null"
-          >
-            {{ t("surveys.copilot.applied", { n: aiEditBanner.applied }) }}：{{ aiEditBanner.summary
-            }}<Button
-              :label="t('surveys.copilot.undoAiEdit')"
-              text
-              :disabled="!canUndo"
-              @click="undoAiEdit"
-          /></Message>
           <Message v-else-if="error" severity="error" :closable="false"
             >{{ error }}<Button :label="t('surveys.reload')" text @click="load"
           /></Message>
@@ -890,18 +940,6 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
             @retry="load"
           >
             <template v-if="survey">
-              <SurveyReviewBar
-                v-if="stage === 'design' && reviewReport && reviewPlan"
-                :report="reviewReport"
-                :plan="reviewPlan"
-                :definition="definition"
-                :stale="reviewStale"
-                :busy="reviewBusy || reviewApplying"
-                :disabled="!survey.canWrite"
-                @apply="applyReviewPlan"
-                @discard="discardReview"
-                @locate="locateQuestion"
-              />
               <SurveyDesignCanvas
                 v-if="stage === 'design'"
                 ref="canvasRef"
@@ -909,16 +947,31 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
                 :disabled="!survey.canWrite"
                 :active-question-id="selectedQuestionId"
                 :survey-id="surveyId"
+                :review-question-ids="reviewQuestionIds"
                 @select="selectedQuestionId = $event"
                 @change="(next, label) => commitDefinition(next, label)"
               >
+                <template #cover-review>
+                  <SurveyInlineReview v-if="reviewReport" :definition="definition" :report="reviewReport"
+                    :stale="reviewStale" :applying="reviewApplying" :disabled="!survey.canWrite"
+                    @apply="applyFinding" @dismiss="discardFinding" />
+                </template>
                 <template #question-review="{ questionId }">
-                  <SurveyInlineReview v-if="reviewReport && reviewPlan" :question-id="questionId" :definition="definition" :report="reviewReport" :plan="reviewPlan" :stale="reviewStale" />
+                  <SurveyInlineReview v-if="reviewReport" :question-id="questionId" :definition="definition"
+                    :report="reviewReport" :stale="reviewStale" :applying="reviewApplying" :disabled="!survey.canWrite"
+                    @apply="applyFinding" @dismiss="discardFinding" />
+                  <SurveyInlineReview v-for="addition in reviewAdditions.filter((item) => item.beforeQuestionId === questionId)"
+                    :key="addition.questionId" :question-id="addition.questionId" :definition="definition"
+                    :report="reviewReport!" :stale="reviewStale" :applying="reviewApplying" :disabled="!survey.canWrite"
+                    @apply="applyFinding" @dismiss="discardFinding" />
+                </template>
+                <template #insert-review="{ pageId, afterId }">
+                  <SurveyInlineReview v-for="addition in reviewAdditions.filter((item) => item.pageId === pageId && item.afterId === afterId && !item.beforeQuestionId)"
+                    :key="addition.questionId" :question-id="addition.questionId" :definition="definition"
+                    :report="reviewReport!" :stale="reviewStale" :applying="reviewApplying" :disabled="!survey.canWrite"
+                    @apply="applyFinding" @dismiss="discardFinding" />
                 </template>
               </SurveyDesignCanvas>
-              <div v-if="stage === 'design' && reviewReport && reviewPlan && reviewAddedQuestions.length" class="review-additions">
-                <SurveyInlineReview v-for="question in reviewAddedQuestions" :key="question.id" :question-id="question.id" :definition="definition" :report="reviewReport" :plan="reviewPlan" :stale="reviewStale" />
-              </div>
               <SurveyDistributePanel
                 v-if="stage === 'distribute'"
                 :slug="survey.slug"
@@ -936,10 +989,15 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
               />
               <SurveyDataAnalysis
                 v-else-if="stage === 'data' || stage === 'analysis'"
+                ref="dataAnalysisRef"
                 :key="survey.id"
                 :survey="survey"
                 :mode="stage === 'data' ? 'data' : 'analysis'"
+                :revision-id="workspaceRevisionId"
                 @responses-loaded="onResponsesLoaded"
+                @revision-change="workspaceRevisionId = $event; updateWorkspaceQuery({ revisionId: $event || undefined })"
+                @navigation-change="stageNavigation = $event"
+                @run-change="updateWorkspaceQuery({ stage: 'analysis', run: $event || undefined })"
               />
             </template>
           </AsyncSlot>
@@ -1057,7 +1115,6 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
   .survey-left-content.is-open { display: block; }
 }
 
-.review-additions { width: 100%; max-width: 46rem; align-self: center; }
 .survey-workbench {
   height: 100%;
   min-height: 0;

@@ -2,6 +2,8 @@
 // 提交、发布、状态与计数均先锁 survey 行再访问子行，串行处理名额和重复提交；
 // 锁与事务由宿主 storage port 的 withSurveyLock 提供，锁序写在 ports.ts。
 import {
+  applySurveyOps,
+  canonicalSurveyJson,
   surveyCellValue,
   surveyVariables,
   surveyVariablesOf,
@@ -9,6 +11,7 @@ import {
 import { validateSurveyDefinition } from "../core/index.js";
 import {
   SurveyDefinitionSchema,
+  ToolSurveyDeliverySchema,
   type CreateSurveyInput,
   type PublicSurvey,
   type SetSurveyStatusInput,
@@ -19,6 +22,7 @@ import {
   type SurveyDetail,
   type SurveyIssue,
   type SurveyResponseView,
+  type SurveyReviewDelivery,
   type SurveyStatus,
   type SurveySummary,
   type UpdateSurveyInput,
@@ -28,6 +32,7 @@ import type {
   SurveysPorts,
   SurveyRecord,
   SurveyResponseRecord,
+  SurveyReviewRecord,
   SurveyRevisionRecord,
 } from "../ports.js";
 
@@ -53,6 +58,22 @@ export function asDefinition(value: unknown): SurveyDefinition {
 
 export function asAnswers(value: unknown): SurveyAnswers {
   return (value ?? {}) as SurveyAnswers;
+}
+
+function asReview(row: SurveyReviewRecord | null): SurveyReviewDelivery | null {
+  if (!row) return null;
+  const parsed = ToolSurveyDeliverySchema.safeParse({
+    type: "survey_review",
+    surveyId: row.surveyId,
+    operationId: row.operationId,
+    baseDraftVersion: row.baseDraftVersion,
+    summary: row.summary,
+    findings: row.findingsJson,
+  });
+  if (!parsed.success || parsed.data.type !== "survey_review") {
+    throw new SurveyError("invalid_review", 500, "诊断记录格式不合法");
+  }
+  return parsed.data;
 }
 
 /** 收集定义里 image_* 题型选项引用的 imageFileId（发布时校验绑定行存在）。 */
@@ -195,10 +216,11 @@ export function createSurveysService(ports: SurveysPorts) {
   }
 
   async function detailFrom(access: SurveyAccess): Promise<SurveyDetail> {
-    const [startedCount, revisions] = await Promise.all([
+    const [startedCount, revisions, review] = await Promise.all([
       // 作答会话与答卷共用存储行：不过滤 finished 才是「已开始」的口径。
       storage.countStarted(access.survey.id),
       storage.listRevisions(access.survey.id),
+      storage.findReview(access.survey.id),
     ]);
     return {
       ...toSummary(access.survey),
@@ -210,6 +232,7 @@ export function createSurveysService(ports: SurveysPorts) {
         createdAt: r.createdAt.toISOString(),
         contentHash: r.contentHash,
       })),
+      review: asReview(review),
       canWrite: access.canWrite,
       canDelete: access.canDelete,
     };
@@ -254,6 +277,107 @@ export function createSurveysService(ports: SurveysPorts) {
   return {
     requireSurveyAccess,
     getSurveyDetail,
+
+    async recordReview(
+      userId: string,
+      surveyId: string,
+      input: Omit<SurveyReviewDelivery, "type" | "surveyId">,
+    ): Promise<SurveyReviewDelivery> {
+      const access = await loadSurveyAccess(ports, userId, surveyId, "write");
+      return storage.withSurveyLock(surveyId, async (tx) => {
+        const row = await tx.survey();
+        if (!row || row.deletedAt) throw new SurveyError("not_found", 404);
+        if (row.draftVersion !== input.baseDraftVersion) {
+          throw new SurveyError("stale_read", 409, "诊断基线已过期");
+        }
+        if (input.findings.length === 0) await tx.deleteReview(surveyId);
+        else {
+          await tx.upsertReview({
+            userId: access.survey.userId,
+            teamId: access.survey.teamId,
+            surveyId,
+            ...input,
+          });
+        }
+        return { type: "survey_review", surveyId, ...input };
+      });
+    },
+
+    async applyReviewFinding(
+      userId: string,
+      surveyId: string,
+      findingId: string,
+      expectedVersion: number,
+    ): Promise<SurveyDetail> {
+      await loadSurveyAccess(ports, userId, surveyId, "write");
+      await storage.withSurveyLock(surveyId, async (tx) => {
+        const [row, storedReview] = await Promise.all([tx.survey(), tx.review()]);
+        const review = asReview(storedReview);
+        if (!row || row.deletedAt) throw new SurveyError("not_found", 404);
+        if (row.draftVersion !== expectedVersion) {
+          throw new SurveyError("version_conflict", 409, "草稿已在别处被修改");
+        }
+        if (!review) throw new SurveyError("not_found", 404, "诊断记录不存在");
+        if (review.baseDraftVersion !== row.draftVersion) {
+          throw new SurveyError("review_stale", 409, "诊断基线已过期");
+        }
+        const finding = review.findings.find((item) => item.id === findingId);
+        if (!finding) throw new SurveyError("not_found", 404, "诊断条目不存在");
+        if (!finding.suggestedOps?.length) {
+          throw new SurveyError("review_not_applicable", 409, "这条建议没有可自动应用的操作");
+        }
+        const base = asDefinition(row.draftJson);
+        const result = applySurveyOps(base, finding.suggestedOps);
+        if (
+          result.rejected.length > 0 ||
+          canonicalSurveyJson(result.definition) === canonicalSurveyJson(base)
+        ) {
+          throw new SurveyError(
+            "review_plan_conflict",
+            409,
+            "建议与当前问卷冲突",
+            result.rejected.map((entry) => ({
+              path: findingId,
+              code: "review_plan_conflict",
+              message: entry.reason,
+            })),
+          );
+        }
+        const nextVersion = row.draftVersion + 1;
+        const findings = review.findings.filter((item) => item.id !== findingId);
+        await tx.updateSurvey({
+          title: result.definition.title,
+          draftJson: result.definition,
+          draftVersion: nextVersion,
+        });
+        if (findings.length) {
+          await tx.updateReview(surveyId, { findings, baseDraftVersion: nextVersion });
+        } else {
+          await tx.deleteReview(surveyId);
+        }
+      });
+      return getSurveyDetail(userId, surveyId);
+    },
+
+    async dismissReviewFinding(
+      userId: string,
+      surveyId: string,
+      findingId: string,
+    ): Promise<SurveyDetail> {
+      await loadSurveyAccess(ports, userId, surveyId, "write");
+      await storage.withSurveyLock(surveyId, async (tx) => {
+        const [row, storedReview] = await Promise.all([tx.survey(), tx.review()]);
+        const review = asReview(storedReview);
+        if (!row || row.deletedAt) throw new SurveyError("not_found", 404);
+        if (!review?.findings.some((item) => item.id === findingId)) {
+          throw new SurveyError("not_found", 404, "诊断条目不存在");
+        }
+        const findings = review.findings.filter((item) => item.id !== findingId);
+        if (findings.length) await tx.updateReview(surveyId, { findings });
+        else await tx.deleteReview(surveyId);
+      });
+      return getSurveyDetail(userId, surveyId);
+    },
 
     async listSurveys(actor: SurveysActor): Promise<SurveySummary[]> {
       const teamId = actor.space.kind === "team" ? actor.space.teamId : null;
@@ -410,6 +534,7 @@ export function createSurveysService(ports: SurveysPorts) {
       await loadSurveyAccess(ports, userId, surveyId, "delete");
       const released = await storage.withSurveyLock(surveyId, async (tx) => {
         await tx.updateSurvey({ deletedAt: new Date() });
+        await tx.deleteReview(surveyId);
         // 级联清选项图绑定；物理字节回收在锁外按宿主池规则进行，但逐 sha 与
         // 上传路径（put+绑定）互斥——同内容重传不能落进 GC 的检查与删除之间。
         return tx.deleteMediaBindings(surveyId);

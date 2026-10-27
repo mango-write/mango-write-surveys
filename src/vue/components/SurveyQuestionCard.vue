@@ -7,11 +7,8 @@ import { computed, nextTick, ref, watch, type ComponentPublicInstance } from "vu
 import { useI18n } from "vue-i18n";
 import Button from "primevue/button";
 import Checkbox from "primevue/checkbox";
-import DatePicker from "primevue/datepicker";
-import InputNumber from "primevue/inputnumber";
 import InputText from "primevue/inputtext";
 import RadioButton from "primevue/radiobutton";
-import Select from "primevue/select";
 import Textarea from "primevue/textarea";
 import {
   AlignLeft,
@@ -19,7 +16,6 @@ import {
   ArrowDown,
   ArrowUp,
   CalendarDays,
-  ChevronDown,
   ChevronsUpDown,
   Circle,
   Clock,
@@ -32,6 +28,7 @@ import {
   ListChecks,
   ListOrdered,
   Rows3,
+  Settings2,
   SlidersHorizontal,
   SquareCheck,
   Star,
@@ -44,7 +41,6 @@ import {
 import type { Component } from "vue";
 
 import type {
-  SurveyCondition,
   SurveyLabeledNode,
   SurveyOption,
   SurveyQuestion,
@@ -52,6 +48,7 @@ import type {
 import SurveyLabeledListEditor from "./SurveyLabeledListEditor.vue";
 import SurveyMarkdownField from "./SurveyMarkdownField.vue";
 import SurveyQuestionField from "./SurveyQuestionField.vue";
+import SurveyQuestionSettings from "./SurveyQuestionSettings.vue";
 import SurveyTypeMenu from "./SurveyTypeMenu.vue";
 import { isDefaultOptionLabel, uid } from "../lib/definition-ops.js";
 import { useSurveysApi } from "../api.js";
@@ -74,6 +71,7 @@ const props = defineProps<{
   dropSide?: "before" | "after" | null;
   /** 图片选项上传/缩略图的认证侧通道；缺省（测试/纯展示）不渲染上传钮。 */
   surveyId?: string;
+  hasReview?: boolean;
 }>();
 const emit = defineEmits<{
   select: [id: string];
@@ -145,6 +143,12 @@ const titleInput = ref<{ $el?: HTMLTextAreaElement } | null>(null);
 const optionInputs = ref<(HTMLInputElement | HTMLTextAreaElement)[]>([]);
 const typeMenuOpen = ref(false);
 const advancedOpen = ref(false);
+const hasAnswerRules = computed(() =>
+  ["text", "number", "scale", "rating", "nps", "date"].includes(props.question.type),
+);
+const hasAdvancedSettings = computed(
+  () => props.conditionSources.length > 0 || hasAnswerRules.value,
+);
 const scaleValues = computed<number[]>(() => {
   const question = props.question;
   if (question.type !== "scale") return [];
@@ -381,116 +385,6 @@ function onTypeMenuSelect(type: SurveyQuestion["type"]) {
   emit("change-type", type);
 }
 
-// ── 高级属性 ────────────────────────────────────────────────────────────
-function setShowIf(questionId: string | null) {
-  if (!questionId) {
-    if (!props.question.showIf) return;
-    const next = { ...props.question };
-    delete next.showIf;
-    emit("change", next);
-    return;
-  }
-  const source = props.conditionSources.find((q) => q.id === questionId);
-  if (!source) return;
-  // 默认匹配值取该题型合法域的第一个值（validate 的条件值域约束）。
-  const value: string | number =
-    source.type === "single" ||
-    source.type === "image_single" ||
-    source.type === "multiple" ||
-    source.type === "image_multiple" ||
-    source.type === "dropdown"
-      ? (source.options[0]?.id ?? "")
-      : source.type === "scale"
-        ? source.min
-        : source.type === "rating"
-          ? 1
-          : source.type === "nps"
-            ? 0
-            : 0;
-  const showIf: SurveyCondition = {
-    questionId,
-    op: source.type === "multiple" || source.type === "image_multiple" ? "contains" : "eq",
-    value,
-  };
-  emit("change", { ...props.question, showIf });
-}
-function setConditionValue(value: string | number | null) {
-  if (!props.question.showIf || value === null) return;
-  emit("change", {
-    ...props.question,
-    showIf: { ...props.question.showIf, value },
-  });
-}
-const conditionSource = computed(() =>
-  props.conditionSources.find(
-    (q) => q.id === props.question.showIf?.questionId,
-  ),
-);
-const conditionOptions = computed(() =>
-  conditionSource.value &&
-  (conditionSource.value.type === "single" ||
-    conditionSource.value.type === "image_single" ||
-    conditionSource.value.type === "multiple" ||
-    conditionSource.value.type === "image_multiple" ||
-    conditionSource.value.type === "dropdown")
-    ? conditionSource.value.options
-    : [],
-);
-
-function setMultiline(multiline: boolean) {
-  if (props.question.type !== "text") return;
-  emit("change", { ...props.question, multiline });
-}
-function setMaxLength(value: number | null) {
-  if (props.question.type !== "text" || value === null) return;
-  emit("change", { ...props.question, maxLength: value });
-}
-function setNumberBound(bound: "min" | "max", value: number | null) {
-  if (props.question.type !== "number" || value === null) return;
-  if (bound === "min") emit("change", { ...props.question, min: value });
-  else emit("change", { ...props.question, max: value });
-}
-function setScaleBound(bound: "min" | "max", value: number | null) {
-  if (props.question.type !== "scale" || value === null) return;
-  if (bound === "min") emit("change", { ...props.question, min: value });
-  else emit("change", { ...props.question, max: value });
-}
-function setScaleLabel(bound: "minLabel" | "maxLabel", value: string | undefined) {
-  if (props.question.type !== "scale") return;
-  const label = value ?? "";
-  if (bound === "minLabel")
-    emit("change", { ...props.question, minLabel: label }, `q:${props.question.id}:minLabel`);
-  else emit("change", { ...props.question, maxLabel: label }, `q:${props.question.id}:maxLabel`);
-}
-
-function setRatingMax(value: number | null) {
-  if (props.question.type !== "rating" || value === null) return;
-  emit("change", { ...props.question, max: value });
-}
-function setNpsLabel(bound: "minLabel" | "maxLabel", value: string | undefined) {
-  if (props.question.type !== "nps") return;
-  const label = value ?? "";
-  if (bound === "minLabel")
-    emit("change", { ...props.question, minLabel: label }, `q:${props.question.id}:minLabel`);
-  else emit("change", { ...props.question, maxLabel: label }, `q:${props.question.id}:maxLabel`);
-}
-function setDateBound(bound: "min" | "max", value: unknown) {
-  if (props.question.type !== "date") return;
-  if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
-    const next = { ...props.question };
-    delete next[bound];
-    emit("change", next);
-    return;
-  }
-  const pad = (part: number) => String(part).padStart(2, "0");
-  const date = `${value.getFullYear()}-${pad(value.getMonth() + 1)}-${pad(value.getDate())}`;
-  emit("change", { ...props.question, [bound]: date });
-}
-function dateBoundary(value: string | undefined): Date | undefined {
-  if (!value) return undefined;
-  const parsed = new Date(`${value}T00:00:00`);
-  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
-}
 function setMatrixRows(rows: SurveyLabeledNode[]) {
   if (
     props.question.type !== "matrix_single" &&
@@ -568,6 +462,7 @@ function optionRef(el: unknown, index: number) {
     class="q-card"
     :class="{
       'q-card--selected': selected,
+      'q-card--review': hasReview,
       'q-card--flash': flashing,
       'q-card--dragging': dragging,
       [`q-card--drop-${dropSide}`]: !!dropSide,
@@ -589,7 +484,7 @@ function optionRef(el: unknown, index: number) {
         @dragend="emit('drag-end')"
         @click="emit('select', question.id)"
       >
-        <GripVertical :size="14" />
+        <GripVertical :size="16" />
       </button>
       <span class="q-card__number">{{ number }}</span>
       <span
@@ -598,6 +493,9 @@ function optionRef(el: unknown, index: number) {
         v-tooltip.top="issueMessage"
       >
         <AlertTriangle :size="14" />
+      </span>
+      <span class="q-card__review">
+        <slot name="review" :question-id="question.id" />
       </span>
       <div v-if="selected && !disabled" class="q-card__toolbar">
         <div class="menu-anchor">
@@ -620,14 +518,6 @@ function optionRef(el: unknown, index: number) {
             @close="typeMenuOpen = false"
           />
         </div>
-        <label v-if="question.type !== 'statement'" class="required-toggle" @click.stop
-          ><Checkbox
-            binary
-            :model-value="question.required"
-            :aria-label="t('surveys.required')"
-            @update:model-value="setRequired"
-          /><span>{{ t("surveys.required") }}</span></label
-        >
         <Button
           severity="secondary"
           variant="text"
@@ -714,43 +604,45 @@ function optionRef(el: unknown, index: number) {
       ">
         <template v-for="(option, index) in question.options" :key="option.id">
           <div class="opt-row">
-            <RadioButton
-              v-if="question.type === 'single' || question.type === 'image_single'"
-              :name="`edit-${question.id}`"
-              :value="option.id"
-              :model-value="null"
-              disabled
-              :tabindex="-1"
-            />
-            <Checkbox v-else binary :model-value="false" disabled :tabindex="-1" />
-            <!-- 图片选项：缩略图即上传/换图入口，旁边小钮删图（无图选项合法）。 -->
-            <button
-              v-if="isImageQuestion && surveyId"
-              type="button"
-              class="opt-thumb"
-              :disabled="uploading"
-              :aria-label="
-                t(
-                  option.imageFileId
-                    ? 'surveys.optionImageReplace'
-                    : 'surveys.optionImageUpload',
-                  { n: index + 1 },
-                )
-              "
-              v-tooltip.top="
-                t(
-                  option.imageFileId
-                    ? 'surveys.optionImageReplace'
-                    : 'surveys.optionImageUpload',
-                  { n: index + 1 },
-                )
-              "
-              @click.stop="pickImage(option.id)"
-            >
-              <img v-if="thumbSrc(option)" :src="thumbSrc(option)" alt="" />
-              <ImageIcon v-else :size="16" />
-              <span v-if="uploading && uploadTarget === option.id" class="opt-thumb__busy" />
-            </button>
+            <div class="opt-row__lead">
+              <RadioButton
+                v-if="question.type === 'single' || question.type === 'image_single'"
+                :name="`edit-${question.id}`"
+                :value="option.id"
+                :model-value="null"
+                disabled
+                :tabindex="-1"
+              />
+              <Checkbox v-else binary :model-value="false" disabled :tabindex="-1" />
+              <!-- 图片选项：缩略图即上传/换图入口，旁边小钮删图（无图选项合法）。 -->
+              <button
+                v-if="isImageQuestion && surveyId"
+                type="button"
+                class="opt-thumb"
+                :disabled="uploading"
+                :aria-label="
+                  t(
+                    option.imageFileId
+                      ? 'surveys.optionImageReplace'
+                      : 'surveys.optionImageUpload',
+                    { n: index + 1 },
+                  )
+                "
+                v-tooltip.top="
+                  t(
+                    option.imageFileId
+                      ? 'surveys.optionImageReplace'
+                      : 'surveys.optionImageUpload',
+                    { n: index + 1 },
+                  )
+                "
+                @click.stop="pickImage(option.id)"
+              >
+                <img v-if="thumbSrc(option)" :src="thumbSrc(option)" alt="" />
+                <ImageIcon v-else :size="16" />
+                <span v-if="uploading && uploadTarget === option.id" class="opt-thumb__busy" />
+              </button>
+            </div>
             <InputText
               fluid
               :ref="(el) => optionRef(el, index)"
@@ -764,48 +656,52 @@ function optionRef(el: unknown, index: number) {
               @focus="onOptionFocus"
               @keydown="onOptionKeydown(index, $event)"
             />
-            <Button
-              v-if="isImageQuestion && option.imageFileId"
-              severity="secondary"
-              variant="text"
-              :aria-label="t('surveys.optionImageRemove')"
-              v-tooltip.top="t('surveys.optionImageRemove')"
-              @click.stop="removeImage(option.id)"
-            >
-              <template #icon><ImageOff :size="14" /></template>
-            </Button>
-            <span v-if="option.exclusive" class="exclusive-chip">{{
-              t("surveys.exclusive")
-            }}</span>
-            <Checkbox
-              v-if="question.type === 'multiple' || question.type === 'image_multiple'"
-              binary
-              :model-value="!!option.exclusive"
-              :aria-label="t('surveys.exclusive')"
-              v-tooltip.top="t('surveys.exclusive')"
-              @update:model-value="toggleExclusive(option.id)"
-            />
-            <Button
-              severity="secondary"
-              variant="text"
-              :aria-label="t('surveys.removeOption')"
-              :disabled="question.options.length <= 2"
-              @click.stop="removeOptionAt(index)"
-            >
-              <template #icon><Trash2 :size="14" /></template>
-            </Button>
+            <div class="opt-row__actions">
+              <Button
+                v-if="isImageQuestion && option.imageFileId"
+                severity="secondary"
+                variant="text"
+                :aria-label="t('surveys.optionImageRemove')"
+                v-tooltip.top="t('surveys.optionImageRemove')"
+                @click.stop="removeImage(option.id)"
+              >
+                <template #icon><ImageOff :size="14" /></template>
+              </Button>
+              <span v-if="option.exclusive" class="exclusive-chip">{{
+                t("surveys.exclusive")
+              }}</span>
+              <Checkbox
+                v-if="question.type === 'multiple' || question.type === 'image_multiple'"
+                binary
+                :model-value="!!option.exclusive"
+                :aria-label="t('surveys.exclusive')"
+                v-tooltip.top="t('surveys.exclusive')"
+                @update:model-value="toggleExclusive(option.id)"
+              />
+              <Button
+                severity="secondary"
+                variant="text"
+                :aria-label="t('surveys.removeOption')"
+                :disabled="question.options.length <= 2"
+                @click.stop="removeOptionAt(index)"
+              >
+                <template #icon><Trash2 :size="14" /></template>
+              </Button>
+            </div>
           </div>
           <!-- 待落笔的空选项行：只在 UI 上占位，输入或丢弃前不进 definition。 -->
           <div v-if="pendingAfter === index" class="opt-row">
-            <RadioButton
-              v-if="question.type === 'single' || question.type === 'image_single'"
-              :name="`edit-${question.id}`"
-              :value="`pending-${index}`"
-              :model-value="null"
-              disabled
-              :tabindex="-1"
-            />
-            <Checkbox v-else binary :model-value="false" disabled :tabindex="-1" />
+            <div class="opt-row__lead">
+              <RadioButton
+                v-if="question.type === 'single' || question.type === 'image_single'"
+                :name="`edit-${question.id}`"
+                :value="`pending-${index}`"
+                :model-value="null"
+                disabled
+                :tabindex="-1"
+              />
+              <Checkbox v-else binary :model-value="false" disabled :tabindex="-1" />
+            </div>
             <InputText
               fluid
               :ref="
@@ -931,203 +827,35 @@ function optionRef(el: unknown, index: number) {
       </div>
     </div>
     <footer v-if="selected && !disabled" class="q-card__more">
+      <label v-if="question.type !== 'statement'" class="required-toggle" @click.stop>
+        <Checkbox
+          binary
+          :model-value="question.required"
+          :aria-label="t('surveys.required')"
+          @update:model-value="setRequired"
+        />
+        <span>{{ t("surveys.required") }}</span>
+      </label>
       <Button
+        v-if="hasAdvancedSettings"
         severity="secondary"
         variant="text"
         :label="t('surveys.moreSettings')"
         :aria-label="t('surveys.moreSettings')"
-        @click.stop="advancedOpen = !advancedOpen"
+        @click.stop="advancedOpen = true"
       >
-        <template #icon><ChevronDown :size="14" :class="{ 'is-flipped': advancedOpen }" /></template>
+        <template #icon><Settings2 :size="16" /></template>
       </Button>
-      <div v-if="advancedOpen" class="advanced" @click.stop>
-        <label class="advanced-field">
-          {{ t("surveys.showCondition") }}
-          <Select
-            :model-value="question.showIf?.questionId ?? null"
-            :options="conditionSources"
-            option-label="title"
-            option-value="id"
-            :placeholder="t('surveys.alwaysShow')"
-            show-clear
-            fluid
-            :aria-label="t('surveys.showCondition')"
-            @update:model-value="setShowIf"
-          />
-        </label>
-        <label v-if="question.showIf" class="advanced-field">
-          {{ t("surveys.conditionValue") }}
-          <Select
-            v-if="conditionOptions.length"
-            :model-value="String(question.showIf.value)"
-            :options="conditionOptions"
-            option-label="label"
-            option-value="id"
-            fluid
-            :aria-label="t('surveys.conditionValue')"
-            @update:model-value="setConditionValue($event as string)"
-          />
-          <InputNumber
-            v-else
-            :model-value="Number(question.showIf.value)"
-            fluid
-            :aria-label="t('surveys.conditionValue')"
-            @update:model-value="setConditionValue($event)"
-          />
-        </label>
-        <template v-if="question.type === 'text'">
-          <label class="advanced-inline">
-            <Checkbox
-              binary
-              :model-value="!!question.multiline"
-              @update:model-value="setMultiline"
-            />{{ t("surveys.multiline") }}</label
-          >
-          <label class="advanced-field">
-            {{ t("surveys.maxLength") }}
-            <InputNumber
-              :model-value="question.maxLength ?? null"
-              :min="1"
-              :max="2000"
-              :use-grouping="false"
-              fluid
-              :aria-label="t('surveys.maxLength')"
-              @update:model-value="setMaxLength"
-            />
-          </label>
-        </template>
-        <template v-else-if="question.type === 'number'">
-          <label class="advanced-field">
-            {{ t("surveys.minimum") }}
-            <InputNumber
-              :model-value="question.min ?? null"
-              :use-grouping="false"
-              fluid
-              :aria-label="t('surveys.minimum')"
-              @update:model-value="setNumberBound('min', $event)"
-            />
-          </label>
-          <label class="advanced-field">
-            {{ t("surveys.maximum") }}
-            <InputNumber
-              :model-value="question.max ?? null"
-              :use-grouping="false"
-              fluid
-              :aria-label="t('surveys.maximum')"
-              @update:model-value="setNumberBound('max', $event)"
-            />
-          </label>
-        </template>
-        <template v-else-if="question.type === 'scale'">
-          <label class="advanced-field">
-            {{ t("surveys.minimum") }}
-            <InputNumber
-              :model-value="question.min"
-              :use-grouping="false"
-              fluid
-              :aria-label="t('surveys.minimum')"
-              @update:model-value="setScaleBound('min', $event)"
-            />
-          </label>
-          <label class="advanced-field">
-            {{ t("surveys.maximum") }}
-            <InputNumber
-              :model-value="question.max"
-              :use-grouping="false"
-              fluid
-              :aria-label="t('surveys.maximum')"
-              @update:model-value="setScaleBound('max', $event)"
-            />
-          </label>
-          <label class="advanced-field">
-            {{ t("surveys.scaleMinLabel") }}
-            <InputText
-              :model-value="question.minLabel ?? ''"
-              maxlength="200"
-              fluid
-              :placeholder="t('surveys.scaleMinLabelPlaceholder')"
-              :aria-label="t('surveys.scaleMinLabel')"
-              @update:model-value="setScaleLabel('minLabel', $event)"
-            />
-          </label>
-          <label class="advanced-field">
-            {{ t("surveys.scaleMaxLabel") }}
-            <InputText
-              :model-value="question.maxLabel ?? ''"
-              maxlength="200"
-              fluid
-              :placeholder="t('surveys.scaleMaxLabelPlaceholder')"
-              :aria-label="t('surveys.scaleMaxLabel')"
-              @update:model-value="setScaleLabel('maxLabel', $event)"
-            />
-          </label>
-        </template>
-        <template v-else-if="question.type === 'rating'">
-          <label class="advanced-field">
-            {{ t("surveys.ratingMax") }}
-            <InputNumber
-              :model-value="question.max"
-              :min="3"
-              :max="10"
-              :use-grouping="false"
-              fluid
-              :aria-label="t('surveys.ratingMax')"
-              @update:model-value="setRatingMax"
-            />
-          </label>
-        </template>
-        <template v-else-if="question.type === 'nps'">
-          <label class="advanced-field">
-            {{ t("surveys.npsMinLabel") }}
-            <InputText
-              :model-value="question.minLabel ?? ''"
-              maxlength="200"
-              fluid
-              :placeholder="t('surveys.npsMinLabelPlaceholder')"
-              :aria-label="t('surveys.npsMinLabel')"
-              @update:model-value="setNpsLabel('minLabel', $event)"
-            />
-          </label>
-          <label class="advanced-field">
-            {{ t("surveys.npsMaxLabel") }}
-            <InputText
-              :model-value="question.maxLabel ?? ''"
-              maxlength="200"
-              fluid
-              :placeholder="t('surveys.npsMaxLabelPlaceholder')"
-              :aria-label="t('surveys.npsMaxLabel')"
-              @update:model-value="setNpsLabel('maxLabel', $event)"
-            />
-          </label>
-        </template>
-        <template v-else-if="question.type === 'date'">
-          <label class="advanced-field">
-            {{ t("surveys.dateMin") }}
-            <DatePicker
-              :model-value="dateBoundary(question.min)"
-              :max-date="dateBoundary(question.max)"
-              date-format="yy-mm-dd"
-              show-icon
-              fluid
-              :aria-label="t('surveys.dateMin')"
-              @update:model-value="setDateBound('min', $event)"
-            />
-          </label>
-          <label class="advanced-field">
-            {{ t("surveys.dateMax") }}
-            <DatePicker
-              :model-value="dateBoundary(question.max)"
-              :min-date="dateBoundary(question.min)"
-              date-format="yy-mm-dd"
-              show-icon
-              fluid
-              :aria-label="t('surveys.dateMax')"
-              @update:model-value="setDateBound('max', $event)"
-            />
-          </label>
-        </template>
-      </div>
     </footer>
+    <SurveyQuestionSettings
+      v-if="selected && !disabled && hasAdvancedSettings"
+      v-model:visible="advancedOpen"
+      :question="question"
+      :number="number"
+      :condition-sources="conditionSources"
+      :has-answer-rules="hasAnswerRules"
+      @change="(next, label) => emit('change', next, label)"
+    />
     <!-- 选项图上传的共享 file input：accept 只提示文件选择器，权威白名单在服务端。 -->
     <input
       ref="fileInput"
@@ -1145,69 +873,83 @@ function optionRef(el: unknown, index: number) {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 10px 12px 12px;
+  gap: 12px;
+  padding: 20px;
   border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md, 10px);
-  background: var(--color-surface-raised, var(--color-surface-base));
+  border-radius: var(--radius-lg);
+  background: var(--elevation-2-surface);
+  box-shadow: var(--elevation-2-shadow);
   cursor: pointer;
+  transition: border-color var(--motion-duration-base) var(--motion-ease-standard),
+    box-shadow var(--motion-duration-base) var(--motion-ease-standard);
 }
 .q-card--selected {
   cursor: default;
   border-color: var(--color-brand-400);
-  box-shadow: 0 0 0 1px var(--color-brand-400);
+  box-shadow: var(--elevation-2-shadow), var(--effect-focus-ring);
 }
-/* 校验定位脉冲（issue 列表点击 → 目标卡）：描边走 token 警示色，约 2s 衰减。 */
+.q-card--review {
+  border-color: var(--color-warning-500);
+  background: linear-gradient(105deg, var(--color-warning-surface), var(--elevation-2-surface) 52%);
+}
+.q-card--review::before {
+  content: "";
+  position: absolute;
+  top: 16px;
+  bottom: 16px;
+  left: -1px;
+  width: 4px;
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  background: var(--color-warning-500);
+}
+.q-card--review.q-card--selected {
+  border-color: var(--color-brand-400);
+}
 .q-card--flash {
   animation: q-card-flash 2s ease-out;
 }
 @keyframes q-card-flash {
-  0%,
-  40% {
+  0%, 40% {
     box-shadow: 0 0 0 2px var(--color-warning-500);
     border-color: var(--color-warning-500);
   }
   100% {
-    box-shadow: none;
+    box-shadow: var(--elevation-2-shadow);
     border-color: var(--color-border-subtle);
   }
 }
 .q-card--dragging {
   opacity: 0.45;
 }
-.q-card--drop-before::before,
+.q-card--drop-before::after,
 .q-card--drop-after::after {
   content: "";
   position: absolute;
   left: 0;
   right: 0;
   height: 3px;
-  border-radius: var(--radius-pill, 999px);
+  border-radius: var(--radius-pill);
   background: var(--color-brand-500);
 }
-.q-card--drop-before::before {
-  top: -6px;
-}
-.q-card--drop-after::after {
-  bottom: -6px;
-}
+.q-card--drop-before::after { top: -8px; }
+.q-card--drop-after::after { bottom: -8px; }
 .q-card__head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  min-height: 28px;
+  gap: 8px;
+  min-height: 32px;
 }
 .q-card__handle {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  margin-left: -6px;
+  width: 32px;
+  height: 32px;
+  margin-left: -8px;
   border: 0;
-  border-radius: var(--radius-sm, 6px);
+  border-radius: var(--radius-control);
   background: transparent;
-  color: var(--color-text-quaternary, var(--color-text-tertiary));
+  color: var(--color-text-quaternary);
   cursor: grab;
 }
 .q-card__handle:hover {
@@ -1215,76 +957,92 @@ function optionRef(el: unknown, index: number) {
   color: var(--color-text-secondary);
 }
 .q-card__number {
+  display: inline-grid;
+  place-items: center;
   flex: none;
-  min-width: 18px;
-  color: var(--color-text-tertiary);
-  font-size: 12px;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius);
+  background: var(--color-bg-soft);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .q-card__issue {
   display: inline-flex;
   color: var(--color-warning-600);
 }
+.q-card__review {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  margin-left: auto;
+}
+.q-card__review + .q-card__toolbar {
+  margin-left: 0;
+}
 .q-card__toolbar {
   display: flex;
   align-items: center;
-  gap: 0;
+  gap: 4px;
   margin-left: auto;
+}
+.q-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 .required-toggle {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 0 6px;
+  gap: 8px;
   color: var(--color-text-secondary);
-  font-size: 12.5px;
+  font-size: var(--font-size-body-sm);
   cursor: pointer;
   white-space: nowrap;
 }
 .q-card__title {
   min-width: 0;
-  font-weight: 500;
+  font-size: var(--font-size-body);
+  font-weight: 600;
+  line-height: var(--line-height-body);
   overflow-wrap: anywhere;
-  padding: 2px 0;
 }
 .q-card__title-input,
 :deep(.q-card__title-input) {
   border-color: transparent;
   background: transparent;
   box-shadow: none;
-  padding: 2px 4px;
   font-weight: 500;
   resize: none;
   overflow: hidden;
 }
-:deep(.q-card__title-input:hover) {
-  border-color: var(--color-border-subtle);
-}
-:deep(.q-card__title-input:focus) {
-  border-color: var(--color-brand-400);
-}
+:deep(.q-card__title-input:hover) { border-color: var(--color-border-subtle); }
+:deep(.q-card__title-input:focus) { border-color: var(--color-brand-400); }
 .q-card__preview {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 12px;
   pointer-events: none;
 }
 .preview-option {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
+  min-height: 24px;
   overflow-wrap: anywhere;
 }
 .preview-ghost {
-  height: 34px;
-  border-radius: var(--radius-sm, 6px);
+  height: 36px;
+  border-radius: var(--radius);
   background: var(--color-bg-soft);
   max-width: 22rem;
 }
 .preview-scale {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 .preview-scale__item {
   display: flex;
@@ -1294,29 +1052,31 @@ function optionRef(el: unknown, index: number) {
 .preview-scale__labels {
   display: flex;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 16px;
 }
 .opt-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+}
+.opt-row__lead,
+.opt-row__actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-/* 互斥标记（画布与预览同款弱色 chip，文案与作答页共用 surveys.exclusive）。 */
 .exclusive-chip {
   flex: none;
-  padding: 1px 7px;
-  border-radius: var(--radius-pill, 999px);
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
   background: var(--color-bg-soft);
   color: var(--color-text-tertiary);
-  font-size: 11px;
+  font-size: var(--font-size-caption);
   line-height: 1.6;
   white-space: nowrap;
 }
-.opt-input {
-  flex: 1;
-  min-width: 0;
-}
-/* 图片选项缩略图（36px 方块）：空态显图标占位，上传中转圈。 */
+.opt-input { min-width: 0; }
 .opt-thumb {
   position: relative;
   flex: none;
@@ -1327,7 +1087,7 @@ function optionRef(el: unknown, index: number) {
   height: 36px;
   padding: 0;
   border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm, 6px);
+  border-radius: var(--radius);
   background: var(--color-bg-soft);
   color: var(--color-text-quaternary);
   cursor: pointer;
@@ -1349,11 +1109,7 @@ function optionRef(el: unknown, index: number) {
   opacity: 0.7;
   animation: opt-thumb-busy 1s linear infinite;
 }
-@keyframes opt-thumb-busy {
-  to {
-    opacity: 0.3;
-  }
-}
+@keyframes opt-thumb-busy { to { opacity: 0.3; } }
 .opt-file-input {
   position: absolute;
   width: 1px;
@@ -1361,93 +1117,48 @@ function optionRef(el: unknown, index: number) {
   opacity: 0;
   pointer-events: none;
 }
-.opt-input--default:not(:focus) {
-  color: var(--color-muted);
-}
-:deep(.opt-input:hover) {
-  border-color: var(--color-border-subtle);
-}
-:deep(.opt-input:focus) {
-  border-color: var(--color-brand-400);
-}
-.opt-hint {
-  font-size: 11.5px;
-}
+.opt-input--default:not(:focus) { color: var(--color-text-secondary); }
+:deep(.opt-input:hover) { border-color: var(--color-border-subtle); }
+:deep(.opt-input:focus) { border-color: var(--color-brand-400); }
+.opt-hint { font-size: var(--font-size-caption); }
 .subeditor {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 8px;
 }
 .subeditor__title {
-  font-size: 12px;
+  font-size: var(--font-size-caption);
   font-weight: 600;
-  color: var(--color-text-tertiary);
+  color: var(--color-text-secondary);
 }
 .q-card__statement {
-  font-size: 13.5px;
-  line-height: 1.7;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-relaxed);
   overflow-wrap: anywhere;
 }
-.q-card__statement :deep(p) {
-  margin: 0 0 0.5em;
-}
-.q-card__statement :deep(p:last-child) {
-  margin-bottom: 0;
-}
-.q-card__statement--empty {
-  padding: 2px 0;
-}
-.preview-shared {
-  font-size: 13px;
-}
+.q-card__statement :deep(p) { margin: 0 0 8px; }
+.q-card__statement :deep(p:last-child) { margin-bottom: 0; }
 .q-card__more {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border-top: 1px solid var(--color-border-subtle);
-  padding-top: 6px;
-  margin-top: 2px;
-}
-.advanced {
-  display: grid;
-  gap: 10px;
-}
-.advanced-field {
-  display: grid;
-  gap: 4px;
-  min-width: 0;
-  font-size: 12.5px;
-  color: var(--color-text-secondary);
-}
-.advanced-inline {
-  display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12.5px;
-  color: var(--color-text-secondary);
+  justify-content: space-between;
+  gap: 16px;
+  border-top: 1px solid var(--color-border-subtle);
+  padding-top: 12px;
+  margin-top: 4px;
 }
-:deep(.is-flipped) {
-  transform: rotate(180deg);
-}
-.menu-anchor {
-  position: relative;
-}
+.menu-anchor { position: relative; }
 @media (max-width: 767.98px) {
-  .q-card {
-    padding: 10px;
-  }
+  .q-card { padding: 16px; }
+  .q-card__head { flex-wrap: wrap; }
   .q-card__toolbar {
     width: 100%;
     justify-content: flex-end;
     flex-wrap: wrap;
     order: 3;
   }
-  /* 手机档题型按钮只留图标（文字进 aria-label）。 */
-  .type-toggle :deep(.p-button-label) {
-    display: none;
-  }
-  .required-toggle span {
-    display: none;
-  }
+  .q-card__review + .q-card__toolbar { width: auto; }
+  .opt-row { grid-template-columns: auto minmax(0, 1fr); }
+  .opt-row__actions { grid-column: 2; justify-content: flex-end; }
 }
 </style>

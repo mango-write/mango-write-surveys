@@ -147,6 +147,36 @@ suite(`surveys standalone adapters (DB)`, () => {
     ).toBe(1);
   });
 
+  it("survey_reviews upsert / update / read / delete roundtrip", async () => {
+    const { id } = await ports.storage.create({
+      userId: "admin",
+      teamId: null,
+      title: "诊断持久化",
+      definition: definition("诊断持久化"),
+    });
+    await ports.storage.withSurveyLock(id, async (tx) => {
+      await tx.upsertReview({
+        userId: "admin",
+        teamId: null,
+        surveyId: id,
+        operationId: "review-db-1",
+        baseDraftVersion: 1,
+        summary: "一条建议",
+        findings: [{ id: "f1" }],
+      });
+      await tx.updateReview(id, { findings: [{ id: "f2" }], baseDraftVersion: 2 });
+    });
+
+    const stored = await ports.storage.findReview(id);
+    expect(stored).toMatchObject({ operationId: "review-db-1", baseDraftVersion: 2 });
+    expect(stored?.findingsJson).toEqual([{ id: "f2" }]);
+
+    await ports.storage.withSurveyLock(id, async (tx) => {
+      await tx.deleteReview(id);
+    });
+    expect(await ports.storage.findReview(id)).toBeNull();
+  });
+
   it("listFinishedResponses returns SURVEY_MAX_RESPONSES+1 bounded rows", async () => {
     const { id: surveyId } = await ports.storage.create({
       userId: "admin",

@@ -58,6 +58,18 @@ export function createSurveysApi(host: SurveysWebHost) {
           ...(responseLimit !== undefined ? { responseLimit } : {}),
         },
       }),
+    applyReviewFinding: (id: string, findingId: string, expectedVersion: number) =>
+      call<SurveyDetail>(
+        host,
+        `/api/surveys/${id}/review/findings/${encodeURIComponent(findingId)}/apply`,
+        { method: "POST", body: { expectedVersion } },
+      ),
+    dismissReviewFinding: (id: string, findingId: string) =>
+      call<SurveyDetail>(
+        host,
+        `/api/surveys/${id}/review/findings/${encodeURIComponent(findingId)}/dismiss`,
+        { method: "POST" },
+      ),
     publish: (id: string) =>
       call<SurveyDetail>(host, `/api/surveys/${id}/publish`, { method: "POST" }),
     status: (id: string, status: "published" | "paused" | "closed") =>

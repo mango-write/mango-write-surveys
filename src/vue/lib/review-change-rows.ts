@@ -1,5 +1,5 @@
 // 诊断候选改动的 before/after 行投影（issue #224 M2）：原研究面板 changeRows
-// 的提炼，消费方是画布诊断条的候选项核对区。只列真实差异：同值异序（如
+// 的提炼，消费方是题旁建议气泡的候选项核对区。只列真实差异：同值异序（如
 // showIf 字段顺序）不算修改；增删题显示标题行；researchDesign 走字段标签
 // 映射。t 由调用方注入，保持纯函数可测。
 import type { SurveyDefinition, SurveyReviewPlanGroup } from "../../core/index.js";

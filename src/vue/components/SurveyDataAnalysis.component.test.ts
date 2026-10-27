@@ -167,7 +167,7 @@ it("searches the visible data without changing the source", async () => {
     .setValue("未回答");
   await flushPromises();
   expect(wrapper.findAll("tbody tr")).toHaveLength(1);
-  expect(wrapper.text()).toContain("搜索只改变表格显示");
+  expect(wrapper.text()).not.toContain("搜索只改变表格显示");
   // 数据视图切换与搜索都不发新请求：responses/codebook 各只在装载时取一次。
   expect(
     request.mock.calls.filter(([path]) => String(path).includes("/responses")),
@@ -181,7 +181,7 @@ describe("per-question summary tab (issue #217)", () => {
     await flushPromises();
     // 默认摘要：0–1 有序变量按量表分布卡呈现（真实题型 scale，不 NPS 化）。
     expect(wrapper.findComponent(SurveyResponseSummary).exists()).toBe(true);
-    expect(wrapper.text()).toContain("口径：发布版本 1");
+    expect(wrapper.findComponent({ name: "Select" }).props("modelValue")).toBe(revision);
     expect(wrapper.text()).toContain("Score");
     expect(wrapper.findAll("tbody tr")).toHaveLength(0);
     wrapper.unmount();
@@ -219,10 +219,7 @@ describe("lifecycle badge sync (issue #217)", () => {
       [{ revisionId: revision, count: 2 }],
     ]);
     // 刷新按钮同路径：再上报一次。
-    await wrapper
-      .findAll("button")
-      .find((b) => b.text().includes("刷新数据"))!
-      .trigger("click");
+    await wrapper.find('button[aria-label="刷新数据"]').trigger("click");
     await flushPromises();
     expect(wrapper.emitted("responses-loaded")!.at(-1)).toEqual([
       { revisionId: revision, count: 2 },
@@ -244,15 +241,14 @@ describe("data toolbar placement (issue #217 M3)", () => {
     // 导出变量字典）在组件外，不随宽表滚出视区。
     const table = wrapper.find("table");
     expect(table.exists()).toBe(true);
-    for (const label of ["刷新数据", "导出原始数据", "导出变量字典"]) {
-      const button = wrapper
-        .findAll("button")
-        .find((b) => b.text().includes(label))!;
+    const buttons = [
+      wrapper.find('button[aria-label="刷新数据"]'),
+      wrapper.findAll("button").find((b) => b.text() === "导出")!,
+    ];
+    for (const button of buttons) {
       expect(button.exists()).toBe(true);
-      expect(table.element.closest("section.data-analysis")).toBeTruthy();
       expect(table.element.contains(button.element)).toBe(false);
-      const section = button.element.closest("section.data-analysis");
-      expect(section).toBeTruthy();
+      expect(button.element.closest("section.data-analysis")).toBeTruthy();
     }
     wrapper.unmount();
   });
@@ -283,7 +279,7 @@ describe("summary follows the published definition's question types (issue #217 
     const card = wrapper.findComponent(SurveyResponseSummary).find(".summary-card");
     expect(card.find(".summary-kind").text()).toBe("量表");
     expect(card.find(".nps-segments").exists()).toBe(false);
-    expect(card.text()).toContain("均值 9");
+    expect(card.find(".summary-metric").text()).toBe("9均值");
     wrapper.unmount();
   });
 
@@ -324,7 +320,7 @@ it("excludes selected rows with a reason, then restores them in place", async ()
     wrapper
       .findAll("button")
       .find((b) => b.text().includes("排除所选"))!;
-  expect(excludeButton().attributes("disabled")).toBeDefined();
+  expect(wrapper.findAll("button").find((b) => b.text().includes("排除所选"))).toBeUndefined();
   await wrapper
     .findAll("tbody tr")[0]!
     .find('input[type="checkbox"]')
@@ -405,10 +401,8 @@ it("export goes through the host transport download with the revision id", async
     transport: { request, download: mocks.download },
   });
   await flushPromises();
-  await wrapper
-    .findAll("button")
-    .find((b) => b.text().includes("导出原始数据"))!
-    .trigger("click");
+  const items = wrapper.findComponent({ name: "Menu" }).props("model") as Array<{ command: () => void }>;
+  items[0]!.command();
   await flushPromises();
   expect(mocks.download).toHaveBeenCalledWith(
     `/api/surveys/${id}/export?revisionId=${revision}`,
@@ -441,7 +435,7 @@ it("keeps published answers and question types when the draft deletes or retarge
   });
   await flushPromises();
   expect(wrapper.find(".summary-kind").text()).toBe("量表");
-  expect(wrapper.text()).toContain("均值 9");
+  expect(wrapper.find(".summary-metric").text()).toBe("9均值");
   expect(wrapper.text()).toContain("published answer");
   await wrapper.findAll("button").find((b) => b.text() === "答卷列表")!.trigger("click");
   await flushPromises();
@@ -480,7 +474,8 @@ it("projects an older selected revision independently of the current publication
   const select = wrapper.findComponent({ name: "Select" });
   select.vm.$emit("update:modelValue", revision);
   await flushPromises();
-  expect(wrapper.text()).toContain("口径：发布版本 1");
+  expect(select.props("modelValue")).toBe(revision);
+  expect(wrapper.emitted("revision-change")!.at(-1)).toEqual([revision]);
   expect(wrapper.text()).toContain("old retained answer");
   expect(request.mock.calls.filter(([path]) => path.includes(`revisionId=${revision}`))).toHaveLength(2);
   wrapper.unmount();

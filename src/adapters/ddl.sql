@@ -1,4 +1,4 @@
--- 独立站 PostgreSQL 初始化 DDL（issue #223 §8）：仅问卷 4 张表，物理列与主仓
+-- 独立站 PostgreSQL 初始化 DDL（issue #223 §8）：仅问卷 5 张表，物理列与主仓
 -- paper schema 对齐（packages/db/prisma/schema.prisma），便于两站数据互迁。
 -- 幂等：全部 CREATE ... IF NOT EXISTS，可重复执行；要求 PG 13+（内置 gen_random_uuid）。
 -- 无外键（与主仓 relationMode="prisma" 风格一致），引用完整性由应用层维护。
@@ -26,6 +26,24 @@ CREATE INDEX IF NOT EXISTS surveys_user_id_team_id_deleted_at_updated_at_idx
   ON surveys (user_id, team_id, deleted_at, updated_at);
 CREATE INDEX IF NOT EXISTS surveys_team_id_deleted_at_updated_at_idx
   ON surveys (team_id, deleted_at, updated_at);
+
+CREATE TABLE IF NOT EXISTS survey_reviews (
+  id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id             text NOT NULL,
+  team_id             uuid,
+  survey_id           uuid NOT NULL,
+  operation_id        text NOT NULL,
+  base_draft_version  integer NOT NULL,
+  summary             text NOT NULL,
+  findings_json       jsonb NOT NULL,
+  created_at          timestamptz(6) NOT NULL DEFAULT now(),
+  updated_at          timestamptz(6) NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS survey_reviews_survey_id_key
+  ON survey_reviews (survey_id);
+CREATE INDEX IF NOT EXISTS survey_reviews_user_id_team_id_idx
+  ON survey_reviews (user_id, team_id);
 
 CREATE TABLE IF NOT EXISTS survey_revisions (
   id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),

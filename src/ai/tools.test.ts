@@ -70,10 +70,12 @@ function stubService() {
     requireSurveyAccess: vi.fn(),
     createSurvey: vi.fn(),
     updateSurvey: vi.fn(),
+    recordReview: vi.fn(),
   } as unknown as SurveysService & {
     requireSurveyAccess: ReturnType<typeof vi.fn>;
     createSurvey: ReturnType<typeof vi.fn>;
     updateSurvey: ReturnType<typeof vi.fn>;
+    recordReview: ReturnType<typeof vi.fn>;
   };
 }
 
@@ -93,7 +95,7 @@ beforeEach(() => {
 });
 
 describe("问卷 AI 工具 — 规格面", () => {
-  it("写工具都是 host-applied（服务端不落库 / 新资源直写 / 诊断只登记）", () => {
+  it("写工具都是 host-applied（编辑不落库 / 新资源直写 / 诊断保存建议）", () => {
     const registered: SurveyAiToolSpec[] = [];
     registerSurveyAiTools(tools, (tool) => registered.push(tool));
     expect(registered.map((tool) => tool.name)).toEqual([
@@ -475,7 +477,7 @@ describe("survey_review run", () => {
     expect(service.updateSurvey).not.toHaveBeenCalled();
   });
 
-  it("登记诊断：回执带 operationId/基线/findings，不写库、不改卷", async () => {
+  it("登记诊断：回执带 operationId/基线/findings，保存报告但不改卷", async () => {
     const result = await tools.surveyReview.run(
       { baseDraftVersion: 3, summary: "覆盖基本齐全，一处措辞需拆分", findings: [finding] },
       SURVEY_CTX,
@@ -486,11 +488,15 @@ describe("survey_review run", () => {
     expect(result.baseDraftVersion).toBe(3);
     expect((result.findings as unknown[])[0]).toMatchObject({ id: "f1", severity: "major" });
     expect(String(result.note)).toContain("内部代理证据");
-    // 回执口径 = 画布的整批候选（buildSurveyReviewPlan 一次确认整批应用），
-    // 不能引导用户逐条确认——那与宿主实际交付方式相反。
-    expect(String(result.note)).toContain("整批");
-    expect(String(result.note)).toContain("一次确认");
+    expect(String(result.note)).toContain("每条可自动修订的建议都由用户独立确认");
+    expect(String(result.note)).toContain("引导用户查看画布");
     expect(String(result.note)).not.toContain("用户确认后才在画布生效");
+    expect(service.recordReview).toHaveBeenCalledWith("user-1", SURVEY_ID, {
+      operationId: OP_ID,
+      baseDraftVersion: 3,
+      summary: "覆盖基本齐全，一处措辞需拆分",
+      findings: [finding],
+    });
     expect(service.updateSurvey).not.toHaveBeenCalled();
   });
 

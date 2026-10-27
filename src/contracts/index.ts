@@ -141,6 +141,7 @@ export const SurveyDetailSchema = SurveySummarySchema.extend({
   startedCount: z.number().int().min(0),
   definition: SurveyDefinitionSchema,
   revisions: z.array(SurveyRevisionSummarySchema),
+  review: z.lazy(() => SurveyReviewDeliverySchema).nullable().optional(),
   canWrite: z.boolean(),
   canDelete: z.boolean(),
 });
@@ -164,6 +165,11 @@ export const SetSurveyStatusInputSchema = z.strictObject({
   status: z.enum(["published", "paused", "closed"]),
 });
 export type SetSurveyStatusInput = z.infer<typeof SetSurveyStatusInputSchema>;
+
+export const ApplySurveyReviewFindingInputSchema = z.strictObject({
+  expectedVersion: z.number().int().min(1),
+});
+export type ApplySurveyReviewFindingInput = z.infer<typeof ApplySurveyReviewFindingInputSchema>;
 
 export const PublicSurveySchema = z.object({
   id: IdSchema,
@@ -253,9 +259,20 @@ export type SurveyReviewFinding = z.infer<typeof SurveyReviewFindingSchema>;
  * 问卷交付载荷（issue #217，与主仓 @mango-write/contracts 的 ToolSurveyDelivery
  * 同构；本包持有同一定义的投影，宿主桥适配时零转换）。survey_edit 由工作区页在
  * 本地草稿上重放 ops（进撤销栈 + 自动保存 + toast）；survey_create 由列表页/
- * 工作区导航到新问卷；survey_review 把诊断卡片挂到画布侧栏（不落库、不改卷）。
- * 只经活流发一次（刷新回放不重放，add 类操作重复应用会重复加题）。
+ * 工作区导航到新问卷；survey_review 把待处理诊断锚到画布并持久化，不直接改卷。
+ * 交付帧只经活流发一次；刷新后的建议恢复改走 SurveyDetail.review，不回放编辑操作。
  */
+export const SurveyReviewDeliverySchema = z.object({
+  type: z.literal("survey_review"),
+  surveyId: IdSchema,
+  operationId: z.string().min(6).max(64),
+  /** 诊断所依据的持久草稿版本；页面与本地副本不一致时只展示、不允许应用。 */
+  baseDraftVersion: z.number().int().min(1),
+  summary: z.string().max(300),
+  findings: z.array(SurveyReviewFindingSchema).max(20),
+});
+export type SurveyReviewDelivery = z.infer<typeof SurveyReviewDeliverySchema>;
+
 export const ToolSurveyDeliverySchema = z.discriminatedUnion("type", [
   z.object({
     type: z.literal("survey_edit"),
@@ -285,15 +302,7 @@ export const ToolSurveyDeliverySchema = z.discriminatedUnion("type", [
     title: z.string().max(200),
     issues: z.array(SurveyIssueSchema).max(200).optional(),
   }),
-  z.object({
-    type: z.literal("survey_review"),
-    surveyId: IdSchema,
-    operationId: z.string().min(6).max(64),
-    /** 诊断所依据的持久草稿版本；页面与本地副本不一致时只展示、不提供一键应用。 */
-    baseDraftVersion: z.number().int().min(1),
-    summary: z.string().max(300),
-    findings: z.array(SurveyReviewFindingSchema).max(20),
-  }),
+  SurveyReviewDeliverySchema,
 ]);
 export type ToolSurveyDelivery = z.infer<typeof ToolSurveyDeliverySchema>;
 

@@ -10,6 +10,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 
 import type { SurveysActor } from "../ports.js";
 import {
+  ApplySurveyReviewFindingInputSchema,
   CreateSurveyInputSchema,
   SetSurveyStatusInputSchema,
   StartSurveyInputSchema,
@@ -178,6 +179,35 @@ export function createSurveysManageRoutes(deps: SurveysRouterDeps): Hono {
         await service.updateSurvey(actorOf(c).userId, pathParam(c, "id"), parsed.data),
       );
     }),
+  );
+
+  routes.post(
+    "/:id/review/findings/:findingId/apply",
+    handle(async (c) => {
+      const parsed = ApplySurveyReviewFindingInputSchema.safeParse(await jsonBody(c));
+      if (!parsed.success) throw new SurveyError("invalid_input", 400, "输入不合法");
+      return c.json(
+        await service.applyReviewFinding(
+          actorOf(c).userId,
+          pathParam(c, "id"),
+          pathParam(c, "findingId"),
+          parsed.data.expectedVersion,
+        ),
+      );
+    }),
+  );
+
+  routes.post(
+    "/:id/review/findings/:findingId/dismiss",
+    handle(async (c) =>
+      c.json(
+        await service.dismissReviewFinding(
+          actorOf(c).userId,
+          pathParam(c, "id"),
+          pathParam(c, "findingId"),
+        ),
+      ),
+    ),
   );
 
   routes.post(

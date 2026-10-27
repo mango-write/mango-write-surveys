@@ -74,6 +74,7 @@ export type SurveysCopilotSurfaceAction =
       primary?: boolean;
       /** 点击后作为消息内容发送的 prompt（不写入 composer）。 */
       prompt: string;
+      skillId?: string;
       toolNames?: string[];
       run?: never;
     }
@@ -113,7 +114,7 @@ export interface SurveysCopilotHost {
   /** 预填对话输入框并聚焦（列表页「AI 生成」入口）。 */
   fillComposer(text: string): void;
   focusComposer(): void;
-  sendPrompt?(text: string, toolNames?: string[]): Promise<void>;
+  sendPrompt?(text: string, toolNames?: string[], options?: { skillId?: string }): Promise<void>;
   /** 页面按 scope 注册面板呈现（空态文案/场景动作/composer 占位）；undefined =
    *  清除。换 scope/换页由页面重新注册；页面卸载后的清理归 releasePageState。
    *  缺省 = 该宿主不消费 surface 呈现（页面照常工作）。 */

@@ -41,7 +41,7 @@ function setup() {
   );
   const ports = {
     auth: { resolveSpaceAccess, resolveResourceAccess },
-    storage: { listByOwner, create, findById, countStarted: async () => 0, listRevisions: async () => [] },
+    storage: { listByOwner, create, findById, countStarted: async () => 0, listRevisions: async () => [], findReview: async () => null },
   } as unknown as SurveysPorts;
   return { service: createSurveysService(ports), resolveSpaceAccess, resolveResourceAccess, listByOwner, create, findById };
 }

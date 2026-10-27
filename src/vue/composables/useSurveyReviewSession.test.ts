@@ -1,20 +1,26 @@
-// 诊断会话状态机单测（issue #224 stage1）：收帧不串场、stale 判定（版本不齐 /
-// 保存未落定）、应用被过期拒绝、保存成功才清 report、保存失败保留方案、
-// request 的 flush 前置与无 sendPrompt 回落。history/autosave 用最小替身。
 import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
 import { buildSurveyReviewPlan } from "../../core/index.js";
 import { makeDefinition } from "../../core/test-fixtures.js";
+import type { SurveyDetail, SurveyReviewDelivery } from "../../contracts/index.js";
 import { SurveysApiError } from "../host.js";
-
-import {
-  useSurveyReviewSession,
-  type SurveyReviewDelivery,
-} from "./useSurveyReviewSession.js";
+import { useSurveyReviewSession } from "./useSurveyReviewSession.js";
 import type { SurveyDraftState } from "./useSurveyDraftHistory.js";
 
 const SURVEY_ID = "s-1";
+type ReviewFinding = SurveyReviewDelivery["findings"][number];
+
+const F1: ReviewFinding = {
+  id: "f1", questionId: "q1", title: "筛选不充分",
+  severity: "major", reason: "用过不等于写过。", recommendation: "精确筛选经历。",
+  suggestedOps: [{ op: "update_question", questionId: "q1", patch: { title: "澄清后的单选" } }],
+};
+const F2: ReviewFinding = {
+  id: "f2", questionId: "q2", title: "选项互斥",
+  severity: "minor", reason: "互斥规则不清。", recommendation: "澄清互斥。",
+  suggestedOps: [{ op: "update_question", questionId: "q2", patch: { title: "澄清后的多选" } }],
+};
 
 function report(overrides: Partial<SurveyReviewDelivery> = {}): SurveyReviewDelivery {
   return {
@@ -23,71 +29,82 @@ function report(overrides: Partial<SurveyReviewDelivery> = {}): SurveyReviewDeli
     operationId: "review-op-1",
     baseDraftVersion: 2,
     summary: "澄清时间范围",
-    findings: [{
-      id: "f1", checkId: "wording.presumptive", questionId: "q1", title: "筛选不充分",
-      severity: "major", reason: "用过不等于写过。", recommendation: "精确筛选经历。",
-      suggestedOps: [{ op: "update_question", questionId: "q1", patch: { title: "澄清后的单选" } }],
-    }],
+    findings: [F1],
     ...overrides,
   };
 }
 
-interface HarnessCopilot {
-  prompts: string[];
-  sendPrompt?: (prompt: string, toolNames?: string[]) => Promise<void>;
-  fillComposer(prompt: string): void;
-  focusComposer(): void;
+function detail(
+  version: number,
+  review: SurveyReviewDelivery | null,
+  title?: string,
+): SurveyDetail {
+  const definition = makeDefinition();
+  if (title) definition.questions[0]!.title = title;
+  return {
+    id: SURVEY_ID,
+    userId: "u1",
+    teamId: null,
+    title: definition.title,
+    slug: "slug-1",
+    status: "draft",
+    currentRevisionId: null,
+    draftVersion: version,
+    completedCount: 0,
+    responseLimit: 100,
+    createdAt: new Date(0).toISOString(),
+    updatedAt: new Date(0).toISOString(),
+    startedCount: 0,
+    definition,
+    revisions: [],
+    review,
+    canWrite: true,
+    canDelete: true,
+  };
 }
 
-interface Harness {
-  session: ReturnType<typeof useSurveyReviewSession>;
-  commits: SurveyDraftState[];
-  /** 排队的 flush 结果；"wait" 表示挂起直到 flushGates 放行。 */
-  flushResults: Array<boolean | "wait">;
-  flushGates: Array<() => void>;
-  warns: string[];
-  errors: string[];
-  successes: string[];
-  copilot: HarnessCopilot;
-  setAutosaveStatus(status: "idle" | "saving" | "saved" | "error" | "conflict"): void;
-  setDraftVersion(version: number): void;
-}
-
-/** 让微任务（含 flush 落地）走完：比裸 await Promise.resolve() 更稳。 */
-const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
-
-function makeHarness(startVersion = 2): Harness {
+function makeHarness(startVersion = 2) {
   const draftVersion = ref(startVersion);
   const autosaveStatus = ref<"idle" | "saving" | "saved" | "error" | "conflict">("idle");
   const state = ref<SurveyDraftState>({ definition: makeDefinition(), responseLimit: 100 });
   const commits: SurveyDraftState[] = [];
+  const commitLabels: string[] = [];
   const flushResults: Array<boolean | "wait"> = [];
   const flushGates: Array<() => void> = [];
   let flushIndex = 0;
   const warns: string[] = [];
   const errors: string[] = [];
   const successes: string[] = [];
-  const copilot: HarnessCopilot = {
-    prompts: [],
+  const prompts: string[] = [];
+  const copilot: {
+    sendPrompt?: (prompt: string, toolNames?: string[], options?: { skillId?: string }) => Promise<void>;
+    fillComposer: (prompt: string) => void;
+    focusComposer: () => void;
+  } = {
     sendPrompt: vi.fn(async (prompt: string) => {
-      copilot.prompts.push(prompt);
+      prompts.push(prompt);
     }),
     fillComposer: (prompt: string) => {
-      copilot.prompts.push(prompt);
+      prompts.push(prompt);
     },
     focusComposer: vi.fn(() => {}),
+  };
+  const api = {
+    applyReviewFinding: vi.fn(async (_id: string, findingId: string, expectedVersion: number) => {
+      const findings = findingId === "f1" ? [F2] : [];
+      const title = findingId === "f1" ? "澄清后的单选" : "澄清后的多选";
+      return detail(expectedVersion + 1, findings.length ? report({ findings, baseDraftVersion: expectedVersion + 1 }) : null, title);
+    }),
+    dismissReviewFinding: vi.fn(async (_id: string, findingId: string) => {
+      const findings = findingId === "f1" ? [F2] : [];
+      return detail(draftVersion.value, findings.length ? report({ findings }) : null);
+    }),
   };
   const session = useSurveyReviewSession({
     surveyId: () => SURVEY_ID,
     canWrite: () => true,
     draftVersion: () => draftVersion.value,
-    history: {
-      current: state,
-      commit: (next: SurveyDraftState) => {
-        commits.push(next);
-        state.value = next;
-      },
-    },
+    history: { current: state },
     autosave: {
       status: autosaveStatus,
       flush: async () => {
@@ -98,78 +115,64 @@ function makeHarness(startVersion = 2): Harness {
         }
         return next ?? true;
       },
-      schedule: () => {},
+    },
+    api,
+    onApply: (next, label) => {
+      commits.push({ definition: next.definition, responseLimit: next.responseLimit });
+      commitLabels.push(label);
+      state.value = { definition: next.definition, responseLimit: next.responseLimit };
+      draftVersion.value = next.draftVersion;
+    },
+    onDismiss: (next) => {
+      draftVersion.value = next.draftVersion;
     },
     copilot,
     notify: {
-      warn: (detail: string) => {
-        warns.push(detail);
-      },
-      error: (detail: string) => {
-        errors.push(detail);
-      },
-      success: (detail: string) => {
-        successes.push(detail);
-      },
+      warn: (message: string) => warns.push(message),
+      error: (message: string) => errors.push(message),
+      success: (message: string) => successes.push(message),
       info: () => {},
     },
     t: (key: string) => key,
   });
   return {
     session,
+    api,
     commits,
+    commitLabels,
     flushResults,
     flushGates,
     warns,
     errors,
     successes,
+    prompts,
     copilot,
-    setAutosaveStatus: (status) => (autosaveStatus.value = status),
-    setDraftVersion: (version) => (draftVersion.value = version),
+    setAutosaveStatus: (status: typeof autosaveStatus.value) => (autosaveStatus.value = status),
+    setDraftVersion: (version: number) => (draftVersion.value = version),
   };
 }
 
-describe("useSurveyReviewSession 收帧与丢弃", () => {
-  it("只收同卷的诊断帧，别的问卷不串场；discard 一次清干净", () => {
+const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+describe("useSurveyReviewSession 报告与过期", () => {
+  it("只收同卷报告；plan 与 core 计划器同源", () => {
     const { session } = makeHarness();
     session.receive(report({ surveyId: "other" }));
     expect(session.report.value).toBeNull();
-
-    session.receive(report());
-    expect(session.report.value?.operationId).toBe("review-op-1");
-
+    const payload = report();
+    session.receive(payload);
+    expect(session.plan.value).toEqual(buildSurveyReviewPlan(makeDefinition(), payload.findings));
     session.discard();
     expect(session.report.value).toBeNull();
-    expect(session.plan.value).toBeNull();
   });
 
-  it("plan 由当前草稿与 findings 构建，addedQuestions 只列新增题", () => {
-    const { session } = makeHarness();
-    const base = report().findings[0]!;
-    session.receive(report({
-      findings: [base, {
-        ...base, id: "f2", questionId: undefined,
-        suggestedOps: [{
-          op: "add_question", pageId: "p1",
-          question: { id: "q-new", type: "text", title: "新题", required: false },
-        }],
-      }],
-    }));
-    expect(session.plan.value?.status).toBe("ready");
-    expect(session.addedQuestions.value.map((question) => question.id)).toEqual(["q-new"]);
-  });
-});
-
-describe("useSurveyReviewSession stale 判定", () => {
-  it("版本不齐或保存未落定即过期；落定后恢复", () => {
+  it("版本不齐或保存未落定即过期", () => {
     const { session, setDraftVersion, setAutosaveStatus } = makeHarness();
-    session.receive(report({ baseDraftVersion: 2 }));
+    session.receive(report());
     expect(session.stale.value).toBe(false);
-
     setDraftVersion(3);
     expect(session.stale.value).toBe(true);
     setDraftVersion(2);
-
     setAutosaveStatus("saving");
     expect(session.stale.value).toBe(true);
     setAutosaveStatus("saved");
@@ -177,105 +180,118 @@ describe("useSurveyReviewSession stale 判定", () => {
   });
 });
 
-describe("useSurveyReviewSession 应用", () => {
-  it("整批一次 commit（source: assistant），保存成功才清 report，成功提示在落盘后", async () => {
-    const { session, commits, successes } = makeHarness();
-    session.receive(report());
-    expect(session.plan.value?.status).toBe("ready");
-    await session.apply();
+describe("useSurveyReviewSession 服务端应用与忽略", () => {
+  it("应用只调当前 finding，回包后留一个撤销步骤并更新剩余基线", async () => {
+    const { session, api, commits, commitLabels, successes } = makeHarness();
+    session.receive(report({ findings: [F1, F2] }));
+    await session.applyFinding("f1");
+
+    expect(api.applyReviewFinding).toHaveBeenCalledWith(SURVEY_ID, "f1", 2);
     expect(commits).toHaveLength(1);
+    expect(commitLabels).toEqual(["筛选不充分"]);
     expect(commits[0]!.definition.questions[0]!.title).toBe("澄清后的单选");
+    expect(session.report.value).toMatchObject({ baseDraftVersion: 3 });
+    expect(session.report.value?.findings.map((item) => item.id)).toEqual(["f2"]);
+    expect(successes).toEqual(["surveys.assistant.applied"]);
+  });
+
+  it("连续应用以最新版本调用，最后一条后清空报告", async () => {
+    const { session, api, commits } = makeHarness();
+    session.receive(report({ findings: [F1, F2] }));
+    await session.applyFinding("f1");
+    await session.applyFinding("f2");
+
+    expect(api.applyReviewFinding).toHaveBeenNthCalledWith(2, SURVEY_ID, "f2", 3);
+    expect(commits).toHaveLength(2);
     expect(session.report.value).toBeNull();
-    expect(successes).toEqual(["surveys.assistant.applied"]);
   });
 
-  it("保存失败：不发生成功提示，只警示并保留方案", async () => {
-    const { session, commits, flushResults, warns, successes } = makeHarness();
-    flushResults.push(false);
-    session.receive(report());
-    await session.apply();
-    expect(commits).toHaveLength(1);
-    expect(successes).toEqual([]);
-    expect(warns).toEqual(["surveys.assistant.saveFirst"]);
-    expect(session.report.value?.operationId).toBe("review-op-1");
-  });
+  it("应用失败不产生撤销或成功提示，报告原样保留", async () => {
+    const { session, api, commits, successes, warns } = makeHarness();
+    api.applyReviewFinding.mockRejectedValueOnce(new SurveysApiError(409, "review_stale", null));
+    session.receive(report({ findings: [F1, F2] }));
+    await session.applyFinding("f1");
 
-  it("保存期间新 report 到达：落盘成功只清旧方案，新方案保留", async () => {
-    const { session, flushResults, flushGates, successes } = makeHarness();
-    flushResults.push("wait");
-    session.receive(report({ operationId: "review-op-1" }));
-    const applying = session.apply();
-    await tick();
-    // 保存仍在途时，新一轮诊断到达。
-    session.receive(report({ operationId: "review-op-2" }));
-    flushGates.shift()!();
-    await applying;
-    expect(successes).toEqual(["surveys.assistant.applied"]);
-    expect(session.report.value?.operationId).toBe("review-op-2");
-  });
-
-  it("过期拒绝：stale 时 apply 不改草稿、不发保存", async () => {
-    const { session, setDraftVersion, commits, flushResults } = makeHarness();
-    session.receive(report());
-    setDraftVersion(3);
-    await session.apply();
     expect(commits).toHaveLength(0);
-    expect(flushResults).toHaveLength(0);
+    expect(successes).toHaveLength(0);
+    expect(warns).toEqual(["surveys.assistant.planUnavailable"]);
+    expect(session.report.value?.findings).toHaveLength(2);
+    expect(session.report.value?.baseDraftVersion).toBe(2);
+  });
+
+  it("过期或无 suggestedOps 时不发请求", async () => {
+    const { session, api, setDraftVersion } = makeHarness();
+    session.receive(report({ findings: [{ ...F1, suggestedOps: undefined }] }));
+    await session.applyFinding("f1");
+    setDraftVersion(3);
+    session.receive(report({ baseDraftVersion: 2 }));
+    await session.applyFinding("f1");
+    expect(api.applyReviewFinding).not.toHaveBeenCalled();
+  });
+
+  it("应用在途收到新报告时保留新报告，不被旧回包覆盖", async () => {
+    const { session, api } = makeHarness();
+    let resolve!: (value: SurveyDetail) => void;
+    api.applyReviewFinding.mockImplementationOnce(
+      () => new Promise<SurveyDetail>((resolvePromise) => { resolve = resolvePromise; }),
+    );
+    session.receive(report({ operationId: "review-op-1" }));
+    const pending = session.applyFinding("f1");
+    await tick();
+    session.receive(report({ operationId: "review-op-2", findings: [{ ...F1, id: "f9" }] }));
+    resolve(detail(3, null, "澄清后的单选"));
+    await pending;
+    expect(session.report.value?.operationId).toBe("review-op-2");
+    expect(session.report.value?.findings.map((item) => item.id)).toEqual(["f9"]);
+  });
+
+  it("忽略经服务端移除；失败保留，最后一条后清空", async () => {
+    const { session, api, warns } = makeHarness();
+    session.receive(report({ findings: [F1, F2] }));
+    await session.discardFinding("f1");
+    expect(api.dismissReviewFinding).toHaveBeenCalledWith(SURVEY_ID, "f1");
+    expect(session.report.value?.findings.map((item) => item.id)).toEqual(["f2"]);
+
+    api.dismissReviewFinding.mockRejectedValueOnce(new SurveysApiError(500, "server", null));
+    await session.discardFinding("f2");
+    expect(warns).toEqual(["surveys.assistant.requestFailed"]);
+    expect(session.report.value?.findings.map((item) => item.id)).toEqual(["f2"]);
+
+    await session.discardFinding("f2");
+    expect(session.report.value).toBeNull();
   });
 });
 
 describe("useSurveyReviewSession request", () => {
-  it("先 flush 在途保存，flush 失败只警示不发话，busy 复位", async () => {
-    const { session, flushResults, warns, copilot } = makeHarness();
+  it("先 flush，失败只警示不发话", async () => {
+    const { session, flushResults, warns, prompts } = makeHarness();
     flushResults.push(false);
     await session.request();
     expect(warns).toEqual(["surveys.assistant.saveFirst"]);
-    expect(copilot.prompts).toHaveLength(0);
+    expect(prompts).toHaveLength(0);
     expect(session.busy.value).toBe(false);
   });
 
-  it("进入 request 即置 busy：flush 挂起时第二个请求被拒，不双发", async () => {
-    const { session, flushResults, flushGates, copilot } = makeHarness();
+  it("flush 挂起时第二个请求被拒，不双发", async () => {
+    const { session, flushResults, flushGates, prompts } = makeHarness();
     flushResults.push("wait");
     const first = session.request();
     await tick();
-    expect(session.busy.value).toBe(true);
-
     await session.request();
     expect(flushGates).toHaveLength(1);
-
     flushGates.shift()!();
     await first;
-    expect(copilot.prompts).toEqual(["surveys.assistant.reviewPrompt"]);
-    expect(session.busy.value).toBe(false);
+    expect(prompts).toEqual(["surveys.assistant.reviewRequest"]);
   });
 
-  it("sendPrompt 挂起时第二个请求被拒；完成后 busy 复位", async () => {
-    const { session, copilot } = makeHarness();
-    const gates: Array<() => void> = [];
-    copilot.sendPrompt = (prompt: string) => {
-      copilot.prompts.push(prompt);
-      return new Promise<void>((resolve) => gates.push(resolve));
-    };
-    const first = session.request();
-    await tick();
-    expect(session.busy.value).toBe(true);
-
+  it("sendPrompt 带 Skill 与工具白名单；失败转错误提示", async () => {
+    const { session, errors, copilot, prompts } = makeHarness();
     await session.request();
-    expect(copilot.prompts).toEqual(["surveys.assistant.reviewPrompt"]);
-
-    gates.shift()!();
-    await first;
-    expect(session.busy.value).toBe(false);
-  });
-
-  it("有 sendPrompt 走发话并带工具白名单；失败转错误提示", async () => {
-    const { session, errors, copilot } = makeHarness();
-    await session.request();
-    expect(copilot.prompts).toEqual(["surveys.assistant.reviewPrompt"]);
+    expect(prompts).toEqual(["surveys.assistant.reviewRequest"]);
     expect(copilot.sendPrompt).toHaveBeenCalledWith(
-      "surveys.assistant.reviewPrompt",
+      "surveys.assistant.reviewRequest",
       ["survey_read", "survey_review"],
+      { skillId: "survey-review" },
     );
 
     copilot.sendPrompt = vi.fn(async () => {
@@ -283,28 +299,13 @@ describe("useSurveyReviewSession request", () => {
     });
     await session.request();
     expect(errors).toEqual(["surveys.assistant.requestFailed"]);
-    expect(session.busy.value).toBe(false);
   });
 
-  it("宿主没有 sendPrompt：回落填入输入框并聚焦，不发请求", async () => {
-    const { session, copilot } = makeHarness();
+  it("宿主没有 sendPrompt：短意图填入输入框并聚焦", async () => {
+    const { session, copilot, prompts } = makeHarness();
     copilot.sendPrompt = undefined;
     await session.request();
-    expect(copilot.prompts).toEqual(["surveys.assistant.reviewPrompt"]);
+    expect(prompts).toEqual(["surveys.assistant.reviewRequest"]);
     expect(copilot.focusComposer).toHaveBeenCalled();
-    expect(session.busy.value).toBe(false);
-  });
-});
-
-// buildSurveyReviewPlan 只在保存成功清理语义之外被本会话消费：冒烟一次，
-// 防止 options.history 的形状漂移悄悄绕开 core 计划器。
-describe("useSurveyReviewSession 与 core 计划器同源", () => {
-  it("plan 与直接调用 buildSurveyReviewPlan 一致", () => {
-    const { session } = makeHarness();
-    const payload = report();
-    session.receive(payload);
-    expect(session.plan.value).toEqual(
-      buildSurveyReviewPlan(makeDefinition(), payload.findings),
-    );
   });
 });

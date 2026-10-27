@@ -26,6 +26,8 @@ import {
 const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   save: vi.fn(),
+  applyReview: vi.fn(),
+  dismissReview: vi.fn(),
   publish: vi.fn(),
   status: vi.fn(),
   remove: vi.fn(),
@@ -39,7 +41,7 @@ vi.mock("primevue/useconfirm", () => ({
 
 import SurveyWorkspacePage from "./SurveyWorkspacePage.vue";
 import SurveyVersionsPanel from "../components/SurveyVersionsPanel.vue";
-import SurveyReviewBar from "../components/SurveyReviewBar.vue";
+import SurveyInlineReview from "../components/SurveyInlineReview.vue";
 import SurveySwitcher from "../components/SurveySwitcher.vue";
 
 const i18n = createSurveysTestI18n();
@@ -120,6 +122,13 @@ function makeHost(
             body.definition,
             body.responseLimit,
           );
+        if (method === "POST" && path.includes("/review/findings/")) {
+          const surveyId = segments.at(-5)!;
+          const findingId = decodeURIComponent(segments.at(-2)!);
+          if (path.endsWith("/apply"))
+            return mocks.applyReview(surveyId, findingId, body.expectedVersion);
+          return mocks.dismissReview(surveyId, findingId);
+        }
         if (method === "POST" && path.endsWith("/publish"))
           return mocks.publish(segments.at(-2)!);
         if (method === "POST" && path.endsWith("/status"))
@@ -148,7 +157,7 @@ const ShellStub = (activeTab: string) =>
   });
 const CanvasStub = defineComponent({
   name: "SurveyDesignCanvas",
-  props: ["modelValue", "disabled", "activeQuestionId", "surveyId"],
+  props: ["modelValue", "disabled", "activeQuestionId", "surveyId", "reviewQuestionIds"],
   emits: ["change", "select"],
   methods: {
     locateIssue: () => {},
@@ -191,6 +200,9 @@ const CanvasStub = defineComponent({
     <button class="edit-q2" @click.stop="editQuestion('q2', 'Q2改')" />
     <button class="edit-desc" @click.stop="editPageDescription()" />
     <button class="select-q1" @click.stop="$emit('select', 'q1')" />
+    <slot name="cover-review" />
+    <slot name="question-review" question-id="q1" page-id="p1" />
+    <slot name="insert-review" page-id="p1" :after-id="null" />
   </div>`,
 });
 const PreviewStub = defineComponent({
@@ -276,6 +288,30 @@ function detail(extra: {
   };
 }
 
+function reviewDetail(findingId: string, version: number, applied: boolean): SurveyDetail {
+  const next = detail({ currentRevisionId: null });
+  next.draftVersion = version;
+  if (applied && findingId === "f1") next.definition.questions[0]!.title = "过去一学期的备注";
+  if (applied && findingId === "f2") next.definition.questions[0]!.required = true;
+  next.review = findingId === "f1" ? {
+    type: "survey_review",
+    surveyId: "s-1",
+    operationId: "review-integration-1",
+    baseDraftVersion: version,
+    summary: "澄清时间范围",
+    findings: [{
+      id: "f2",
+      questionId: "q1",
+      title: "统一核心题口径",
+      severity: "major",
+      reason: "核心题需要完整回答",
+      recommendation: "设为必答",
+      suggestedOps: [{ op: "update_question", questionId: "q1", patch: { required: true } }],
+    }],
+  } : null;
+  return next;
+}
+
 function makeRouter(detailComponent: Component = { template: "<div/>" }) {
   return createRouter({
     history: createMemoryHistory(),
@@ -343,6 +379,12 @@ beforeEach(() => {
     (options: { accept?: () => void }) => options.accept?.(),
   );
   mocks.get.mockImplementation(async () => detail({ currentRevisionId: null }));
+  mocks.applyReview.mockImplementation(async (_id, findingId, expectedVersion) =>
+    reviewDetail(findingId, expectedVersion + 1, true),
+  );
+  mocks.dismissReview.mockImplementation(async (_id, findingId) =>
+    reviewDetail(findingId, 2, false),
+  );
 });
 afterEach(() => vi.useRealTimers());
 
@@ -439,6 +481,18 @@ describe("SurveyWorkspacePage 生命周期轨道（issue #217）", () => {
       detail({ currentRevisionId: "00000000-0000-4000-8000-000000000002" }),
     );
     const { wrapper } = await mountWorkspace("/u/surveys/s-1?run=run-9");
+    expect(wrapper.find(".analysis-stub").text()).toBe("analysis");
+  });
+
+  it("阶段经 URL 恢复并在切换时写回，刷新不会退回设计", async () => {
+    mocks.get.mockResolvedValue(
+      detail({ currentRevisionId: "00000000-0000-4000-8000-000000000002" }),
+    );
+    const { wrapper, router } = await mountWorkspace("/u/surveys/s-1?stage=data");
+    expect(wrapper.find(".analysis-stub").text()).toBe("data");
+    await segments(wrapper)[3]!.trigger("click");
+    await flushPromises();
+    expect(router.currentRoute.value.query.stage).toBe("analysis");
     expect(wrapper.find(".analysis-stub").text()).toBe("analysis");
   });
 
@@ -1246,7 +1300,7 @@ describe("SurveyWorkspacePage AI 交付新鲜度（#223）", () => {
 
     await handlers.onSurveyDeliveryFrame(editDelivery(2));
     await flushPromises();
-    expect(wrapper.text()).toContain(t("surveys.copilot.applied", { n: 1 }));
+    expect(wrapper.text()).not.toContain(t("surveys.copilot.applied", { n: 1 }));
     expect(wrapper.text()).not.toContain(t("surveys.copilot.staleDelivery"));
 
     await vi.advanceTimersByTimeAsync(1600);
@@ -1309,7 +1363,7 @@ describe("SurveyWorkspacePage AI 交付新鲜度（#223）", () => {
     await handlers.onSurveyDeliveryFrame(editDelivery(2));
     await flushPromises();
     // 横幅在所有段可见；视图停在数据段，定义照常进历史栈并自动保存。
-    expect(wrapper.text()).toContain(t("surveys.copilot.applied", { n: 1 }));
+    expect(wrapper.text()).not.toContain(t("surveys.copilot.applied", { n: 1 }));
     expect(wrapper.find(".analysis-stub").exists()).toBe(true);
     await vi.advanceTimersByTimeAsync(1600);
     expect(mocks.save).toHaveBeenCalledTimes(1);
@@ -1352,7 +1406,7 @@ describe("SurveyWorkspacePage AI 交付新鲜度（#223）", () => {
       .find((b) => b.text() === t("surveys.copilot.staleApply"))!;
     await applyAnyway.trigger("click");
     await flushPromises();
-    expect(wrapper.text()).toContain(t("surveys.copilot.applied", { n: 1 }));
+    expect(wrapper.text()).not.toContain(t("surveys.copilot.applied", { n: 1 }));
     await vi.advanceTimersByTimeAsync(1600);
     expect(mocks.save).toHaveBeenCalledTimes(1);
     expect(mocks.save.mock.calls[0]![2]).toEqual({
@@ -1453,7 +1507,20 @@ describe("SurveyWorkspacePage AI 建卷落地提示（issue #217）", () => {
   // 断言不稳定——该路径需要在无残留的模块注册表里跑。
 });
 
-describe("问卷诊断修订的工作台闭环（唯一整批应用入口）", () => {
+// ── 诊断修订与视图边界（issue #224 stage1 / M2 投影化）──────────────────────
+// survey_review 帧只落诊断状态：AI 交付绝不改 layoutPrefs（tab/折叠）与移动
+// 导航；诊断的阅读与应用都在题目旁的 SurveyInlineReview（cover/question/
+// insert 三类槽位投影），应用与忽略都按单条 finding 进行。测试直接对题旁
+// Inline emit apply/dismiss 驱动工作台，不打开真实 Popover。
+
+/** 题旁（question 槽位）的 Inline 实例：CanvasStub 固定把 q1 投影进该槽。 */
+function questionReview(wrapper: ReturnType<typeof mount>) {
+  return wrapper
+    .findAllComponents(SurveyInlineReview)
+    .find((inline) => inline.props("questionId") === "q1")!;
+}
+
+describe("问卷诊断修订的工作台闭环（逐条应用）", () => {
   const review = (version = 2) => ({
     type: "survey_review" as const, surveyId: "s-1", operationId: "review-integration-1",
     baseDraftVersion: version, summary: "澄清时间范围",
@@ -1467,73 +1534,69 @@ describe("问卷诊断修订的工作台闭环（唯一整批应用入口）", (
     ],
   });
 
-  function applyButton(wrapper: ReturnType<typeof mount>) {
-    return wrapper
-      .findAll("button")
-      .find((b) => b.text().includes(t("surveys.assistant.applyPlan", { n: 1 })));
-  }
-
-  it("诊断落在画布诊断条；整批应用只产生一个保存与撤销步骤，落盘后清掉方案", async () => {
+  it("两条 finding 逐条应用：两次事务、两个撤销步骤，第一条后另一条仍在且可继续", async () => {
     mocks.save.mockResolvedValue(detail({ currentRevisionId: null }));
     const { wrapper, copilotRegister } = await mountWorkspace("/u/surveys/s-1", "outline", { copilot: true });
     copilotRegister!.mock.calls[0]![0].onSurveyDeliveryFrame(review());
     await flushPromises();
     vi.useFakeTimers();
-    const bar = wrapper.findComponent(SurveyReviewBar);
-    expect(bar.exists()).toBe(true);
-    expect(bar.props("stale")).toBe(false);
-    expect(bar.props("plan")).toMatchObject({ status: "ready" });
-    // 唯一应用入口：整页只有诊断条这一个「应用」按钮。
-    const applies = wrapper.findAll("button").filter((b) => b.text().includes(t("surveys.assistant.applyPlan", { n: 1 })));
-    expect(applies).toHaveLength(1);
-    await applyButton(wrapper)!.trigger("click");
+
+    const inline = questionReview(wrapper);
+    expect(inline.props("report").findings.map((finding: { id: string }) => finding.id)).toEqual(["f1", "f2"]);
+    expect(inline.props("stale")).toBe(false);
+
+    inline.vm.$emit("apply", "f1");
     await flushPromises();
-    expect(mocks.save).toHaveBeenCalledTimes(1);
-    // 落盘确认后方案清理：诊断条消失，且不自动发起新检查。
-    expect(wrapper.findComponent(SurveyReviewBar).exists()).toBe(false);
+    expect(mocks.applyReview).toHaveBeenCalledWith("s-1", "f1", 2);
+    expect(wrapper.findComponent(CanvasStub).props("modelValue").questions[0]).toMatchObject({ title: "过去一学期的备注" });
+
+    const remaining = questionReview(wrapper);
+    expect(remaining.props("report").findings.map((finding: { id: string }) => finding.id)).toEqual(["f2"]);
+    expect(remaining.props("stale")).toBe(false);
+    remaining.vm.$emit("apply", "f2");
+    await flushPromises();
+    expect(mocks.applyReview).toHaveBeenNthCalledWith(2, "s-1", "f2", 3);
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(wrapper.findAllComponents(SurveyInlineReview)).toHaveLength(0);
+
+    await wrapper.find(`button[aria-label="${t("surveys.undo")}"]`).trigger("click");
     await vi.advanceTimersByTimeAsync(1500);
     await flushPromises();
     expect(mocks.save).toHaveBeenCalledTimes(1);
-    expect(mocks.save.mock.calls.at(-1)![2].questions[0]).toMatchObject({ title: "过去一学期的备注", required: true });
+    expect(mocks.save.mock.calls[0]![2].questions[0]).toMatchObject({ title: "过去一学期的备注", required: false });
     await wrapper.find(`button[aria-label="${t("surveys.undo")}"]`).trigger("click");
     await vi.advanceTimersByTimeAsync(1500);
     await flushPromises();
     expect(mocks.save).toHaveBeenCalledTimes(2);
-    expect(mocks.save.mock.calls.at(-1)![2].questions[0]).toMatchObject({ title: "备注", required: false });
+    expect(mocks.save.mock.calls[1]![2].questions[0]).toMatchObject({ title: "备注", required: false });
     wrapper.unmount();
   });
 
-  it("旧版本诊断：应用按钮禁用且点击不产生保存", async () => {
+  it("旧基线诊断：题旁 Inline 标 stale，实际 emit apply 也不发保存", async () => {
     const { wrapper, copilotRegister } = await mountWorkspace("/u/surveys/s-1", "outline", { copilot: true });
     copilotRegister!.mock.calls[0]![0].onSurveyDeliveryFrame(review(1));
     await flushPromises();
-    const bar = wrapper.findComponent(SurveyReviewBar);
-    expect(bar.props("stale")).toBe(true);
-    const apply = applyButton(wrapper)!;
-    expect(apply.attributes("disabled")).toBeDefined();
-    await apply.trigger("click");
+    const inline = questionReview(wrapper);
+    expect(inline.props("stale")).toBe(true);
+    inline.vm.$emit("apply", "f1");
     await flushPromises();
     expect(mocks.save).not.toHaveBeenCalled();
     wrapper.unmount();
   });
 });
 
-// ── 诊断会话与视图边界（issue #224 stage1 / M2 投影化）──────────────────────
-// survey_review 帧只落诊断状态：AI 交付绝不改 layoutPrefs（tab/折叠）与移动
-// 导航；诊断展示在轻量批量操作条（跟随设计段）与逐题投影，操作条只保留批量
-// 事实与整批应用，阅读位置在题目旁。
 describe("SurveyWorkspacePage 诊断会话与视图边界（issue #224）", () => {
-  const review = (version = 2) => ({
+  const finding = (id: string, patch: Record<string, unknown>) => ({
+    id, checkId: "wording.timeframe", questionId: "q1", title: `建议 ${id}`,
+    severity: "major" as const, reason: "行为题需要时间范围", recommendation: "明确过去一学期",
+    suggestedOps: [{ op: "update_question" as const, questionId: "q1", patch }],
+  });
+  const review = (version = 2, findings = [finding("f1", { title: "过去一学期的备注" })]) => ({
     type: "survey_review" as const, surveyId: "s-1", operationId: "review-view-1",
-    baseDraftVersion: version, summary: "澄清时间范围",
-    findings: [
-      { id: "f1", checkId: "wording.timeframe", questionId: "q1", title: "明确时间",
-        severity: "major" as const, reason: "行为题需要时间范围", recommendation: "明确过去一学期",
-        suggestedOps: [{ op: "update_question" as const, questionId: "q1", patch: { title: "过去一学期的备注" } }] },
-    ],
+    baseDraftVersion: version, summary: "澄清时间范围", findings,
   });
 
-  it("survey_review 帧到达：诊断条照常落地，但不切 tab、不展开左栏、不打开移动导航", async () => {
+  it("survey_review 帧到达：诊断落题旁 Inline（无顶部诊断条），但不切 tab、不展开左栏、不打开移动导航", async () => {
     const prefs = spyPrefs();
     const { wrapper, copilotRegister } = await mountWorkspace(
       "/u/surveys/s-1", "outline", { copilot: true, layoutPrefs: () => prefs },
@@ -1541,80 +1604,87 @@ describe("SurveyWorkspacePage 诊断会话与视图边界（issue #224）", () =
     copilotRegister!.mock.calls[0]![0].onSurveyDeliveryFrame(review());
     await flushPromises();
 
-    const bar = wrapper.findComponent(SurveyReviewBar);
-    expect(bar.props("report")).toMatchObject({ operationId: "review-view-1" });
+    const inline = questionReview(wrapper);
+    expect(inline.props("report")).toMatchObject({ operationId: "review-view-1" });
+    // 阅读位置只在题目旁：整页没有顶部批量操作条。
+    expect(wrapper.find(".review-bar").exists()).toBe(false);
     expect(prefs.activeLeftTab.value).toBe("outline");
     expect(prefs.leftCollapsed.value).toBe(false);
     expect(wrapper.find(".mobile-survey-toggle").attributes("aria-expanded")).toBe("false");
     wrapper.unmount();
   });
 
-  it("用户在大纲 tab 时收到诊断：画布诊断条可见，视图偏好原样不动", async () => {
+  it("用户在大纲 tab 时收到诊断：题旁 Inline 可见，视图偏好原样不动", async () => {
     const prefs = spyPrefs();
     const { wrapper, copilotRegister } = await mountWorkspace(
       "/u/surveys/s-1", "outline", { copilot: true, layoutPrefs: () => prefs },
     );
     copilotRegister!.mock.calls[0]![0].onSurveyDeliveryFrame(review());
     await flushPromises();
-    expect(wrapper.findComponent(SurveyReviewBar).exists()).toBe(true);
+    expect(questionReview(wrapper).exists()).toBe(true);
     expect(prefs.activeLeftTab.value).toBe("outline");
     expect(prefs.leftCollapsed.value).toBe(false);
     wrapper.unmount();
   });
 
-  it("报告落地后草稿又保存过：方案自动过期，应用按钮禁用且不发保存", async () => {
+  it("报告落地后草稿又保存过：Inline 转 stale，实际 emit apply 也不发保存", async () => {
     mocks.save.mockResolvedValue({ ...detail({ currentRevisionId: null }), draftVersion: 3 });
     const { wrapper, copilotRegister } = await mountWorkspace("/u/surveys/s-1", "outline", { copilot: true });
     vi.useFakeTimers();
     copilotRegister!.mock.calls[0]![0].onSurveyDeliveryFrame(review());
     await flushPromises();
-    const bar = wrapper.findComponent(SurveyReviewBar);
-    expect(bar.props("stale")).toBe(false);
+    expect(questionReview(wrapper).props("stale")).toBe(false);
 
     await wrapper.find(".canvas-stub").trigger("click");
     await vi.advanceTimersByTimeAsync(1600);
     expect(mocks.save).toHaveBeenCalledTimes(1);
-    expect(bar.props("stale")).toBe(true);
+    expect(questionReview(wrapper).props("stale")).toBe(true);
 
-    const apply = wrapper
-      .findAll("button")
-      .find((b) => b.text().includes(t("surveys.assistant.applyPlan", { n: 1 })))!;
-    expect(apply.attributes("disabled")).toBeDefined();
-    await apply.trigger("click");
+    questionReview(wrapper).vm.$emit("apply", "f1");
     await flushPromises();
     await vi.advanceTimersByTimeAsync(1600);
     expect(mocks.save).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
 
-  it("应用后保存失败：方案保留（状态转过期），不虚报已清理", async () => {
-    mocks.save.mockRejectedValue(new SurveysApiError(500, "server", null));
+  it("单条应用失败：report 保留且没有普通保存或假成功", async () => {
+    mocks.applyReview.mockRejectedValue(new SurveysApiError(500, "server", null));
     const { wrapper, copilotRegister } = await mountWorkspace("/u/surveys/s-1", "outline", { copilot: true });
     copilotRegister!.mock.calls[0]![0].onSurveyDeliveryFrame(review());
     await flushPromises();
-    const apply = wrapper
-      .findAll("button")
-      .find((b) => b.text().includes(t("surveys.assistant.applyPlan", { n: 1 })))!;
-    await apply.trigger("click");
+    questionReview(wrapper).vm.$emit("apply", "f1");
     await flushPromises();
-    expect(mocks.save).toHaveBeenCalledTimes(1);
-    const bar = wrapper.findComponent(SurveyReviewBar);
-    expect(bar.exists()).toBe(true);
-    expect(bar.props("stale")).toBe(true);
+    expect(mocks.applyReview).toHaveBeenCalledTimes(1);
+    expect(mocks.save).not.toHaveBeenCalled();
+    const inline = questionReview(wrapper);
+    expect(inline.props("report").findings.map((finding: { id: string }) => finding.id)).toEqual(["f1"]);
+    expect(inline.props("stale")).toBe(false);
     wrapper.unmount();
   });
 
-  it("诊断条可放弃：点放弃后诊断条消失且不发保存", async () => {
+  it("详情携带待处理报告时刷新恢复题旁建议", async () => {
+    mocks.get.mockResolvedValue({ ...detail({ currentRevisionId: null }), review: review() });
+    const { wrapper } = await mountWorkspace("/u/surveys/s-1", "outline", { copilot: true });
+    expect(questionReview(wrapper).props("report")).toMatchObject({ operationId: "review-view-1" });
+    wrapper.unmount();
+  });
+
+  it("单条忽略：不发保存，仅移除该条建议；无剩余时整份诊断消失", async () => {
     const { wrapper, copilotRegister } = await mountWorkspace("/u/surveys/s-1", "outline", { copilot: true });
-    copilotRegister!.mock.calls[0]![0].onSurveyDeliveryFrame(review());
+    copilotRegister!.mock.calls[0]![0].onSurveyDeliveryFrame(
+      review(2, [finding("f1", { title: "过去一学期的备注" }), finding("f2", { required: true })]),
+    );
     await flushPromises();
-    await wrapper
-      .findAll("button")
-      .find((b) => b.text() === t("surveys.reviewBar.discard"))!
-      .trigger("click");
+    questionReview(wrapper).vm.$emit("dismiss", "f1");
     await flushPromises();
-    expect(wrapper.findComponent(SurveyReviewBar).exists()).toBe(false);
+    expect(mocks.dismissReview).toHaveBeenCalledWith("s-1", "f1");
     expect(mocks.save).not.toHaveBeenCalled();
+    expect(questionReview(wrapper).props("report").findings.map((finding: { id: string }) => finding.id)).toEqual(["f2"]);
+
+    questionReview(wrapper).vm.$emit("dismiss", "f2");
+    await flushPromises();
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(wrapper.findAllComponents(SurveyInlineReview)).toHaveLength(0);
     wrapper.unmount();
   });
 });
@@ -1645,7 +1715,7 @@ describe("SurveyWorkspacePage 导航收敛与 surface 呈现（issue #224 M2）"
     wrapper.unmount();
   });
 
-  it("surface 呈现按阶段注册且无 run 动作；review 只归顶栏一个触发", async () => {
+  it("surface 注册唯一诊断动作；顶栏不再重复提供入口", async () => {
     mocks.save.mockResolvedValue(detail({ currentRevisionId: null }));
     const { wrapper, copilotPresentation, copilotSendPrompt, copilotRelease } = await mountWorkspace(
       "/u/surveys/s-1", "outline", { copilot: true },
@@ -1659,19 +1729,42 @@ describe("SurveyWorkspacePage 导航收敛与 surface 呈现（issue #224 M2）"
     };
     expect(presentation.title).toBe(t("surveys.copilot.surfaceTitle"));
     expect(presentation.composerPlaceholder).toBe(t("surveys.copilot.surfacePlaceholder"));
-    // 不注册任何场景动作：题目旁建议是主要阅读位置，review 入口唯一。
-    expect(presentation.actions).toEqual([]);
-    const reviewButtons = wrapper.findAll("button").filter((b) => b.text() === t("surveys.assistant.review"));
-    expect(reviewButtons).toHaveLength(1);
-    await reviewButtons[0]!.trigger("click");
+    expect(presentation.actions).toHaveLength(1);
+    expect(presentation.actions[0]).toMatchObject({ id: "survey-review", primary: true });
+    expect(wrapper.findAll("button").filter((b) => b.text() === t("surveys.assistant.review"))).toHaveLength(0);
+    await presentation.actions[0]!.run?.();
     await flushPromises();
     expect(copilotSendPrompt).toHaveBeenCalledWith(
-      t("surveys.assistant.reviewPrompt"),
+      t("surveys.assistant.reviewRequest"),
       ["survey_read", "survey_review"],
+      { skillId: "survey-review" },
     );
     wrapper.unmount();
     // 卸载清理归 releasePageState（契约上负责页面写入桥的状态，含 surface）。
     expect(copilotRelease).toHaveBeenCalled();
+  });
+
+  it("分析阶段 surface 只发送短意图与 survey-analysis Skill", async () => {
+    mocks.get.mockResolvedValue(
+      detail({ currentRevisionId: "00000000-0000-4000-8000-000000000002" }),
+    );
+    const { wrapper, copilotPresentation } = await mountWorkspace(
+      "/u/surveys/s-1?stage=analysis", "outline", { copilot: true },
+    );
+    const presentation = copilotPresentation!.mock.calls.at(-1)![0] as {
+      composerPlaceholder: string;
+      actions: Array<{ id: string; prompt: string; skillId: string; toolNames: string[] }>;
+    };
+    expect(presentation.composerPlaceholder).toBe(t("surveys.copilot.surfaceAnalysisPlaceholder"));
+    expect(presentation.actions).toHaveLength(1);
+    expect(presentation.actions[0]).toMatchObject({
+      id: "survey-analysis",
+      prompt: t("surveys.assistant.analysisRequest"),
+      skillId: "survey-analysis",
+      toolNames: ["research_read", "research_analyze", "research_run_read"],
+    });
+    expect(presentation.actions[0]!.prompt).not.toContain("research_read");
+    wrapper.unmount();
   });
 
   it("选中题时 surface 文案体现当前题", async () => {

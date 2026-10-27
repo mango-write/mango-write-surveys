@@ -8,6 +8,7 @@ import Button from "primevue/button";
 import InputText from "primevue/inputtext";
 import InputNumber from "primevue/inputnumber";
 import ProgressBar from "primevue/progressbar";
+import Tag from "primevue/tag";
 
 import type { SurveyStatus } from "../../contracts/index.js";
 
@@ -52,6 +53,10 @@ const progressValue = computed(() => {
   if (!props.responseLimit || props.responseLimit <= 0) return 0;
   return Math.min(100, Math.round((props.completedCount / props.responseLimit) * 100));
 });
+const completionRate = computed(() =>
+  props.startedCount > 0 ? Math.min(100, Math.round((props.completedCount / props.startedCount) * 100)) : 0,
+);
+const remainingCount = computed(() => Math.max(0, props.responseLimit - props.completedCount));
 
 async function copyLink() {
   try {
@@ -69,33 +74,54 @@ function onLimitChange(value: number | null) {
 <template>
   <div class="survey-distribute">
     <section class="distribute-card distribute-card--share">
-      <h2>{{ t("surveys.share") }}</h2>
-      <div class="share-row">
-        <InputText
-          :model-value="shareUrl"
-          readonly
-          fluid
-          :aria-label="t('surveys.publicLink')"
-        /><Button
-          :label="t('surveys.copyLink')"
-          icon="pi pi-copy"
-          severity="secondary"
-          @click="copyLink"
-        />
+      <div class="share-main">
+        <header class="distribute-heading">
+          <h2>{{ t("surveys.share") }}</h2>
+          <Tag :value="t(`surveys.status.${status}`)"
+            :severity="status === 'published' ? 'success' : status === 'paused' ? 'warn' : 'secondary'" />
+        </header>
+        <div class="share-row">
+          <InputText :model-value="shareUrl" readonly fluid :aria-label="t('surveys.publicLink')" />
+          <Button :label="t('surveys.copyLink')" icon="pi pi-copy" @click="copyLink" />
+        </div>
       </div>
-      <div class="share-body">
-        <img v-if="qr" :src="qr" :alt="t('surveys.qr')" />
-        <p class="tw:text-muted">{{ t("surveys.shareHint") }}</p>
+      <img v-if="qr" class="share-qr" :src="qr" :alt="t('surveys.qr')" />
+    </section>
+
+    <section class="distribute-metrics" :aria-label="t('surveys.collectProgress')">
+      <div class="metric">
+        <span>{{ t("surveys.completedMetric") }}</span>
+        <strong>{{ completedCount }}</strong>
+      </div>
+      <div class="metric">
+        <span>{{ t("surveys.startedMetric") }}</span>
+        <strong>{{ startedCount }}</strong>
+      </div>
+      <div class="metric metric--rate">
+        <span>{{ t("surveys.completionRate") }}</span>
+        <strong>{{ completionRate }}<small>%</small></strong>
       </div>
     </section>
+
     <section class="distribute-card">
-      <h2>{{ t("surveys.collectProgress") }}</h2>
-      <ProgressBar :value="progressValue" :show-value="false" class="collect-bar" />
-      <p class="collect-detail">
-        {{ t("surveys.progressDetail", { completed: completedCount, limit: responseLimit, started: startedCount }) }}
-      </p>
-      <label class="limit-field"
-        >{{ t("surveys.responseLimit") }}<InputNumber
+      <header class="distribute-heading">
+        <h2>{{ t("surveys.collectProgress") }}</h2>
+        <span class="progress-count">{{ t("surveys.progressCount", { completed: completedCount, limit: responseLimit }) }}</span>
+      </header>
+      <div class="progress-block">
+        <ProgressBar :value="progressValue" :show-value="false" class="collect-bar" />
+        <div class="progress-caption">
+          <span>{{ t("surveys.progressPercent", { value: progressValue }) }}</span>
+          <span>{{ t("surveys.remainingCount", { count: remainingCount }) }}</span>
+        </div>
+      </div>
+      <div class="limit-row">
+        <label class="limit-field" for="survey-response-limit">
+          <span>{{ t("surveys.responseLimit") }}</span>
+          <small>{{ t("surveys.responseLimitHint") }}</small>
+        </label>
+        <InputNumber
+          input-id="survey-response-limit"
           :model-value="responseLimit"
           fluid
           :min="1"
@@ -104,11 +130,18 @@ function onLimitChange(value: number | null) {
           :disabled="!canWrite || busy"
           :aria-label="t('surveys.responseLimit')"
           @update:model-value="onLimitChange"
-        /><small class="tw:text-muted">{{ t("surveys.responseLimitHint") }}</small></label>
+        />
+      </div>
     </section>
+
     <section class="distribute-card">
-      <h2>{{ t("surveys.collectStatus") }}</h2>
+      <header class="distribute-heading">
+        <h2>{{ t("surveys.collectStatus") }}</h2>
+        <Tag :value="t(`surveys.status.${status}`)"
+          :severity="status === 'published' ? 'success' : status === 'paused' ? 'warn' : 'secondary'" />
+      </header>
       <SurveyStatusActions
+        layout="cards"
         :status="status"
         :has-revision="true"
         :can-write="canWrite"
@@ -119,76 +152,135 @@ function onLimitChange(value: number | null) {
     </section>
   </div>
 </template>
+
 <style scoped>
 .survey-distribute {
   display: grid;
-  gap: var(--layout-card-padding-lg);
-  /* 放宽到中岛可用宽度：分享卡通栏，概况/状态两卡在宽岛并排（窄岛自动单列）。 */
-  grid-template-columns: repeat(auto-fit, minmax(min(24rem, 100%), 1fr));
-}
-.distribute-card--share {
-  grid-column: 1 / -1;
+  gap: 16px;
+  width: 100%;
+  max-width: 64rem;
+  margin-inline: auto;
 }
 .distribute-card {
   display: grid;
-  gap: var(--layout-card-padding);
-  padding: var(--layout-card-padding);
+  gap: 20px;
+  padding: 24px;
   border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-md, 10px);
-  background: var(--material-inlay);
+  border-radius: var(--radius-lg);
+  background: var(--elevation-2-surface);
+  box-shadow: var(--elevation-2-shadow);
 }
-.distribute-card h2 {
-  margin: 0;
-  font-size: var(--font-size-title-sm, 14px);
-  color: var(--color-text-primary);
+.distribute-card--share {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 24px;
+  border-color: var(--color-brand-200);
+  background: var(--gradient-surface-accent);
 }
-.share-row {
+.distribute-heading {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  justify-content: space-between;
+  gap: 16px;
 }
-.share-row > :first-child {
-  flex: 1;
+.distribute-heading h2 {
+  margin: 0;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-title-sm);
+  font-weight: 600;
+}
+.share-main {
+  display: grid;
+  gap: 20px;
   min-width: 0;
 }
-.share-body {
-  display: flex;
-  align-items: center;
-  gap: var(--layout-card-padding);
-  flex-wrap: wrap;
+.share-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
 }
-.share-body img {
-  width: 120px;
-  height: auto;
+.share-qr {
+  width: 128px;
+  height: 128px;
+  padding: 8px;
   border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-sm, 6px);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-base);
 }
-.share-body p {
-  margin: 0;
-  min-width: 12rem;
-  flex: 1;
+.distribute-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
 }
-.collect-bar {
-  height: 8px;
+.metric {
+  display: grid;
+  gap: 8px;
+  padding: 20px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-lg);
+  background: var(--elevation-2-surface);
+  box-shadow: var(--elevation-2-shadow);
 }
-.collect-detail {
-  margin: 0;
-  font-size: 12.5px;
+.metric > span {
   color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+}
+.metric strong {
+  font-size: 28px;
+  font-weight: 650;
+  line-height: var(--line-height-tight);
   font-variant-numeric: tabular-nums;
+}
+.metric--rate strong { color: var(--color-success-600); }
+.metric small {
+  margin-left: 2px;
+  font-size: var(--font-size-body-sm);
+  font-weight: 500;
+}
+.progress-count,
+.progress-caption {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+}
+.progress-block {
+  display: grid;
+  gap: 8px;
+}
+.collect-bar { height: 8px; }
+.progress-caption {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  font-size: var(--font-size-caption);
+}
+.limit-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 160px;
+  align-items: end;
+  gap: 16px;
+  padding-top: 20px;
+  border-top: 1px solid var(--color-border-subtle);
 }
 .limit-field {
   display: grid;
-  gap: 0.5rem;
-  width: 100%;
-  min-width: 0;
+  gap: 4px;
+  color: var(--color-text-primary);
+  font-size: var(--font-size-body-sm);
+  font-weight: 500;
+}
+.limit-field small {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+  font-weight: 400;
 }
 @media (max-width: 767.98px) {
-  .share-row {
-    flex-wrap: wrap;
-  }
-  .share-row > :first-child {
-    flex: 1 1 100%;
-  }
+  .distribute-card { padding: 16px; }
+  .distribute-card--share { grid-template-columns: 1fr; }
+  .share-qr { justify-self: center; }
+  .share-row { grid-template-columns: 1fr; }
+  .distribute-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .metric:last-child { grid-column: 1 / -1; }
+  .limit-row { grid-template-columns: 1fr; }
 }
 </style>

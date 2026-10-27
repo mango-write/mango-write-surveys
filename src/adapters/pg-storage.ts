@@ -64,6 +64,17 @@ interface SurveyRow {
   deleted_at: Date | null;
 }
 
+interface ReviewRow {
+  id: string;
+  survey_id: string;
+  operation_id: string;
+  base_draft_version: number;
+  summary: string;
+  findings_json: unknown;
+  created_at: Date;
+  updated_at: Date;
+}
+
 interface RevisionRow {
   id: string;
   user_id: string;
@@ -116,6 +127,19 @@ function toSurvey(row: SurveyRow): SurveyRecord {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     deletedAt: row.deleted_at,
+  };
+}
+
+function toReview(row: ReviewRow) {
+  return {
+    id: row.id,
+    surveyId: row.survey_id,
+    operationId: row.operation_id,
+    baseDraftVersion: row.base_draft_version,
+    summary: row.summary,
+    findingsJson: row.findings_json,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   };
 }
 
@@ -180,6 +204,33 @@ function makeLock(tx: postgres.TransactionSql, surveyId: string): SurveysLock {
       if (patch.deletedAt !== undefined) sets.push(tx`deleted_at = ${patch.deletedAt},`);
       sets.push(tx`updated_at = now()`);
       await tx`UPDATE surveys SET ${sets} WHERE id = ${surveyId}`;
+    },
+    review: async () => {
+      const rows = await tx<ReviewRow[]>`SELECT * FROM survey_reviews WHERE survey_id = ${surveyId}`;
+      return rows[0] ? toReview(rows[0]) : null;
+    },
+    upsertReview: async (input) => {
+      await tx`
+        INSERT INTO survey_reviews
+          (user_id, team_id, survey_id, operation_id, base_draft_version, summary, findings_json)
+        VALUES (${input.userId}, ${input.teamId}, ${surveyId}, ${input.operationId},
+                ${input.baseDraftVersion}, ${input.summary}, ${tx.json(input.findings as postgres.JSONValue)})
+        ON CONFLICT (survey_id) DO UPDATE SET
+          operation_id = EXCLUDED.operation_id,
+          base_draft_version = EXCLUDED.base_draft_version,
+          summary = EXCLUDED.summary,
+          findings_json = EXCLUDED.findings_json,
+          updated_at = now()`;
+    },
+    updateReview: async (sid, patch) => {
+      await tx`UPDATE survey_reviews SET
+        findings_json = ${tx.json(patch.findings as postgres.JSONValue)},
+        base_draft_version = COALESCE(${patch.baseDraftVersion ?? null}, base_draft_version),
+        updated_at = now()
+        WHERE survey_id = ${sid}`;
+    },
+    deleteReview: async (sid) => {
+      await tx`DELETE FROM survey_reviews WHERE survey_id = ${sid}`;
     },
     findRevisionById: async (id) => {
       const rows = await tx<RevisionRow[]>`SELECT * FROM survey_revisions WHERE id = ${id}`;
@@ -394,6 +445,10 @@ export function createPgStorage(databaseUrl: string): StandaloneSurveysStorage {
         createdAt: row.created_at,
       }));
       return metas;
+    },
+    findReview: async (surveyId) => {
+      const rows = await sql<ReviewRow[]>`SELECT * FROM survey_reviews WHERE survey_id = ${surveyId}`;
+      return rows[0] ? toReview(rows[0]) : null;
     },
     findRevisionOfSurvey: async (surveyId, revisionId) => {
       const rows = await sql<RevisionRow[]>`
