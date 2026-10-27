@@ -41,12 +41,17 @@ function stubDeps() {
       })),
       createSurvey: vi.fn(),
       updateSurvey: vi.fn(),
+      recordReview: vi.fn(async () => null),
     },
     collection: { listCollections: vi.fn() },
     media: { uploadImage: vi.fn() },
     actorOf: vi.fn(() => ({ userId: "standalone-admin", space: { kind: "personal" } })),
   } as unknown as SurveysRouterDeps & {
-    service: { createSurvey: ReturnType<typeof vi.fn>; updateSurvey: ReturnType<typeof vi.fn> };
+    service: {
+      createSurvey: ReturnType<typeof vi.fn>;
+      updateSurvey: ReturnType<typeof vi.fn>;
+      recordReview: ReturnType<typeof vi.fn>;
+    };
   };
 }
 
