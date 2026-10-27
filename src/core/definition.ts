@@ -29,6 +29,7 @@ export const SURVEY_LIMITS = {
   maxAnalysisCovariates: 10,
   maxAnalysisFactorCount: 20,
   maxTimeBudgetMinutes: 600,
+  maxPretestItemFeedback: 200,
 } as const;
 
 const idSchema = z
@@ -344,11 +345,36 @@ export const SurveyResearchConstructSchema = z.object({
 });
 export type SurveyResearchConstruct = z.infer<typeof SurveyResearchConstructSchema>;
 
+// 试填反馈的探查维度：对齐 CDC 认知访谈作答复核四过程（standards SOURCES.cdc_cognitive）。
+export const PRETEST_ASPECTS = [
+  "comprehension",
+  "recall",
+  "judgment",
+  "response",
+] as const;
+export type SurveyPretestAspect = (typeof PRETEST_ASPECTS)[number];
+
+export const SurveyPretestItemFeedbackSchema = z.object({
+  questionId: idSchema,
+  aspect: z.enum(PRETEST_ASPECTS),
+  note: z.string().trim().min(1).max(SURVEY_LIMITS.maxTextLength),
+  count: z.number().int().min(1).max(999).optional(),
+});
+export type SurveyPretestItemFeedback = z.infer<
+  typeof SurveyPretestItemFeedbackSchema
+>;
+
 // 作者自报的试填记录。它是作者声明，不是外部核验：诊断只能引用、不能据此宣称已验证。
 export const SurveyResearchPretestSchema = z.object({
   participantCount: z.number().int().min(1).max(100000),
   notes: designText,
   recordedAt: z.string().datetime(),
+  // 试填针对的草稿版本（记录时取当前采集版本；从未发布过则缺省）。
+  revisionId: z.string().min(1).max(64).optional(),
+  itemFeedback: z
+    .array(SurveyPretestItemFeedbackSchema)
+    .max(SURVEY_LIMITS.maxPretestItemFeedback)
+    .optional(),
 });
 export type SurveyResearchPretest = z.infer<typeof SurveyResearchPretestSchema>;
 

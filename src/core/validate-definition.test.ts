@@ -309,3 +309,84 @@ describe("研究设计校验（#224）", () => {
     expect(codes(validateSurveyDesign(duplicate))).toContain("duplicate_id");
   });
 });
+
+describe("试填反馈校验（#224 阶段4）", () => {
+  const design = {
+    researchQuestion: "使用频率如何？",
+    population: "博士生",
+    recruitment: "邮件列表",
+    purpose: "describe" as const,
+    timeBudgetMinutes: 5,
+    constructs: [],
+    analysisPlan: "描述统计",
+    assumptions: [],
+    pendingDecisions: [],
+  };
+  const basePretest = {
+    participantCount: 3,
+    notes: "两人反馈题干歧义",
+    recordedAt: "2026-01-01T00:00:00.000Z",
+  };
+  const feedback = {
+    questionId: "q1",
+    aspect: "comprehension" as const,
+    note: "把「常用」理解成了每周",
+    count: 2,
+  };
+
+  it("旧 JSON 无新字段可加载；新字段合法时全部通过", () => {
+    const legacy = {
+      ...makeDefinition(),
+      researchDesign: { ...design, pretest: basePretest },
+    };
+    expect(codes(validateSurveyDefinition(legacy))).toEqual([]);
+    expect(codes(validateSurveyDesign(legacy))).toEqual([]);
+
+    const extended = {
+      ...makeDefinition(),
+      researchDesign: {
+        ...design,
+        pretest: {
+          ...basePretest,
+          revisionId: "00000000-0000-4000-8000-000000000009",
+          itemFeedback: [feedback],
+        },
+      },
+    };
+    expect(codes(validateSurveyDefinition(extended))).toEqual([]);
+    expect(codes(validateSurveyDesign(extended))).toEqual([]);
+  });
+
+  it("aspect 枚举、note 非空（trim）、count 边界在 schema 层拒绝", () => {
+    const withPretest = (pretest: Record<string, unknown>) => ({
+      ...makeDefinition(),
+      researchDesign: { ...design, pretest },
+    });
+
+    const badAspect = withPretest({ ...basePretest, itemFeedback: [{ ...feedback, aspect: "mood" }] });
+    expect(codes(validateSurveyDefinition(badAspect))).toContain("schema.invalid_value");
+
+    const blankNote = withPretest({ ...basePretest, itemFeedback: [{ ...feedback, note: "   " }] });
+    expect(codes(validateSurveyDefinition(blankNote))).toContain("schema.too_small");
+
+    const zeroCount = withPretest({ ...basePretest, itemFeedback: [{ ...feedback, count: 0 }] });
+    expect(codes(validateSurveyDefinition(zeroCount))).toContain("schema.too_small");
+
+    const hugeCount = withPretest({ ...basePretest, itemFeedback: [{ ...feedback, count: 1000 }] });
+    expect(codes(validateSurveyDefinition(hugeCount))).toContain("schema.too_big");
+  });
+
+  it("反馈引用已删除的题目：设计校验提示悬空引用，不成为发布硬门禁", () => {
+    const dangling = {
+      ...makeDefinition(),
+      researchDesign: {
+        ...design,
+        pretest: { ...basePretest, itemFeedback: [{ ...feedback, questionId: "ghost" }] },
+      },
+    };
+    expect(codes(validateSurveyDefinition(dangling))).toEqual([]);
+    const designIssues = validateSurveyDesign(dangling);
+    expect(codes(designIssues)).toEqual(["design_unknown_question"]);
+    expect(designIssues[0]!.path).toBe("researchDesign.pretest.itemFeedback.0.questionId");
+  });
+});

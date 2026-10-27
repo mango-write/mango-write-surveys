@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { ref } from "vue";
 
-import { buildSurveyReviewPlan } from "../../core/index.js";
+import { buildSurveyReviewPlan, canonicalContentJson, sha256Hex } from "../../core/index.js";
 import { makeDefinition } from "../../core/test-fixtures.js";
 import type { SurveyDetail, SurveyReviewDelivery } from "../../contracts/index.js";
 import { SurveysApiError } from "../host.js";
@@ -177,6 +177,32 @@ describe("useSurveyReviewSession 报告与过期", () => {
     expect(session.stale.value).toBe(true);
     setAutosaveStatus("saved");
     expect(session.stale.value).toBe(false);
+  });
+
+  it("报告带内容指纹：仅补试填记录（版本推进、指纹未变）不算过期，建议可应用", async () => {
+    const { session, api, commits, setDraftVersion } = makeHarness();
+    const fingerprint = await sha256Hex(canonicalContentJson(makeDefinition()));
+    session.receive(report({ baseContentFingerprint: fingerprint }));
+    await tick();
+    // 补试填记录后版本推进，题目内容未动。
+    setDraftVersion(5);
+    expect(session.stale.value).toBe(false);
+
+    await session.applyFinding("f1");
+    expect(api.applyReviewFinding).toHaveBeenCalledWith(SURVEY_ID, "f1", 5);
+    expect(commits).toHaveLength(1);
+  });
+
+  it("内容指纹不匹配：即使版本号一致也过期，不发应用请求", async () => {
+    const { session, api, setDraftVersion } = makeHarness();
+    const changed = { ...makeDefinition(), title: "别的问卷" };
+    const fingerprint = await sha256Hex(canonicalContentJson(changed));
+    session.receive(report({ baseContentFingerprint: fingerprint }));
+    await tick();
+    setDraftVersion(2);
+    expect(session.stale.value).toBe(true);
+    await session.applyFinding("f1");
+    expect(api.applyReviewFinding).not.toHaveBeenCalled();
   });
 });
 

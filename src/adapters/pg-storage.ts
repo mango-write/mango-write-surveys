@@ -442,6 +442,7 @@ export function createPgStorage(databaseUrl: string): StandaloneSurveysStorage {
         id: row.id,
         revision: row.revision,
         contentHash: row.content_hash,
+        definition: row.definition_json,
         createdAt: row.created_at,
       }));
       return metas;

@@ -82,21 +82,26 @@ async function submit() {
         :disabled="!idea.trim() || !hasCopilot || alreadySent"
         @click="submit"
       />
+    </div>
+    <!-- P1-10 入口收敛：模板/空白降为 muted 次级行，主入口只有「生成问卷」。 -->
+    <p class="create-start-alt">
+      <span>{{ t("surveys.createStart.altPrefix") }}</span>
       <Button
-        :label="t('surveys.templates.pick')"
-        icon="pi pi-clone"
+        :label="t('surveys.createStart.altTemplate')"
         severity="secondary"
         variant="text"
+        class="create-start-alt-link"
         @click="$emit('pickTemplate')"
       />
+      <span aria-hidden="true">/</span>
       <Button
-        :label="t('surveys.create')"
-        icon="pi pi-plus"
+        :label="t('surveys.createStart.altBlank')"
         severity="secondary"
         variant="text"
+        class="create-start-alt-link"
         @click="$emit('createBlank')"
       />
-    </div>
+    </p>
     <p v-if="!hasCopilot" class="create-start-note">{{ t("surveys.createStart.noCopilot") }}</p>
     <Message v-else-if="failed" severity="error" :closable="false">
       {{ t("surveys.createStart.failed") }}
@@ -154,6 +159,27 @@ async function submit() {
 }
 .is-hero .create-start-actions {
   justify-content: center;
+}
+.create-start-alt {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.15rem;
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--color-text-tertiary);
+}
+.is-hero .create-start-alt {
+  justify-content: center;
+}
+.create-start-alt :deep(.p-button) {
+  font-size: 0.8rem;
+  font-weight: 400;
+  padding: 0.1rem 0.35rem;
+  min-height: 0;
+}
+.create-start-alt :deep(.p-button .p-button-label) {
+  color: var(--color-text-secondary);
 }
 .create-start-note {
   margin: 0;

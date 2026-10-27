@@ -14,19 +14,20 @@ import { useI18n } from "vue-i18n";
 import { useConfirm } from "primevue/useconfirm";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
-import InputNumber from "primevue/inputnumber";
 import Message from "primevue/message";
 import Tag from "primevue/tag";
-import Textarea from "primevue/textarea";
 import { Eye, History, List, Redo2, Undo2 } from "lucide-vue-next";
 import type {
   SurveyDetail,
+  SurveyPretestItemFeedback,
   SurveyStatus,
   ToolSurveyDelivery,
 } from "../../contracts/index.js";
 import {
   applySurveyOps,
+  canonicalContentJson,
   canonicalSurveyJson,
+  sha256Hex,
   validateSurveyDefinition,
 } from "../../core/index.js";
 
@@ -49,6 +50,8 @@ import SurveyOutlinePanel from "../components/SurveyOutlinePanel.vue";
 import SurveyVersionsPanel from "../components/SurveyVersionsPanel.vue";
 import SurveyDistributePanel from "../components/SurveyDistributePanel.vue";
 import SurveyPreviewOverlay from "../components/SurveyPreviewOverlay.vue";
+import SurveyPretestPanel from "../components/SurveyPretestPanel.vue";
+import SurveyResearchDesignSummary from "../components/SurveyResearchDesignSummary.vue";
 import SurveySwitcher from "../components/SurveySwitcher.vue";
 import SurveyInlineReview from "../components/SurveyInlineReview.vue";
 import SurveyStageNavigation from "../components/SurveyStageNavigation.vue";
@@ -411,6 +414,12 @@ function onKeydown(event: KeyboardEvent) {
 }
 
 const hasRevision = computed(() => !!survey.value?.currentRevisionId);
+const currentRevisionNumber = computed(
+  () =>
+    survey.value?.revisions.find(
+      (revision) => revision.id === survey.value?.currentRevisionId,
+    )?.revision ?? null,
+);
 const currentRevision = computed(() => {
   const detail = survey.value;
   const revisionId = detail?.currentRevisionId;
@@ -418,8 +427,9 @@ const currentRevision = computed(() => {
   return detail.revisions.find((revision) => revision.id === revisionId) ?? null;
 });
 
-// 「设计段有未发布修改」= 草稿 definition 的 canonical 哈希 ≠ 当前采集版本
-// 的 contentHash。canonical 形式唯一来源在 surveys 包 core，与 api 发布时同一份。
+// 「设计段有未发布修改」按内容指纹判定：发布版本带 contentFingerprint（剥掉
+// researchDesign.pretest 的 canonical 摘要）时比对指纹——仅补试填记录不算改卷，
+// 状态保持「与发布版本一致」；旧宿主缺席指纹时回退整卷 contentHash 对比。
 const definitionDirty = ref(false);
 let dirtyEpoch = 0;
 async function refreshDirty() {
@@ -431,15 +441,12 @@ async function refreshDirty() {
   }
   const epoch = ++dirtyEpoch;
   try {
-    const digest = await crypto.subtle.digest(
-      "SHA-256",
-      new TextEncoder().encode(canonicalSurveyJson(definition.value)),
-    );
-    if (epoch !== dirtyEpoch) return;
-    const hash = Array.from(new Uint8Array(digest))
-      .map((byte) => byte.toString(16).padStart(2, "0"))
-      .join("");
-    definitionDirty.value = hash !== revision.contentHash;
+    const dirty = revision.contentFingerprint
+      ? (await sha256Hex(canonicalContentJson(definition.value))) !==
+        revision.contentFingerprint
+      : (await sha256Hex(canonicalSurveyJson(definition.value))) !==
+        revision.contentHash;
+    if (epoch === dirtyEpoch) definitionDirty.value = dirty;
   } catch {
     if (epoch === dirtyEpoch) definitionDirty.value = false;
   }
@@ -526,27 +533,27 @@ const publishNextRevision = computed(
   () => (survey.value?.revisions[0]?.revision ?? 0) + 1,
 );
 const publishDesign = computed(() => definition.value.researchDesign ?? null);
-// 「有研究设计」的发布侧判据：recordPretest 会在无设计草稿上合成空基底，
+// 「有研究设计」的发布侧判据：保存试填反馈会在无设计草稿上合成空基底，
 // 只看 researchDesign 存在会把空设计当成「没有待确认事项」的绿色事实。
 const publishDesignUsable = computed(() => {
   const design = definition.value.researchDesign;
   return !!design && !!design.researchQuestion.trim();
 });
-// 试填记录（作者自报）：唯一数据是 definition.researchDesign.pretest；确认
-// 视图里按需展开记录，保存走 commitDefinition 同一历史/自动保存链路。
-const pretestNotes = ref("");
-const pretestCount = ref<number | null>(null);
-watch(
-  () => publishDesign.value?.pretest,
-  (value) => {
-    pretestNotes.value = value?.notes ?? "";
-    pretestCount.value = value?.participantCount ?? null;
-  },
-  { immediate: true },
-);
-function recordPretest() {
-  const target = survey.value;
-  if (!target?.canWrite || !pretestCount.value || !pretestNotes.value.trim()) return;
+// 试填记录（作者自报）：唯一数据是 definition.researchDesign.pretest；工作台
+// 顶栏直达面板（复制提纲 + 按题反馈），发布确认只留聚合摘要。保存走
+// commitDefinition 同一历史/自动保存链路，不新增服务器路由。
+const pretestOpen = ref(false);
+function openPretestFromPublish() {
+  publishOpen.value = false;
+  pretestOpen.value = true;
+}
+function savePretest(payload: {
+  participantCount: number;
+  notes: string;
+  revisionId?: string;
+  itemFeedback: SurveyPretestItemFeedback[];
+}) {
+  if (!survey.value?.canWrite) return;
   // 冲突是终态：不再提交任何变更，提示与全局冲突横幅一致，不给「已记录」假成功。
   if (autosave.status.value === "conflict") {
     notify.warn(t("surveys.conflict"));
@@ -568,15 +575,32 @@ function recordPretest() {
         pendingDecisions: [],
         ...publishDesign.value,
         pretest: {
-          notes: pretestNotes.value.trim(),
-          participantCount: pretestCount.value,
+          ...payload,
           recordedAt: new Date().toISOString(),
         },
       },
     },
     "pretest",
   );
+  pretestOpen.value = false;
+  notify.success(t("surveys.pretestPanel.saved"));
 }
+// 发布确认的聚合口径：按题反馈条数与四类分布，从已保存记录即时汇总。
+const pretestAspectCounts = computed<Record<SurveyPretestItemFeedback["aspect"], number>>(() => {
+  const counts = { comprehension: 0, recall: 0, judgment: 0, response: 0 };
+  for (const item of publishDesign.value?.pretest?.itemFeedback ?? []) counts[item.aspect] += 1;
+  return counts;
+});
+const pretestRevisionLine = computed(() => {
+  // 人读版本序数（发布框同款口径）：从 revisions 列表把 id 换成第 n 版。
+  const revisionId = publishDesign.value?.pretest?.revisionId;
+  const ordinal = revisionId
+    ? survey.value?.revisions.find((revision) => revision.id === revisionId)?.revision
+    : undefined;
+  return ordinal
+    ? t("surveys.publishCheck.pretestRevision", { n: ordinal })
+    : t("surveys.publishCheck.pretestRevisionNone");
+});
 const pendingReview = computed(() =>
   reviewReport.value && reviewPlan.value
     ? {
@@ -586,6 +610,40 @@ const pendingReview = computed(() =>
       }
     : null,
 );
+
+// 「题目数」口径：只数真实题目（页序展开），说明块单独陈述，避免发布事实
+// 与提纲「共 N 题」互相矛盾。AI 建卷提示卡用同一口径。
+const answerableCount = computed(() => {
+  let questions = 0;
+  let statements = 0;
+  for (const page of definition.value.pages)
+    for (const id of page.questionIds) {
+      const question = definition.value.questions.find((item) => item.id === id);
+      if (!question) continue;
+      if (question.type === "statement") statements += 1;
+      else questions += 1;
+    }
+  return { questions, statements };
+});
+// en 的单复数分支（repo 门禁禁止消息里的裸 |），键在调用点按数选：
+// 题目短语先拼好再入句，说明块单独一句。
+const publishFactsLine = computed(() => {
+  const pages = definition.value.pages.length;
+  const questionPhrase =
+    answerableCount.value.questions === 1
+      ? t("surveys.publishCheck.factsQuestionOne")
+      : t("surveys.publishCheck.factsQuestionMany", { n: answerableCount.value.questions });
+  const line =
+    pages === 1
+      ? t("surveys.publishCheck.factsOne", { questions: questionPhrase })
+      : t("surveys.publishCheck.factsMany", { questions: questionPhrase, pages });
+  if (!answerableCount.value.statements) return line;
+  return `${line} ${
+    answerableCount.value.statements === 1
+      ? t("surveys.publishCheck.factsStatementOne")
+      : t("surveys.publishCheck.factsStatementMany", { n: answerableCount.value.statements })
+  }`;
+});
 
 async function publish() {
   const target = survey.value;
@@ -870,6 +928,14 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
                 <template #icon><Eye :size="17" /></template>
               </Button>
               <Button
+                v-if="survey.canWrite"
+                severity="secondary"
+                variant="text"
+                :label="t('surveys.pretestPanel.open')"
+                v-tooltip.bottom="t('surveys.pretestPanel.open')"
+                @click="pretestOpen = true"
+              />
+              <Button
                 :label="t('surveys.publish')"
                 icon="pi pi-send"
                 :loading="busy"
@@ -893,7 +959,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
               t("surveys.copilot.aiCreated", {
                 title: aiCreatedCard.title,
                 pages: definition.pages.length,
-                questions: definition.questions.length,
+                questions: answerableCount.questions,
               })
             }}{{ aiCreatedCard.issues?.length
               ? " " +
@@ -940,6 +1006,11 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
             @retry="load"
           >
             <template v-if="survey">
+              <SurveyResearchDesignSummary
+                v-if="stage === 'design'"
+                :design="publishDesign"
+                :definition="definition"
+              />
               <SurveyDesignCanvas
                 v-if="stage === 'design'"
                 ref="canvasRef"
@@ -1011,6 +1082,17 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
       :survey-id="surveyId"
       @update:visible="previewOpen = $event"
     />
+    <SurveyPretestPanel
+      v-if="survey"
+      :visible="pretestOpen"
+      :definition="definition"
+      :pretest="publishDesign?.pretest ?? null"
+      :revision-id="survey.currentRevisionId ?? ''"
+      :revision-number="currentRevisionNumber"
+      :busy="busy"
+      @save="savePretest"
+      @update:visible="pretestOpen = $event"
+    />
     <!-- 发布前确认（issue #224 M3）：结构校验在打开前已完成并通过，这里只
          陈述事实与提醒，区分「建议确认」与「结构阻断」，不虚构全部通过。 -->
     <Dialog
@@ -1023,9 +1105,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
         <p class="publish-intro">
           {{ t("surveys.publishConfirm", { n: publishNextRevision }) }}
         </p>
-        <p class="publish-facts">
-          {{ t("surveys.publishCheck.facts", { questions: definition.questions.length, pages: definition.pages.length }) }}
-        </p>
+        <p class="publish-facts">{{ publishFactsLine }}</p>
         <div class="publish-reminders" role="list">
           <p class="publish-reminders-title">{{ t("surveys.publishCheck.remindersTitle") }}</p>
           <div v-if="!publishDesignUsable" role="listitem" class="publish-reminder">
@@ -1065,22 +1145,22 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
             </span>
           </div>
         </div>
-        <!-- 试填记录按需展开：只有作者需要留痕时才填；保存走草稿历史与自动保存。 -->
+        <!-- 试填聚合摘要（issue #224 阶段4）：记录入口在工作台顶栏，这里只陈述
+             已保存的事实（作者自报口径），需要补充时跳转面板。 -->
         <details v-if="survey?.canWrite" class="publish-pretest">
           <summary>{{ t("surveys.assistant.trialTitle") }}</summary>
-          <p class="publish-pretest-hint">{{ t("surveys.publishCheck.pretestHint") }}</p>
-          <Button :label="t('surveys.preview')" severity="secondary" @click="previewOpen = true" />
-          <label class="publish-pretest-field">
-            {{ t("surveys.assistant.trialCount") }}
-            <InputNumber v-model="pretestCount" :min="1" :max="10000" :disabled="busy" show-buttons fluid />
-          </label>
-          <label class="publish-pretest-field">
-            {{ t("surveys.assistant.trialNotes") }}
-            <Textarea v-model="pretestNotes" :maxlength="2000" rows="3" auto-resize fluid :disabled="busy" />
-          </label>
-          <Button :label="t('surveys.assistant.recordTrial')" severity="secondary"
-            :disabled="busy || !pretestCount || !pretestNotes.trim()" @click="recordPretest" />
-          <p v-if="publishDesign?.pretest" class="publish-pretest-hint">{{ t("surveys.assistant.trialRecorded") }}</p>
+          <template v-if="publishDesign?.pretest">
+            <p class="publish-pretest-hint">{{ t("surveys.publishCheck.pretestDone", { n: publishDesign.pretest.participantCount }) }}</p>
+            <p class="publish-pretest-hint">{{ t("surveys.publishCheck.pretestFeedback", { n: publishDesign.pretest.itemFeedback?.length ?? 0 }) }}</p>
+            <p class="publish-pretest-hint">{{ t("surveys.publishCheck.pretestAspects", pretestAspectCounts) }}</p>
+            <p class="publish-pretest-hint">{{ pretestRevisionLine }}</p>
+            <p class="publish-pretest-hint">{{ t("surveys.assistant.trialRecorded") }}</p>
+          </template>
+          <template v-else>
+            <p class="publish-pretest-hint">{{ t("surveys.publishCheck.noPretest") }}</p>
+            <p class="publish-pretest-hint">{{ t("surveys.publishCheck.pretestHint") }}</p>
+          </template>
+          <Button :label="t('surveys.pretestPanel.open')" severity="secondary" @click="openPretestFromPublish" />
         </details>
         <p class="publish-disclaimer">{{ t("surveys.publishCheck.disclaimer") }}</p>
         <Message v-if="publishError" severity="error" :closable="false">
@@ -1273,11 +1353,5 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
   font-size: 0.8rem;
   color: var(--color-text-tertiary);
   line-height: 1.6;
-}
-.publish-pretest-field {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  font-size: 0.85rem;
 }
 </style>

@@ -105,6 +105,9 @@ function setup() {
     service,
     survey,
     review: () => review,
+    setReview: (next: SurveyReviewRecord | null) => {
+      review = next;
+    },
     record: (findings = [finding("f1"), finding("f2")]) =>
       service.recordReview(userId, surveyId, {
         operationId: "operation-1",
@@ -112,6 +115,25 @@ function setup() {
         summary: "两条建议",
         findings,
       }),
+  };
+}
+
+/** 保存试填反馈后的草稿形态：版本推进，题目内容未动（可能合成全空设计基底）。 */
+function withPretest(recordedAt: string) {
+  return {
+    ...makeDefinition(),
+    researchDesign: {
+      researchQuestion: "",
+      population: "",
+      recruitment: "",
+      purpose: "describe" as const,
+      timeBudgetMinutes: 5,
+      constructs: [],
+      analysisPlan: "",
+      assumptions: [],
+      pendingDecisions: [],
+      pretest: { participantCount: 3, notes: "两人反馈题干歧义", recordedAt },
+    },
   };
 }
 
@@ -147,13 +169,78 @@ describe("SurveysService 诊断记录", () => {
   it("过期基线拒绝应用，题目和报告保持原样", async () => {
     const { service, survey, record, review } = setup();
     await record();
+    // 基线过期 = 内容真的变了（仅版本推进而内容未变走指纹口径，不算过期）。
+    survey.draftVersion = 2;
+    survey.draftJson = { ...makeDefinition(), title: "基线后改了标题" };
+
+    await expect(service.applyReviewFinding(userId, surveyId, "f1", 2)).rejects.toMatchObject({
+      code: "review_stale",
+    });
+    expect(survey.draftJson).toEqual({ ...makeDefinition(), title: "基线后改了标题" });
+    const payload = review()?.findingsJson as { findings: unknown[] };
+    expect(payload.findings).toHaveLength(2);
+  });
+
+  it("登记时服务端盖章内容指纹；详情恢复携带同一指纹", async () => {
+    const { service, record, review } = setup();
+    const delivery = await record();
+    expect(delivery.baseContentFingerprint).toMatch(/^[0-9a-f]{64}$/);
+    const payload = review()?.findingsJson as { baseContentFingerprint?: string };
+    expect(payload.baseContentFingerprint).toBe(delivery.baseContentFingerprint);
+
+    const restored = await service.getSurveyDetail(userId, surveyId);
+    expect(restored.review?.baseContentFingerprint).toBe(delivery.baseContentFingerprint);
+  });
+
+  it("仅补试填记录：版本推进、内容指纹未变，建议仍可应用", async () => {
+    const { service, survey, record } = setup();
+    await record();
+    // 记录试填的草稿形态：可能带全空研究设计基底（无设计草稿合成），剥掉
+    // pretest 后归一化为原定义，指纹不变。
+    survey.draftVersion = 2;
+    survey.draftJson = withPretest("2026-01-02T00:00:00.000Z");
+
+    const detail = await service.applyReviewFinding(userId, surveyId, "f1", 2);
+    expect(detail.draftVersion).toBe(3);
+    expect(detail.definition.questions[0]).toMatchObject({ title: "修改 f1" });
+  });
+
+  it("内容真的变了：即使有指纹也拒绝应用", async () => {
+    const { service, survey, record } = setup();
+    await record();
+    survey.draftVersion = 2;
+    survey.draftJson = { ...makeDefinition(), title: "真的改了标题" };
+
+    await expect(service.applyReviewFinding(userId, surveyId, "f1", 2)).rejects.toMatchObject({
+      code: "review_stale",
+    });
+  });
+
+  it("旧记录无指纹字段：回退版本号对比，版本不一致拒绝", async () => {
+    const { service, survey, record, review, setReview } = setup();
+    await record();
+    // 旧格式：findings_json 是裸数组、无指纹。
+    setReview({
+      ...(review() as SurveyReviewRecord),
+      findingsJson: [finding("f1"), finding("f2")],
+    });
     survey.draftVersion = 2;
 
     await expect(service.applyReviewFinding(userId, surveyId, "f1", 2)).rejects.toMatchObject({
       code: "review_stale",
     });
-    expect(survey.draftJson).toEqual(makeDefinition());
-    expect(review()?.findingsJson).toHaveLength(2);
+    expect(survey.draftVersion).toBe(2);
+  });
+
+  it("应用后剩余建议的基线推进到应用后的内容指纹", async () => {
+    const { service, record, review } = setup();
+    await record();
+    const detail = await service.applyReviewFinding(userId, surveyId, "f1", 1);
+
+    expect(detail.review?.baseDraftVersion).toBe(2);
+    expect(detail.review?.baseContentFingerprint).toMatch(/^[0-9a-f]{64}$/);
+    const payload = review()?.findingsJson as { baseContentFingerprint?: string };
+    expect(payload.baseContentFingerprint).toBe(detail.review?.baseContentFingerprint);
   });
 
   it("没有自动操作的条目不能应用，但可忽略", async () => {
@@ -164,7 +251,8 @@ describe("SurveysService 诊断记录", () => {
       code: "review_not_applicable",
     });
     expect(survey.draftJson).toEqual(makeDefinition());
-    expect(review()?.findingsJson).toHaveLength(1);
+    const payload = review()?.findingsJson as { findings: unknown[] };
+    expect(payload.findings).toHaveLength(1);
 
     const detail = await service.dismissReviewFinding(userId, surveyId, "manual");
     expect(detail.review).toBeNull();

@@ -54,22 +54,42 @@ function mountWithVariant(host: SurveysWebHost, variant: "hero" | "compact") {
 }
 
 describe("SurveyCreateStart（issue #224 M3）", () => {
-  it("hero 态渲染主文案、输入与三个动作；compact 态不渲染长说明", () => {
+  it("hero 态渲染主文案、输入与唯一主入口；compact 态不渲染长说明", () => {
     const { host } = makeHost();
     const hero = mountWithVariant(host, "hero");
     expect(hero.text()).toContain(t("surveys.createStart.question"));
     expect(hero.text()).toContain(t("surveys.createStart.hint"));
     expect(hero.find("textarea").exists()).toBe(true);
-    const labels = hero.findAll("button").map((b) => b.text());
-    expect(labels).toContain(t("surveys.createStart.submit"));
-    expect(labels).toContain(t("surveys.templates.pick"));
-    expect(labels).toContain(t("surveys.create"));
+    expect(hero.findAll("button").map((b) => b.text())).toEqual([
+      t("surveys.createStart.submit"),
+      t("surveys.createStart.altTemplate"),
+      t("surveys.createStart.altBlank"),
+    ]);
     hero.unmount();
 
     const compact = mountWithVariant(makeHost().host, "compact");
     expect(compact.text()).toContain(t("surveys.createStart.question"));
     expect(compact.text()).not.toContain(t("surveys.createStart.hint"));
     compact.unmount();
+  });
+
+  it("入口层级（P1-10）：hero/compact 都是唯一主按钮 + 一条 muted 次级行含模板/空白两个链接", () => {
+    for (const variant of ["hero", "compact"] as const) {
+      const wrapper = mountWithVariant(makeHost().host, variant);
+      // 主入口唯一：actions 区只有「生成问卷」。
+      const actions = wrapper.findAll(".create-start-actions button");
+      expect(actions).toHaveLength(1);
+      expect(actions[0]!.text()).toBe(t("surveys.createStart.submit"));
+      // 次级行：模板/空白两个文字链接，主按钮不在其中。
+      const altLinks = wrapper.findAll(".create-start-alt button");
+      expect(altLinks.map((b) => b.text())).toEqual([
+        t("surveys.createStart.altTemplate"),
+        t("surveys.createStart.altBlank"),
+      ]);
+      expect(wrapper.find(".create-start-alt").text()).toContain(t("surveys.createStart.altPrefix"));
+      expect(wrapper.text()).toContain("/");
+      wrapper.unmount();
+    }
   });
 
   it("有 sendPrompt：点击生成直接发送包装后的研究想法", async () => {
@@ -165,7 +185,7 @@ describe("SurveyCreateStart（issue #224 M3）", () => {
     wrapper.unmount();
   });
 
-  it("无 copilot 宿主：输入与主按钮禁用，给降级说明；次要动作仍可用", async () => {
+  it("无 copilot 宿主：输入与主按钮禁用，给降级说明；次级行链接仍可用", async () => {
     const { host } = makeHost();
     const wrapper = mountWithVariant(host, "hero");
     expect(wrapper.text()).toContain(t("surveys.createStart.noCopilot"));
@@ -179,11 +199,11 @@ describe("SurveyCreateStart（issue #224 M3）", () => {
     const withEmits = mountSurveysComponent(SurveyCreateStart, { props: { variant: "hero", onPickTemplate: picked, onCreateBlank: blank } }, host);
     await withEmits
       .findAll("button")
-      .find((b) => b.text() === t("surveys.templates.pick"))!
+      .find((b) => b.text() === t("surveys.createStart.altTemplate"))!
       .trigger("click");
     await withEmits
       .findAll("button")
-      .find((b) => b.text() === t("surveys.create"))!
+      .find((b) => b.text() === t("surveys.createStart.altBlank"))!
       .trigger("click");
     expect(picked).toHaveBeenCalledTimes(1);
     expect(blank).toHaveBeenCalledTimes(1);

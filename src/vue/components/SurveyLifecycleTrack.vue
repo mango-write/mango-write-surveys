@@ -86,6 +86,23 @@ const statusText = computed(() => t(`surveys.status.${props.status}`));
   border-radius: var(--radius-pill, 999px);
   background: var(--color-bg-soft);
 }
+@media (max-width: 480px) {
+  /* 390px 下四段溢出为横向滚动：右缘渐隐提示还有可滚动内容（纯 CSS，静态）。 */
+  .lifecycle-track {
+    position: relative;
+  }
+  .lifecycle-track::after {
+    content: "";
+    position: absolute;
+    top: 1px;
+    bottom: 1px;
+    right: 1px;
+    width: 20px;
+    border-radius: 0 var(--radius-pill, 999px) var(--radius-pill, 999px) 0;
+    background: linear-gradient(to right, transparent, var(--color-bg-soft));
+    pointer-events: none;
+  }
+}
 .track-connector {
   flex-shrink: 0;
   width: 12px;

@@ -8,13 +8,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createMemoryHistory, createRouter, RouterView } from "vue-router";
 import { createHash } from "node:crypto";
-import InputNumber from "primevue/inputnumber";
-import Textarea from "primevue/textarea";
 
 import { createSurveysTestI18n, createTestHost, mountSurveysComponent } from "../test-mount.js";
 import type { SurveysLayoutPrefs, SurveysWebHost } from "../host.js";
 import { SurveysApiError } from "../host.js";
-import { canonicalSurveyJson } from "../../core/index.js";
+import { canonicalContentJson, canonicalSurveyJson } from "../../core/index.js";
 import type { SurveyDefinition, SurveyDetail } from "../../contracts/index.js";
 import {
   __resetAiCreatedSurveyHandoffForTest,
@@ -42,6 +40,7 @@ vi.mock("primevue/useconfirm", () => ({
 import SurveyWorkspacePage from "./SurveyWorkspacePage.vue";
 import SurveyVersionsPanel from "../components/SurveyVersionsPanel.vue";
 import SurveyInlineReview from "../components/SurveyInlineReview.vue";
+import SurveyPretestPanel from "../components/SurveyPretestPanel.vue";
 import SurveySwitcher from "../components/SurveySwitcher.vue";
 
 const i18n = createSurveysTestI18n();
@@ -82,9 +81,11 @@ function makeHost(
   copilotSendPrompt?: ReturnType<typeof vi.fn>;
   copilotRelease?: ReturnType<typeof vi.fn>;
   copilotHandlers: Array<{ onSurveyDeliveryFrame?: (delivery: never) => void }>;
+  notifySuccess: ReturnType<typeof vi.fn>;
   notifyWarn: ReturnType<typeof vi.fn>;
 } {
   const navigate = vi.fn();
+  const notifySuccess = vi.fn();
   const notifyWarn = vi.fn();
   const copilotHandlers: Array<{ onSurveyDeliveryFrame?: (delivery: never) => void }> = [];
   const copilotRegister = opts.copilot
@@ -97,7 +98,7 @@ function makeHost(
   const copilotSendPrompt = opts.copilot ? vi.fn(async () => {}) : undefined;
   const copilotRelease = opts.copilot ? vi.fn() : undefined;
   const host = createTestHost({
-    notify: { success: vi.fn(), error: vi.fn(), info: vi.fn(), warn: notifyWarn },
+    notify: { success: notifySuccess, error: vi.fn(), info: vi.fn(), warn: notifyWarn },
     ...(opts.workbench ? { workbenchShell: { template: "<div/>" } } : {}),
     ...(opts.layoutPrefs ? { layoutPrefs: opts.layoutPrefs } : {}),
     ...(copilotRegister ? { copilot: {
@@ -139,7 +140,7 @@ function makeHost(
     },
     navigate: navigate as never,
   });
-  return { host, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, notifyWarn };
+  return { host, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, notifySuccess, notifyWarn };
 }
 
 const ShellStub = (activeTab: string) =>
@@ -342,7 +343,7 @@ async function mountWorkspace(
 ) {
   const router = makeRouter();
   await router.push(initialPath);
-  const { host, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, notifyWarn } = makeHost(opts);
+  const { host, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, notifySuccess, notifyWarn } = makeHost(opts);
   const wrapper = mountSurveysComponent(
     SurveyWorkspacePage,
     { global: { plugins: [router], stubs: shellStubs(leftActiveTab) } },
@@ -350,7 +351,7 @@ async function mountWorkspace(
   );
   await router.isReady();
   await flushPromises();
-  return { router, wrapper, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, notifyWarn };
+  return { router, wrapper, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, notifySuccess, notifyWarn };
 }
 
 // 离开保护要走 vue-router 的 in-component 守卫：页面必须是当前路由的组件实例。
@@ -403,6 +404,24 @@ function publishButton(wrapper: ReturnType<typeof mount>) {
 /** 发布前确认视图（issue #224 M3）：打开后点对话框 footer 的发布按钮。 */
 function publishDialog(wrapper: ReturnType<typeof mount>) {
   return wrapper.find(".dialog-stub");
+}
+
+/** 发布事实行（PM P1-4）：只数真实题目，说明块单独陈述；en 单复数在调用点选键。 */
+function publishFacts(questions: number, pages: number, statements = 0): string {
+  const questionPhrase =
+    questions === 1
+      ? t("surveys.publishCheck.factsQuestionOne")
+      : t("surveys.publishCheck.factsQuestionMany", { n: questions });
+  const line =
+    pages === 1
+      ? t("surveys.publishCheck.factsOne", { questions: questionPhrase })
+      : t("surveys.publishCheck.factsMany", { questions: questionPhrase, pages });
+  if (!statements) return line;
+  return `${line} ${
+    statements === 1
+      ? t("surveys.publishCheck.factsStatementOne")
+      : t("surveys.publishCheck.factsStatementMany", { n: statements })
+  }`;
 }
 
 async function confirmPublishInDialog(wrapper: ReturnType<typeof mount>) {
@@ -496,6 +515,15 @@ describe("SurveyWorkspacePage 生命周期轨道（issue #217）", () => {
     expect(wrapper.find(".analysis-stub").text()).toBe("analysis");
   });
 
+  it("?stage=distribute 深链直达发放段（走查 P2e：四段深链接线回归）", async () => {
+    mocks.get.mockResolvedValue(
+      detail({ currentRevisionId: "00000000-0000-4000-8000-000000000002" }),
+    );
+    const { wrapper } = await mountWorkspace("/u/surveys/s-1?stage=distribute");
+    expect(wrapper.find(".distribute-stub").exists()).toBe(true);
+    expect(wrapper.find(".canvas-stub").exists()).toBe(false);
+  });
+
   it("段切换按钮响应键盘 Enter 与 Space（minor⑥：键盘可激活）", async () => {
     mocks.get.mockResolvedValue(
       detail({ currentRevisionId: "00000000-0000-4000-8000-000000000002" }),
@@ -560,6 +588,97 @@ describe("SurveyWorkspacePage 生命周期轨道（issue #217）", () => {
     const { wrapper } = await mountWorkspace();
     await flushPromises();
     expect(wrapper.find(".segment-badge--dirty").exists()).toBe(false);
+  });
+
+  it("仅保存试填反馈不翻未发布状态：内容指纹口径（走查 P1 复审）", async () => {
+    const draft = definition();
+    const synced = detail({
+      currentRevisionId: "00000000-0000-4000-8000-000000000002",
+      contentHash: sha256Hex(canonicalSurveyJson(draft)),
+    });
+    synced.revisions[0]!.contentFingerprint = sha256Hex(canonicalContentJson(draft));
+    mocks.get.mockResolvedValue(synced);
+    mocks.save.mockResolvedValue(synced);
+    const { wrapper } = await mountWorkspace();
+    await vi.waitFor(() =>
+      expect(wrapper.find(".draft-state").text()).toBe(t("surveys.draftMatchesPublished")),
+    );
+
+    // 保存一条试填反馈：题目内容一字未动，状态保持「与发布版本一致」。
+    wrapper
+      .findComponent(SurveyPretestPanel)
+      .vm.$emit("save", { participantCount: 2, notes: "", itemFeedback: [] });
+    await flushPromises();
+    await vi.waitFor(() =>
+      expect(wrapper.find(".draft-state").text()).toBe(t("surveys.draftMatchesPublished")),
+    );
+    expect(wrapper.find(".segment-badge--dirty").exists()).toBe(false);
+
+    // 真改题：徽标照旧出现（口径没有放宽到不认识内容修改）。
+    vi.useFakeTimers();
+    await changeDefinition(wrapper);
+    // 冲掉自动保存防抖：排队的保存在本用例内落地，不漏给后续用例。
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(wrapper.find(".segment-badge--dirty").exists()).toBe(true);
+    wrapper.unmount();
+  });
+});
+
+describe("SurveyWorkspacePage 研究设计摘要卡（走查 P1-6）", () => {
+  const designDetail = () => {
+    const target = detail({ currentRevisionId: null });
+    target.definition = {
+      ...definition(),
+      researchDesign: {
+        researchQuestion: "研究生如何选用科研工具",
+        population: "研究生",
+        recruitment: "",
+        purpose: "describe",
+        timeBudgetMinutes: 5,
+        constructs: [],
+        analysisPlan: "",
+        assumptions: [],
+        pendingDecisions: ["是否需要按年级分层"],
+      },
+    };
+    return target;
+  };
+
+  it("设计段画布上方有只读摘要卡：默认折叠，含研究问题与待确认事项（与发布确认同源）", async () => {
+    mocks.get.mockResolvedValue(designDetail());
+    const { wrapper } = await mountWorkspace();
+    const card = wrapper.find("details.design-summary");
+    expect(card.exists()).toBe(true);
+    expect(card.attributes("open")).toBeUndefined();
+    expect(card.text()).toContain("研究设计");
+    expect(card.text()).toContain("已填写");
+    expect(card.text()).toContain("研究生如何选用科研工具");
+    expect(card.text()).toContain("是否需要按年级分层");
+    wrapper.unmount();
+  });
+
+  it("无研究设计：摘要卡显示「未填写」与既有入口指引，不出空行", async () => {
+    const { wrapper } = await mountWorkspace();
+    const card = wrapper.find("details.design-summary");
+    expect(card.exists()).toBe(true);
+    expect(card.text()).toContain("未填写");
+    expect(card.text()).toContain("还没有研究设计");
+    wrapper.unmount();
+  });
+
+  it("只在设计段渲染；数据/发放段不出现", async () => {
+    mocks.get.mockResolvedValue(
+      detail({ currentRevisionId: "00000000-0000-4000-8000-000000000002" }),
+    );
+    const { wrapper } = await mountWorkspace();
+    expect(wrapper.find("details.design-summary").exists()).toBe(true);
+    await segments(wrapper)[2]!.trigger("click");
+    await flushPromises();
+    expect(wrapper.find("details.design-summary").exists()).toBe(false);
+    await segments(wrapper)[0]!.trigger("click");
+    await flushPromises();
+    expect(wrapper.find("details.design-summary").exists()).toBe(true);
+    wrapper.unmount();
   });
 });
 
@@ -709,7 +828,7 @@ describe("SurveyWorkspacePage 发布确认与离开保护（issue #217）", () =
     const dialog = publishDialog(wrapper);
     expect(dialog.exists()).toBe(true);
     expect(dialog.text()).toContain(t("surveys.publishConfirm", { n: 2 }));
-    expect(dialog.text()).toContain(t("surveys.publishCheck.facts", { questions: 1, pages: 1 }));
+    expect(dialog.text()).toContain(publishFacts(1, 1));
 
     await confirmPublishInDialog(wrapper);
     expect(mocks.publish).toHaveBeenCalledWith(revisionDetail.id);
@@ -816,42 +935,51 @@ describe("SurveyWorkspacePage 发布确认与离开保护（issue #217）", () =
     plain.wrapper.unmount();
   });
 
-  it("确认视图内可记录试填：走草稿历史；不等防抖点发布时先 flush 再发布", async () => {
+  it("工作台顶栏直达试填反馈面板：保存走草稿历史；不等防抖点发布时先 flush 再发布", async () => {
     const revisionDetail = detail({ currentRevisionId: null });
     mocks.get.mockResolvedValue(revisionDetail);
     mocks.save.mockResolvedValue(revisionDetail);
     mocks.publish.mockResolvedValue(revisionDetail);
-    const { wrapper } = await mountWorkspace();
-    await publishButton(wrapper).trigger("click");
-    await flushPromises();
-    const dialog = publishDialog(wrapper);
-    // 试填记录按需 details：默认折叠但内容可交互（只有作者需要留痕时展开）。
-    const pretest = dialog.find(".publish-pretest");
-    expect(pretest.exists()).toBe(true);
-    expect(pretest.element.hasAttribute("open")).toBe(false);
-    // PrimeVue 输入件在测试树内经组件 emit 更新模型（与其它组件测试同口径）。
-    wrapper.findComponent(InputNumber).vm.$emit("update:modelValue", 3);
-    wrapper.findComponent(Textarea).vm.$emit("update:modelValue", "两人反馈题干歧义");
-    await flushPromises();
-    await pretest
+    const { wrapper, notifySuccess } = await mountWorkspace();
+    // 顶栏入口直达面板（不再藏在发布确认的 details 里）。
+    await wrapper
       .findAll("button")
-      .find((b) => b.text() === t("surveys.assistant.recordTrial"))!
+      .find((b) => b.text() === t("surveys.pretestPanel.open"))!
       .trigger("click");
+    const panel = wrapper.findComponent(SurveyPretestPanel);
+    expect(panel.props("visible")).toBe(true);
+    // 记录提交走面板事件（表单交互在面板组件测试里覆盖）。
+    panel.vm.$emit("save", {
+      participantCount: 3,
+      notes: "两人反馈题干歧义",
+      itemFeedback: [
+        { questionId: "q1", aspect: "comprehension", note: "把「常用」理解成了每周", count: 2 },
+      ],
+    });
     await flushPromises();
-    // 记录试填合成的空研究设计不洗成绿色「没有待确认事项」：noDesign 提醒仍在。
-    expect(publishDialog(wrapper).text()).toContain(t("surveys.publishCheck.noDesign"));
-    expect(publishDialog(wrapper).text()).not.toContain(t("surveys.publishCheck.noPending"));
+    // 保存后面板关闭并给出明确反馈（走查 P1-3：保存无任何提示）。
+    expect(panel.props("visible")).toBe(false);
+    expect(publishDialog(wrapper).exists()).toBe(false);
+    expect(notifySuccess).toHaveBeenCalledWith(t("surveys.pretestPanel.saved"));
 
     vi.useFakeTimers();
-    // 记录后立即点发布：确认发布前必须再次 flush，版本与记录一起落盘。
-    await confirmPublishInDialog(wrapper);
+    await publishButton(wrapper).trigger("click");
     await vi.advanceTimersByTimeAsync(100);
+    // 确认视图打开前已 flush：版本与记录一起落盘。
     expect(mocks.save).toHaveBeenCalledTimes(1);
     const savedDefinition = mocks.save.mock.calls[0]![2] as SurveyDefinition;
     expect(savedDefinition.researchDesign?.pretest).toMatchObject({
       participantCount: 3,
       notes: "两人反馈题干歧义",
     });
+    expect(savedDefinition.researchDesign?.pretest?.itemFeedback).toEqual([
+      { questionId: "q1", aspect: "comprehension", note: "把「常用」理解成了每周", count: 2 },
+    ]);
+    // 记录试填合成的空研究设计不洗成绿色「没有待确认事项」：noDesign 提醒仍在。
+    expect(publishDialog(wrapper).text()).toContain(t("surveys.publishCheck.noDesign"));
+    expect(publishDialog(wrapper).text()).not.toContain(t("surveys.publishCheck.noPending"));
+
+    await confirmPublishInDialog(wrapper);
     expect(mocks.publish).toHaveBeenCalledWith(revisionDetail.id);
     expect(wrapper.find(".distribute-stub").exists()).toBe(true);
     wrapper.unmount();
@@ -888,34 +1016,101 @@ describe("SurveyWorkspacePage 发布确认与离开保护（issue #217）", () =
     wrapper.unmount();
   });
 
-  it("自动保存冲突终态下记录试填被拒：警示一致提示，不落盘也不假成功", async () => {
+  it("自动保存冲突终态下保存试填反馈被拒：警示一致提示，不落盘也不假成功", async () => {
     mocks.get.mockResolvedValue(detail({ currentRevisionId: null }));
     mocks.save.mockRejectedValue(new SurveysApiError(409, "version_conflict", null));
     const { wrapper, notifyWarn } = await mountWorkspace();
-    await publishButton(wrapper).trigger("click");
-    await flushPromises();
-    expect(publishDialog(wrapper).exists()).toBe(true);
     vi.useFakeTimers();
     // 画布变更触发在途保存 → 409 → 冲突终态。
     await changeDefinition(wrapper);
     await vi.advanceTimersByTimeAsync(1600);
     expect(mocks.save).toHaveBeenCalledTimes(1);
-    wrapper.findComponent(InputNumber).vm.$emit("update:modelValue", 2);
-    wrapper.findComponent(Textarea).vm.$emit("update:modelValue", "试填反馈");
-    await flushPromises();
-    await publishDialog(wrapper)
-      .find(".publish-pretest")
-      .findAll("button")
-      .find((b) => b.text() === t("surveys.assistant.recordTrial"))!
-      .trigger("click");
+    const panel = wrapper.findComponent(SurveyPretestPanel);
+    panel.vm.$emit("save", { participantCount: 2, notes: "试填反馈", itemFeedback: [] });
     await flushPromises();
     expect(notifyWarn).toHaveBeenCalledWith(t("surveys.conflict"));
-    // 冲突后不产生新的保存，也不显示「已记录」假成功。
+    // 冲突后不产生新的保存，也不给「已保存」假成功。
     await vi.advanceTimersByTimeAsync(1600);
     expect(mocks.save).toHaveBeenCalledTimes(1);
-    expect(publishDialog(wrapper).find(".publish-pretest").text()).not.toContain(
-      t("surveys.assistant.trialRecorded"),
+    expect(notifyWarn).not.toHaveBeenCalledWith(t("surveys.pretestPanel.saved"));
+    wrapper.unmount();
+  });
+
+  it("确认视图展示试填聚合摘要：人数、按题条数、四类分布与版本归属", async () => {
+    const target = detail({ currentRevisionId: "00000000-0000-4000-8000-000000000002" });
+    target.definition = {
+      ...definition(),
+      researchDesign: {
+        researchQuestion: "研究生如何选用科研工具",
+        population: "",
+        recruitment: "",
+        purpose: "describe",
+        timeBudgetMinutes: 5,
+        constructs: [],
+        analysisPlan: "",
+        assumptions: [],
+        pendingDecisions: [],
+        pretest: {
+          participantCount: 3,
+          notes: "",
+          recordedAt: "2026-01-01T00:00:00.000Z",
+          revisionId: "00000000-0000-4000-8000-000000000002",
+          itemFeedback: [
+            { questionId: "q1", aspect: "comprehension", note: "甲理解成每周" },
+            { questionId: "q1", aspect: "comprehension", note: "乙理解成每天" },
+            { questionId: "q1", aspect: "judgment", note: "丙拿不准「常用」" },
+            { questionId: "q1", aspect: "response", note: "丁想要其他选项" },
+          ],
+        },
+      },
+    };
+    mocks.get.mockResolvedValue(target);
+    const { wrapper } = await mountWorkspace();
+    await publishButton(wrapper).trigger("click");
+    await flushPromises();
+    const dialog = publishDialog(wrapper);
+    expect(dialog.text()).toContain(t("surveys.publishCheck.pretestDone", { n: 3 }));
+    expect(dialog.text()).toContain(t("surveys.publishCheck.pretestFeedback", { n: 4 }));
+    expect(dialog.text()).toContain(
+      t("surveys.publishCheck.pretestAspects", {
+        comprehension: 2,
+        recall: 0,
+        judgment: 1,
+        response: 1,
+      }),
     );
+    expect(dialog.text()).toContain(
+      t("surveys.publishCheck.pretestRevision", { n: 1 }),
+    );
+    expect(dialog.text()).toContain(t("surveys.assistant.trialRecorded"));
+    // 摘要里的入口直达面板：确认视图先收起，避免弹层叠放（面板复用同一 stub 类）。
+    await dialog
+      .findAll("button")
+      .find((b) => b.text() === t("surveys.pretestPanel.open"))!
+      .trigger("click");
+    await flushPromises();
+    expect(wrapper.findComponent(SurveyPretestPanel).props("visible")).toBe(true);
+    expect(wrapper.text()).not.toContain(publishFacts(1, 1));
+    wrapper.unmount();
+  });
+
+  it("发布事实只数真实题目：说明块单独陈述，不与提纲「共 N 题」矛盾（走查 P1-4）", async () => {
+    const target = detail({ currentRevisionId: null });
+    target.definition = {
+      ...definition(),
+      questions: [
+        { id: "q1", type: "text", title: "备注", required: false },
+        { id: "s1", type: "statement", title: "", required: false, body: "研究说明" },
+      ],
+      pages: [{ id: "p1", title: "第一页", questionIds: ["s1", "q1"] }],
+    };
+    mocks.get.mockResolvedValue(target);
+    const { wrapper } = await mountWorkspace();
+    await publishButton(wrapper).trigger("click");
+    await flushPromises();
+    const dialog = publishDialog(wrapper);
+    expect(dialog.text()).toContain(publishFacts(1, 1, 1));
+    expect(dialog.text()).not.toContain(publishFacts(2, 1));
     wrapper.unmount();
   });
 
@@ -1006,6 +1201,38 @@ describe("SurveyWorkspacePage 发布确认与离开保护（issue #217）", () =
     expect(dialog.text()).toContain(t("surveys.publishCheck.staleReview", { n: 1 }));
     expect(dialog.text()).not.toContain(t("surveys.publishCheck.pendingReview", { n: 1 }));
     expect(dialog.text()).toContain("旧一轮检查摘要");
+    wrapper.unmount();
+  });
+
+  it("确认视图：报告带内容指纹且未变时不标过期（版本号已因试填推进）", async () => {
+    const { wrapper, copilotHandlers } = await mountWorkspace("/u/surveys/s-1", "outline", { copilot: true });
+    for (const handlers of copilotHandlers) {
+      handlers.onSurveyDeliveryFrame?.({
+        type: "survey_review",
+        surveyId: "s-1",
+        operationId: "op-review-fingerprint",
+        baseDraftVersion: 99,
+        baseContentFingerprint: sha256Hex(canonicalContentJson(definition())),
+        summary: "表述检查摘要",
+        findings: [
+          {
+            id: "f1",
+            title: "题干表述",
+            severity: "minor",
+            reason: "题干含双重否定",
+            recommendation: "改为直接肯定句",
+          },
+        ],
+      } as never);
+    }
+    await flushPromises();
+    await publishButton(wrapper).trigger("click");
+    await flushPromises();
+    const dialog = publishDialog(wrapper);
+    await vi.waitFor(() =>
+      expect(dialog.text()).toContain(t("surveys.publishCheck.pendingReview", { n: 1 })),
+    );
+    expect(dialog.text()).not.toContain(t("surveys.publishCheck.staleReview", { n: 1 }));
     wrapper.unmount();
   });
 

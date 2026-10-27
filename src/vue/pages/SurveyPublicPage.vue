@@ -334,8 +334,16 @@ watch(slug, () => {
             <p class="tw:text-muted">{{ t("surveys.receivedHint") }}</p>
             <small class="tw:text-muted">{{
               receipt.responseId
-            }}</small></template
-          >
+            }}</small>
+            <p class="tw:text-muted">{{ t("surveys.receiptReentryHint") }}</p>
+            <Button
+              class="receipt-again"
+              :label="t('surveys.fillAgain')"
+              severity="secondary"
+              :disabled="busy"
+              @click="restart"
+            />
+          </template>
           <template v-else-if="!session">
             <!-- 说明类字段按 markdown 渲染（breaks: true，老纯文本的单换行仍成行）。 -->
             <div
@@ -353,6 +361,10 @@ watch(slug, () => {
                 t("surveys.consent")
               }}</span></label
             >
+            <!-- 未勾选时 Start 只置灰不够（走查反馈：看不出不可点），勾选框旁再给一句提示。 -->
+            <p v-if="!consent" class="consent-hint tw:text-muted">
+              {{ t("surveys.consentHint") }}
+            </p>
             <Message v-if="error" severity="error" :closable="false">{{
               t(
                 errorCode === "session_expired"
@@ -414,6 +426,13 @@ watch(slug, () => {
                   :invalid-row="q.id === invalidQuestionId ? invalidRowId : ''"
                   @update:model-value="updateAnswer(q.id, $event)"
                 />
+                <!-- 红框只标出位置：就地补一行文字说明缺什么（拦截语在页尾可能不在视口内）。 -->
+                <p
+                  v-if="q.id === invalidQuestionId"
+                  class="slot-invalid-text"
+                >
+                  {{ invalidText || t("surveys.validationFailed") }}
+                </p>
               </div>
             </div>
             <input
@@ -548,6 +567,11 @@ watch(slug, () => {
 .public-paper :deep(.p-button) {
   min-height: 2.75rem;
 }
+/* 禁用主按钮明确置灰：主题的禁用态在部分主题色下看不出不可点（走查 P1-9）。 */
+.public-paper :deep(.p-button:disabled) {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 h1 {
   font-size: var(--font-size-title-md);
   margin: 0;
@@ -581,6 +605,16 @@ h2 {
   align-items: center;
   gap: 1rem;
   flex-wrap: wrap;
+}
+.consent-hint {
+  margin: -0.5rem 0 0;
+  font-size: 0.85rem;
+}
+.slot-invalid-text {
+  margin: 8px 0 0;
+  color: var(--color-danger-600, var(--color-text-secondary));
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
 }
 .public-actions {
   justify-content: space-between;

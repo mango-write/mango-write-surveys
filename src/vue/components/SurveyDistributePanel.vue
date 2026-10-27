@@ -199,6 +199,9 @@ function onLimitChange(value: number | null) {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
 }
+.share-row :deep(input) {
+  text-overflow: ellipsis;
+}
 .share-qr {
   width: 128px;
   height: 128px;

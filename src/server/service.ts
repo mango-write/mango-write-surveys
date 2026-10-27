@@ -3,6 +3,7 @@
 // 锁与事务由宿主 storage port 的 withSurveyLock 提供，锁序写在 ports.ts。
 import {
   applySurveyOps,
+  canonicalContentJson,
   canonicalSurveyJson,
   surveyCellValue,
   surveyVariables,
@@ -60,15 +61,37 @@ export function asAnswers(value: unknown): SurveyAnswers {
   return (value ?? {}) as SurveyAnswers;
 }
 
+/** 内容指纹：归一化（剥 pretest + 丢全空设计基底）后的 canonical sha256，与发布
+ *  快照的 contentHash 同一套哈希实现。仅补试填记录不改变指纹。 */
+function contentFingerprintOf(definition: SurveyDefinition): string {
+  return sha256Hex(canonicalContentJson(definition));
+}
+
+/** findings_json 信封：指纹没有独立列，与 findings 一起存进同一 jsonb（存储层
+ *  不感知）。旧记录的 findings_json 是裸数组，读回按无指纹处理。 */
+function reviewEnvelope(
+  findings: unknown,
+  baseContentFingerprint: string | null,
+): { findings: unknown; baseContentFingerprint: string | null } {
+  return { findings, baseContentFingerprint };
+}
+
 function asReview(row: SurveyReviewRecord | null): SurveyReviewDelivery | null {
   if (!row) return null;
+  const legacy = Array.isArray(row.findingsJson);
+  const envelope = legacy
+    ? null
+    : (row.findingsJson as { findings?: unknown; baseContentFingerprint?: unknown } | null);
   const parsed = ToolSurveyDeliverySchema.safeParse({
     type: "survey_review",
     surveyId: row.surveyId,
     operationId: row.operationId,
     baseDraftVersion: row.baseDraftVersion,
     summary: row.summary,
-    findings: row.findingsJson,
+    findings: legacy ? row.findingsJson : envelope?.findings,
+    ...(legacy || typeof envelope?.baseContentFingerprint !== "string"
+      ? {}
+      : { baseContentFingerprint: envelope.baseContentFingerprint }),
   });
   if (!parsed.success || parsed.data.type !== "survey_review") {
     throw new SurveyError("invalid_review", 500, "诊断记录格式不合法");
@@ -231,6 +254,7 @@ export function createSurveysService(ports: SurveysPorts) {
         revision: r.revision,
         createdAt: r.createdAt.toISOString(),
         contentHash: r.contentHash,
+        contentFingerprint: contentFingerprintOf(asDefinition(r.definition)),
       })),
       review: asReview(review),
       canWrite: access.canWrite,
@@ -290,6 +314,10 @@ export function createSurveysService(ports: SurveysPorts) {
         if (row.draftVersion !== input.baseDraftVersion) {
           throw new SurveyError("stale_read", 409, "诊断基线已过期");
         }
+        // 登记时服务端盖章内容指纹：此后仅补试填记录不算内容变化，建议不作废。
+        const baseContentFingerprint = contentFingerprintOf(
+          asDefinition(row.draftJson),
+        );
         if (input.findings.length === 0) await tx.deleteReview(surveyId);
         else {
           await tx.upsertReview({
@@ -297,9 +325,15 @@ export function createSurveysService(ports: SurveysPorts) {
             teamId: access.survey.teamId,
             surveyId,
             ...input,
+            findings: reviewEnvelope(input.findings, baseContentFingerprint),
           });
         }
-        return { type: "survey_review", surveyId, ...input };
+        return {
+          type: "survey_review",
+          surveyId,
+          ...input,
+          baseContentFingerprint,
+        };
       });
     },
 
@@ -318,7 +352,13 @@ export function createSurveysService(ports: SurveysPorts) {
           throw new SurveyError("version_conflict", 409, "草稿已在别处被修改");
         }
         if (!review) throw new SurveyError("not_found", 404, "诊断记录不存在");
-        if (review.baseDraftVersion !== row.draftVersion) {
+        // 过期判定走内容指纹：仅补试填记录（pretest）不改指纹，建议不作废；
+        // 旧记录没有指纹字段，回退版本号对比（宁严勿松）。
+        const contentUnchanged = review.baseContentFingerprint
+          ? contentFingerprintOf(asDefinition(row.draftJson)) ===
+            review.baseContentFingerprint
+          : review.baseDraftVersion === row.draftVersion;
+        if (!contentUnchanged) {
           throw new SurveyError("review_stale", 409, "诊断基线已过期");
         }
         const finding = review.findings.find((item) => item.id === findingId);
@@ -351,7 +391,14 @@ export function createSurveysService(ports: SurveysPorts) {
           draftVersion: nextVersion,
         });
         if (findings.length) {
-          await tx.updateReview(surveyId, { findings, baseDraftVersion: nextVersion });
+          // 应用过一条后内容已变：剩余建议的基线推进到应用后的指纹。
+          await tx.updateReview(surveyId, {
+            findings: reviewEnvelope(
+              findings,
+              contentFingerprintOf(result.definition),
+            ),
+            baseDraftVersion: nextVersion,
+          });
         } else {
           await tx.deleteReview(surveyId);
         }
@@ -373,7 +420,14 @@ export function createSurveysService(ports: SurveysPorts) {
           throw new SurveyError("not_found", 404, "诊断条目不存在");
         }
         const findings = review.findings.filter((item) => item.id !== findingId);
-        if (findings.length) await tx.updateReview(surveyId, { findings });
+        if (findings.length)
+          await tx.updateReview(surveyId, {
+            // 忽略不改内容：基线指纹原样保留。
+            findings: reviewEnvelope(
+              findings,
+              review.baseContentFingerprint ?? null,
+            ),
+          });
         else await tx.deleteReview(surveyId);
       });
       return getSurveyDetail(userId, surveyId);

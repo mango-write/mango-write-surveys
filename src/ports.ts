@@ -94,6 +94,8 @@ export interface SurveyRevisionMeta {
   id: string;
   revision: number;
   contentHash: string;
+  /** 发布快照（definition_json）：服务端据此现算内容指纹（剥掉 pretest）。 */
+  definition: unknown;
   createdAt: Date;
 }
 

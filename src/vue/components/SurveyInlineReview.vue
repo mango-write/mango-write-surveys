@@ -89,6 +89,13 @@ const heading = computed(() => {
             <span class="review-finding__icon"><Sparkles :size="18" /></span>
             <strong>{{ heading }}</strong>
           </header>
+          <p v-if="finding.impact" class="review-finding__impact">
+            {{ t("surveys.inlineReview.impact") }}{{ finding.impact }}
+          </p>
+          <blockquote v-if="finding.evidence" class="review-finding__evidence">
+            <span>{{ t("surveys.inlineReview.evidence") }}</span>
+            <p>{{ finding.evidence }}</p>
+          </blockquote>
           <div v-if="!stale && rowsFor(finding).length" class="review-finding__changes">
             <div v-for="row in rowsFor(finding)" :key="row.key" class="review-change">
               <strong v-if="rowsFor(finding).length > 1" class="review-change__field">
@@ -162,6 +169,31 @@ const heading = computed(() => {
   height: 36px;
   border-radius: var(--radius-md);
   background: var(--color-warning-surface);
+}
+.review-finding__impact {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-body-sm);
+}
+.review-finding__evidence {
+  margin: 0;
+  display: grid;
+  gap: 6px;
+  padding: 10px 14px;
+  border-left: 3px solid var(--color-warning-600);
+  background: var(--color-bg-soft);
+  border-radius: var(--radius-sm, 6px);
+}
+.review-finding__evidence > span {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+}
+.review-finding__evidence p {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-relaxed);
+  overflow-wrap: anywhere;
 }
 .review-finding__changes,
 .review-change {

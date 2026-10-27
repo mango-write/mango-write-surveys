@@ -243,6 +243,7 @@ function tableRows(table: SurveyResearchTable) {
     </details>
     <details class="provenance">
       <summary>{{ t("surveys.research.provenanceTitle") }}</summary>
+      <p class="provenance-hint tw:text-muted">{{ t("surveys.provenanceHashHint") }}</p>
       <dl>
         <dt>{{ t("surveys.inputHash") }}</dt>
         <dd><code>{{ run.inputHash }}</code></dd>
@@ -373,10 +374,24 @@ function tableRows(table: SurveyResearchTable) {
 .provenance dl {
   margin: 8px 0 0;
 }
+.provenance-hint {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+}
 .provenance dd {
   margin: 0 0 8px;
   overflow-wrap: anywhere;
   font-variant-numeric: tabular-nums;
+}
+/* 哈希单行等宽 + 截断：64 位串换行占半屏，复查比对时完整值走导出。 */
+.provenance dd code {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+  font-family: var(--font-family-mono, ui-monospace, monospace);
 }
 @media (max-width: 767.98px) {
   .result-actions {

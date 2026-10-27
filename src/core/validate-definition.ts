@@ -400,6 +400,15 @@ export function validateSurveyDesign(
         message: `维度「${construct.label}」还没有对应题目`,
       });
   });
+  // 试填反馈是历史记录，题目删后不追改：只在设计校验里提示悬空引用，不阻断发布。
+  design.pretest?.itemFeedback?.forEach((item, i) => {
+    if (!questionIds.has(item.questionId))
+      issues.push({
+        path: `researchDesign.pretest.itemFeedback.${i}.questionId`,
+        code: "design_unknown_question",
+        message: `试填反馈引用了不存在的题目：${item.questionId}`,
+      });
+  });
   const variableIds = new Set(surveyVariables(definition).map((variable) => variable.id));
   const refIssue = (ref: string, path: string): void => {
     const [kind, id] = ref.split(":") as [string, string];

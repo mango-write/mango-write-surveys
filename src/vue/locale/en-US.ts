@@ -14,6 +14,8 @@ export default {
     basis: "Basis",
     before: "Before",
     after: "After",
+    evidence: "Quoted from the survey",
+    impact: "Impact: ",
     apply: "Apply this suggestion",
     dismiss: "Dismiss",
   },
@@ -23,9 +25,8 @@ export default {
     "unmapped": "Mapping needs updating",
 
     "trialTitle": "Respondent tryout and feedback",
-    "trialCount": "Participant count (author reported)",
+    "trialCount": "People who tried it (count entered by you)",
     "trialNotes": "Misunderstandings, response difficulties and proposed revisions",
-    "recordTrial": "Save tryout record",
     "trialRecorded": "This record is author reported and has not been independently verified. It does not establish measurement validity.",
 
   "review": "Improve my survey",
@@ -213,12 +214,16 @@ export default {
   researchNotice: "Participation and data use",
   researchSurvey: "Research survey",
   consent: "I have read the information and agree to participate",
+  consentHint: "Check the box to start.",
   start: "Start survey",
   previous: "Previous",
   next: "Next",
   submit: "Submit response",
   received: "Response received",
   receivedHint: "Thank you. Your response has been saved.",
+  receiptReentryHint:
+    "This link keeps showing the receipt above in this browser. If the next respondent is someone else (e.g. a shared computer), the button below clears the local record and starts over.",
+  fillAgain: "Fill a new response",
   pageProgress: "Page {current} of {total}",
   savedLocally: "Progress is saved in this browser",
   unavailable: "Survey unavailable",
@@ -316,6 +321,9 @@ export default {
     placeholder:
       "e.g. I want to learn how graduate students use research tools and where they struggle",
     submit: "Generate survey",
+    altPrefix: "Or ",
+    altTemplate: "start from a template",
+    altBlank: "start blank",
     failed: "Sending didn't complete. Try again — your description is kept.",
     noDelivery:
       "The AI assistant replied in the conversation; if a survey was generated it opens automatically. Otherwise refine your description and retry.",
@@ -323,7 +331,12 @@ export default {
       "No AI assistant in this environment. Start from a template or a blank survey.",
   },
   publishCheck: {
-    facts: "{questions} questions across {pages} pages.",
+    factsOne: "{questions} on 1 page.",
+    factsMany: "{questions} on {pages} pages.",
+    factsQuestionOne: "1 question",
+    factsQuestionMany: "{n} questions",
+    factsStatementOne: "1 note block is not counted as a question.",
+    factsStatementMany: "{n} note blocks are not counted as questions.",
     remindersTitle: "Before you publish (reminders, not blockers)",
     noDesign:
       "No research design rationale yet. Ask AI to organize it in the conversation, or publish as is.",
@@ -335,13 +348,81 @@ export default {
     noPretest:
       "No pretest recorded yet: consider inviting your target population before publishing.",
     pretestHint:
-      "Preview checks the flow; invite your target population before publishing and record their feedback here. A record creates no formal responses.",
+      "Preview checks the flow; invite your target population before publishing and record their feedback in the tryout feedback panel. A record creates no formal responses.",
+    pretestFeedback: "{n} per-question feedback note(s).",
+    pretestAspects:
+      "Feedback by kind — understanding {comprehension} · recall {recall} · judgment {judgment} · answer options {response}.",
+    pretestRevision: "Recorded against version {n}",
+    pretestRevisionNone: "Recorded before the survey had a published version.",
     pendingReview:
       "{n} AI review suggestion(s) are unhandled; view them on the canvas.",
     staleReview:
       "{n} AI review suggestion(s) are outdated — the survey changed since; kept for traceability only, trust the current draft.",
     disclaimer:
       "These are pre-publish reminders only; they do not mean the survey passed human pretesting or validity checks.",
+  },
+  pretestPanel: {
+    title: "Tryout feedback",
+    open: "Tryout feedback",
+    copyGuide: "Copy interview guide",
+    copyGuideDone: "Guide copied",
+    copyGuideFailed: "Copy failed. Please select the text and copy it manually.",
+    feedbackTitle: "Per-question feedback",
+    empty: "No per-question feedback recorded yet.",
+    question: "Question",
+    questionPlaceholder: "Pick a question",
+    aspectLabel: "Feedback kind",
+    aspect: {
+      comprehension: "Understanding",
+      recall: "Recall",
+      judgment: "Judgment",
+      response: "Answer options",
+    },
+    note: "Note (record their words)",
+    people: "People mentioned (optional)",
+    add: "Add this feedback",
+    remove: "Remove this feedback",
+    entryCount: "{n} people",
+    save: "Save tryout feedback",
+    saved: "Tryout feedback saved to the draft (author-reported, not independently verified).",
+    saveHint: "Enter the participant count to enable save.",
+    revision: "Record will be tied to the current version (v{n})",
+    revisionNone:
+      "Saved before the survey's first published version, so it isn't tied to a version.",
+    discardTitle: "Unsaved tryout feedback will be lost if you close now.",
+    discardClose: "Discard and close",
+    keepEditing: "Keep editing",
+  },
+  pretestGuide: {
+    intro:
+      "This is a tryout guide for “{title}”: invite 2–5 people similar to your target population to answer the whole survey ({questions} questions in total). " +
+      "Ask the probe questions below one by one and write down their exact words — do not summarize. " +
+      "Afterwards, record the feedback per question in the survey workspace's tryout feedback panel and save.",
+    probe: {
+      comprehension:
+        "Ask them to say in their own words what the question “{title}” is asking. If their reading differs from yours, note their exact words.",
+      recall:
+        "Does “{title}” require recalling past events? Do they answer from memory or could they look it up? If they cannot remember, ask what makes it hard.",
+      judgment:
+        "Ask whether they hesitated answering “{title}”: what a word means (e.g. how often “often” is), or finding no answer that fits their situation.",
+      response:
+        "Ask how they arrived at the answer they picked: was the answer they had in mind among the options? Did they look for an “other” option that isn't there?",
+    },
+  },
+  designSummary: {
+    title: "Research design",
+    ready: "Filled in",
+    missing: "Not filled in",
+    empty:
+      "No research design yet. Ask AI in the conversation to draft one from your research idea; the publish confirmation will remind you too.",
+    constructsTitle: "Constructs → questions",
+    constructsEmpty: "No construct mapping yet.",
+    scoringMean: "Scoring: mean of at least {min} valid items",
+    scoringSum: "Scoring: sum of at least {min} valid items",
+    scoringNone: "No scoring rules yet",
+    planEmpty: "No analysis plan yet.",
+    pendingTitle: "Awaiting your decision",
+    numberSeparator: ", ",
   },
   copilot: {
     generate: "AI generate",
@@ -663,6 +744,8 @@ export default {
   useInPaper: "Use in paper",
   exportResult: "Export analysis result",
   provenance: "View data and calculation provenance",
+  provenanceHashHint:
+    "The two fingerprints verify which data a result was computed from; use them when exporting or re-checking.",
   resultRecordedAt: "Result created: {time}",
   inputHash: "Input hash",
   resultHash: "Result hash",

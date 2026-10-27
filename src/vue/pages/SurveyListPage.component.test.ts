@@ -200,10 +200,10 @@ describe("SurveyListPage（issue #217）", () => {
     expect(hero.text()).toContain(t("surveys.createStart.question"));
     expect(hero.find("textarea").exists()).toBe(true);
 
-    // 空白新建是次要动作：hero 发事件，列表页打开既有新建弹层。
+    // 空白新建是次级行动作：hero 发事件，列表页打开既有新建弹层。
     const blankButton = hero
       .findAll("button")
-      .find((b) => b.text() === t("surveys.create"))!;
+      .find((b) => b.text() === t("surveys.createStart.altBlank"))!;
     await blankButton.trigger("click");
     await flushPromises();
     const dialog = wrapper.find(".dialog-stub");
@@ -229,10 +229,14 @@ describe("SurveyListPage（issue #217）", () => {
     const card = wrapper.find(".create-start");
     expect(card.exists()).toBe(true);
     expect(card.classes()).toContain("is-compact");
-    const labels = card.findAll("button").map((b) => b.text());
-    expect(labels).toContain(t("surveys.createStart.submit"));
-    expect(labels).toContain(t("surveys.templates.pick"));
-    expect(labels).toContain(t("surveys.create"));
+    // P1-10：主入口唯一 + 一条 muted 次级行（模板/空白）。
+    expect(card.findAll(".create-start-actions button").map((b) => b.text())).toEqual([
+      t("surveys.createStart.submit"),
+    ]);
+    expect(card.findAll(".create-start-alt button").map((b) => b.text())).toEqual([
+      t("surveys.createStart.altTemplate"),
+      t("surveys.createStart.altBlank"),
+    ]);
     wrapper.unmount();
   });
 
@@ -274,7 +278,7 @@ describe("SurveyListPage（issue #217）", () => {
   it("从模板开始：选模板建卷并立即落模板定义为草稿，然后进工作区", async () => {    const { navigate, wrapper } = await mountList();
     await wrapper
       .findAll("button")
-      .find((b) => b.text() === t("surveys.templates.pick"))!
+      .find((b) => b.text() === t("surveys.createStart.altTemplate"))!
       .trigger("click");
     await flushPromises();
     // 列表页的 Dialog 全部走同一 stub：此时打开的是模板弹层。

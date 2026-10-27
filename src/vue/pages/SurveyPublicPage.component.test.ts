@@ -157,6 +157,106 @@ describe("public survey browser lifecycle", () => {
     );
     w.unmount();
   });
+  it("finished sessions reopen to the receipt with a clear re-entry exit (shared-computer scenario)", async () => {
+    const w = await render();
+    await w.find('input[type="checkbox"]').setValue(true);
+    await w
+      .findAll("button")
+      .find((b) => b.text() === "开始填写")!
+      .trigger("click");
+    await flushPromises();
+    await w.find("input#q1").setValue("Evidence");
+    await w
+      .findAll("button")
+      .find((b) => b.text() === "提交答卷")!
+      .trigger("click");
+    await flushPromises();
+    expect(w.text()).toContain("答卷已收到");
+    w.unmount();
+
+    // 服务端以回执为完成凭证：重开链接对已完成会话返回 receipt → 恒显回执页。
+    // 出口只清客户端会话存储，防重复机制（服务端按会话发回执）不受影响。
+    mocks.start.mockResolvedValue({
+      sessionToken: "token-216",
+      revisionId,
+      definition,
+      expiresAt: "2030-01-01T00:00:00.000Z",
+      receipt: {
+        responseId: revisionId,
+        revisionId,
+        completedAt: "2026-10-18T00:00:00.000Z",
+      },
+    });
+    const again = await render();
+    expect(again.text()).toContain("答卷已收到");
+    expect(again.text()).toContain("这台浏览器");
+    await again.find(".receipt-again").trigger("click");
+    await flushPromises();
+    expect(localStorage.getItem("mango-survey:test-survey-216")).toBeNull();
+    const start = again
+      .findAll("button")
+      .find((b) => b.text() === "开始填写")!;
+    expect(start.attributes("disabled")).toBeDefined();
+    again.unmount();
+  });
+  it("unchecked consent explains why start is unavailable, and the hint clears once checked", async () => {
+    const w = await render();
+    expect(w.text()).toContain("勾选同意后才能开始填写。");
+    await w.find('input[type="checkbox"]').setValue(true);
+    await flushPromises();
+    expect(w.text()).not.toContain("勾选同意后才能开始填写。");
+    w.unmount();
+  });
+  it("blocked submit names the missing answer inside the highlighted question card", async () => {
+    const choiceDef = {
+      ...definition,
+      questions: [
+        {
+          id: "pick",
+          type: "single",
+          title: "Pick one",
+          required: true,
+          options: [
+            { id: "a", label: "A" },
+            { id: "b", label: "B" },
+          ],
+        },
+      ],
+      pages: [{ id: "p1", title: "", questionIds: ["pick"] }],
+    };
+    mocks.get.mockResolvedValue({
+      id: revisionId,
+      slug,
+      status: "published",
+      revisionId,
+      definition: choiceDef,
+    });
+    mocks.start.mockResolvedValue({
+      sessionToken: "pick-token",
+      revisionId,
+      definition: choiceDef,
+      expiresAt: "2030-01-01T00:00:00.000Z",
+    });
+    const w = await render();
+    await w.find('input[type="checkbox"]').setValue(true);
+    await w
+      .findAll("button")
+      .find((b) => b.text() === "开始填写")!
+      .trigger("click");
+    await flushPromises();
+    await w
+      .findAll("button")
+      .find((b) => b.text() === "提交答卷")!
+      .trigger("click");
+    await flushPromises();
+    expect(mocks.submit).not.toHaveBeenCalled();
+    const slot = w.find(".question-slot--invalid");
+    expect(slot.exists()).toBe(true);
+    expect(slot.find(".slot-invalid-text").text()).toContain(
+      "「Pick one」是必答题，请先作答。",
+    );
+    w.unmount();
+  });
 });
 
 it("persists a typed zero before InputNumber loses focus", async () => {

@@ -87,4 +87,25 @@ describe("题目旁的诊断气泡", () => {
     expect(inserted.find(".inline-review__trigger").exists()).toBe(true);
     inserted.unmount();
   });
+  it("带证据与影响时展示逐字摘录块与影响行；缺省时不渲染占位", async () => {
+    const withEvidence = mount({
+      findings: [{
+        ...report.findings[0]!,
+        evidence: "你使用科研工具的频率如何？",
+        impact: "双重提问会让答案无法归因。",
+      }],
+    });
+    await withEvidence.find(".inline-review__trigger").trigger("click");
+    await flushPromises();
+    expect(withEvidence.find(".review-finding__evidence").text()).toContain("你使用科研工具的频率如何？");
+    expect(withEvidence.find(".review-finding__impact").text()).toContain("双重提问会让答案无法归因。");
+    withEvidence.unmount();
+
+    const plain = mount();
+    await plain.find(".inline-review__trigger").trigger("click");
+    await flushPromises();
+    expect(plain.find(".review-finding__evidence").exists()).toBe(false);
+    expect(plain.find(".review-finding__impact").exists()).toBe(false);
+    plain.unmount();
+  });
 });

@@ -35,6 +35,7 @@ export {
   SurveyOpSchema,
   SurveyOptionSchema,
   SurveyPageSchema,
+  SurveyPretestItemFeedbackSchema,
   SurveyQuestionSchema,
   SurveyQuestionTypeSchema,
   SurveyRankingQuestionSchema,
@@ -72,6 +73,8 @@ export type {
   SurveyOp,
   SurveyOption,
   SurveyPage,
+  SurveyPretestAspect,
+  SurveyPretestItemFeedback,
   SurveyQuestion,
   SurveyQuestionType,
   SurveyRankingQuestion,
@@ -133,6 +136,9 @@ export const SurveyRevisionSummarySchema = z.object({
   createdAt: IsoDateTimeSchema,
   /** 发布快照的 sha256（canonical JSON）；工作台据此判「草稿有未发布修改」。 */
   contentHash: z.string().regex(/^[0-9a-f]{64}$/),
+  /** 内容指纹：发布快照剥掉 researchDesign.pretest 后的 sha256（canonical）。
+   *  dirty 与诊断过期判定用它，试填记录更新不算内容修改；旧宿主可缺席。 */
+  contentFingerprint: z.string().regex(/^[0-9a-f]{64}$/).optional(),
 });
 export type SurveyRevisionSummary = z.infer<typeof SurveyRevisionSummarySchema>;
 
@@ -250,6 +256,10 @@ export const SurveyReviewFindingSchema = z.object({
   severity: SurveyReviewSeveritySchema,
   reason: z.string().min(1).max(1000),
   recommendation: z.string().min(1).max(1000),
+  /** 不修会对测量/结论造成什么影响（一句话）。 */
+  impact: z.string().min(1).max(1000).optional(),
+  /** 题干/选项的逐字摘录（≤200 字），有对应题目时必填——供读者核对依据。 */
+  evidence: z.string().min(1).max(200).optional(),
   /** 安全的候选修订：必须在当前草稿上全部可应用，且不含发布/整卷替换。 */
   suggestedOps: z.array(SurveyOpSchema).max(5).optional(),
 });
@@ -268,6 +278,9 @@ export const SurveyReviewDeliverySchema = z.object({
   operationId: z.string().min(6).max(64),
   /** 诊断所依据的持久草稿版本；页面与本地副本不一致时只展示、不允许应用。 */
   baseDraftVersion: z.number().int().min(1),
+  /** 诊断所依据草稿的内容指纹（剥掉 researchDesign.pretest 后的 sha256）。
+   *  在场时过期判定走指纹（仅补试填记录不作废建议）；缺席回退版本号对比。 */
+  baseContentFingerprint: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   summary: z.string().max(300),
   findings: z.array(SurveyReviewFindingSchema).max(20),
 });
