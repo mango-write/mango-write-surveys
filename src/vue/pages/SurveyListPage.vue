@@ -17,12 +17,11 @@ import Message from "primevue/message";
 import { ClipboardList } from "lucide-vue-next";
 import type { SurveyStatus, SurveySummary } from "../../contracts/index.js";
 
-import { AsyncSlot } from "@mango-write/ui";
+import { AsyncSlot, PageHeader as SurveyPageHeader } from "@mango-write/ui";
 import { useSurveysHost, type SurveysCopilotHandlers } from "../host.js";
 import { useSurveysNotify } from "../notify.js";
 import { useSurveysApi } from "../api.js";
 import { setAiCreatedSurveyHandoff } from "../lib/ai-created-handoff.js";
-import SurveyPageHeader from "../components/SurveyPageHeader.vue";
 import SurveyCreateStart from "../components/SurveyCreateStart.vue";
 import SurveyTemplatePicker from "../components/SurveyTemplatePicker.vue";
 import type { SurveyTemplate } from "../lib/templates.js";

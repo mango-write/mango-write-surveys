@@ -35,7 +35,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#6e340e56733eb8c2b712cc8ffe5b26e1f1ff7312",
+    "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#2c162401a572a87b4a37bfdbd2e069b44d0f38bc",
     "dompurify": "^3.4.17",
     "echarts": "5.6.0",
     "echarts-wordcloud": "2.1.0",
@@ -76,7 +76,7 @@
   },
   "pnpm": {
     "overrides": {
-      "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#6e340e56733eb8c2b712cc8ffe5b26e1f1ff7312"
+      "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#2c162401a572a87b4a37bfdbd2e069b44d0f38bc"
     }
   },
   "sideEffects": false,

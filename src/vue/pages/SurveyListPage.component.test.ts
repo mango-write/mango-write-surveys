@@ -223,7 +223,7 @@ describe("SurveyListPage（issue #217）", () => {
 
   it("返回态：建卷入口收敛为紧凑卡（AI 主 + 模板/空白次），页头不再平铺三按钮", async () => {
     const { wrapper } = await mountList();
-    const header = wrapper.find(".survey-page-header");
+    const header = wrapper.find(".mw-page-header");
     expect(header.text()).not.toContain(t("surveys.copilot.generate"));
     expect(header.text()).not.toContain(t("surveys.templates.pick"));
     const card = wrapper.find(".create-start");
