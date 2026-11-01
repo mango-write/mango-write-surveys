@@ -11,6 +11,7 @@ import type { ContentfulStatusCode } from "hono/utils/http-status";
 import type { SurveysActor } from "../ports.js";
 import {
   ApplySurveyReviewFindingInputSchema,
+  ApplySurveyReviewPlanInputSchema,
   CreateSurveyInputSchema,
   SetSurveyStatusInputSchema,
   StartSurveyInputSchema,
@@ -31,6 +32,7 @@ import {
   SURVEY_SUBMIT_RATE_PER_MINUTE,
 } from "./limits.js";
 import type { SurveysMedia } from "./media.js";
+import type { createPretestService } from "./pretest.js";
 import { surveyRateLimit } from "./rate-limit.js";
 import type { SurveysService } from "./service.js";
 
@@ -38,6 +40,7 @@ export interface SurveysRouterDeps {
   service: SurveysService;
   collection: SurveysCollection;
   media: SurveysMedia;
+  pretest?: ReturnType<typeof createPretestService>;
   /** 宿主认证后的主体与归属空间（身份永不来自请求体）。 */
   actorOf: (c: Context) => SurveysActor;
 }
@@ -132,7 +135,7 @@ function buildContentDisposition(
 }
 
 export function createSurveysManageRoutes(deps: SurveysRouterDeps): Hono {
-  const { service, media, actorOf } = deps;
+  const { service, media, actorOf, pretest } = deps;
   const routes = new Hono();
 
   // 管理面 bodyLimit 只管 JSON 写入；媒体上传走自己的 6MB 闸（multipart 外壳比
@@ -178,6 +181,33 @@ export function createSurveysManageRoutes(deps: SurveysRouterDeps): Hono {
       return c.json(
         await service.updateSurvey(actorOf(c).userId, pathParam(c, "id"), parsed.data),
       );
+    }),
+  );
+
+  routes.post(
+    "/:id/pretests",
+    handle(async (c) => {
+      if (!pretest) throw new SurveyError("not_found", 404);
+      const body = await jsonBody(c);
+      const version = body && typeof body === "object" ? (body as { expectedVersion?: unknown }).expectedVersion : null;
+      if (typeof version !== "number" || !Number.isInteger(version) || version < 1) throw new SurveyError("invalid_input", 400);
+      return c.json(await pretest.create(actorOf(c).userId, uuidParam(c, "id"), version));
+    }),
+  );
+  routes.get(
+    "/:id/pretests",
+    handle(async (c) => {
+      if (!pretest) throw new SurveyError("not_found", 404);
+      return c.json({ items: await pretest.list(actorOf(c).userId, uuidParam(c, "id")) });
+    }),
+  );
+
+  routes.post(
+    "/:id/review/apply",
+    handle(async (c) => {
+      const parsed = ApplySurveyReviewPlanInputSchema.safeParse(await jsonBody(c));
+      if (!parsed.success) throw new SurveyError("invalid_input", 400, "输入不合法");
+      return c.json(await service.applyReviewPlan(actorOf(c).userId, pathParam(c, "id"), parsed.data));
     }),
   );
 
@@ -353,7 +383,7 @@ export function createSurveysManageRoutes(deps: SurveysRouterDeps): Hono {
 }
 
 export function createSurveysPublicRoutes(deps: SurveysRouterDeps): Hono {
-  const { collection, media } = deps;
+  const { collection, media, pretest } = deps;
   const routes = new Hono();
 
   // 受访者链接不属于可发现内容：不进搜索索引，也不许任何缓存层留副本。
@@ -361,7 +391,7 @@ export function createSurveysPublicRoutes(deps: SurveysRouterDeps): Hono {
   // immutable 缓存头——这里跳过，别把 no-store 盖回去。
   routes.use("*", async (c, next) => {
     await next();
-    if (/\/assets\//.test(c.req.path)) return;
+    if (!/\/pretests\//.test(c.req.path) && /\/assets\//.test(c.req.path)) return;
     c.header("Cache-Control", "no-store, max-age=0");
     c.header("Pragma", "no-cache");
     c.header("X-Robots-Tag", "noindex, nofollow");
@@ -376,6 +406,29 @@ export function createSurveysPublicRoutes(deps: SurveysRouterDeps): Hono {
       methods: ["POST"],
     }),
   );
+
+  routes.use(
+    "/pretests/*",
+    bodyLimit({ maxSize: SURVEY_SUBMIT_BODY_MAX_BYTES, onError: (c) => c.json({ error: "payload_too_large" }, 413) }),
+  );
+  routes.use("/pretests/read", surveyRateLimit({ name: "survey-pretest-read", windowMs: 60_000, max: SURVEY_START_RATE_PER_MINUTE, methods: ["POST"] }));
+  routes.use("/pretests/responses", surveyRateLimit({ name: "survey-pretest-submit", windowMs: 60_000, max: SURVEY_SUBMIT_RATE_PER_MINUTE, methods: ["POST"] }));
+  routes.use("/pretests/assets/*", surveyRateLimit({ name: "survey-pretest-assets", windowMs: 60_000, max: SURVEY_START_RATE_PER_MINUTE * 10, methods: ["POST"] }));
+  routes.post("/pretests/read", handle(async (c) => {
+    if (!pretest) throw new SurveyError("not_found", 404);
+    const body = await jsonBody(c) as { token?: unknown };
+    return c.json(await pretest.read(typeof body?.token === "string" ? body.token : ""));
+  }));
+  routes.post("/pretests/responses", handle(async (c) => {
+    if (!pretest) throw new SurveyError("not_found", 404);
+    const body = await jsonBody(c) as { token?: unknown; submission?: unknown };
+    return c.json(await pretest.submit(typeof body?.token === "string" ? body.token : "", body?.submission));
+  }));
+  routes.post("/pretests/assets/:fileId", handle(async (c) => {
+    if (!pretest) throw new SurveyError("not_found", 404);
+    const body = await jsonBody(c) as { token?: unknown };
+    return mediaResponse(await pretest.readAsset(typeof body?.token === "string" ? body.token : "", uuidParam(c, "fileId")), "no-store");
+  }));
   routes.use(
     "/:slug/responses",
     surveyRateLimit({

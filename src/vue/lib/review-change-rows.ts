@@ -33,6 +33,8 @@ const fieldLabelKeys: Record<string, string> = {
   max: "surveys.maximum",
   minLabel: "surveys.scaleMinLabel",
   maxLabel: "surveys.scaleMaxLabel",
+  multiline: "surveys.multiline",
+  maxLength: "surveys.maxLength",
   rows: "surveys.matrixRows",
   columns: "surveys.matrixColumns",
 };
@@ -43,13 +45,27 @@ const designFieldLabelKeys: Record<string, string> = {
   analysisPlan: "surveys.assistant.analysis",
   assumptions: "surveys.assistant.assumptions",
   pendingDecisions: "surveys.assistant.pending",
+  constructs: "surveys.assistant.questionPurpose",
 };
 
 export function reviewQuestionLabel(id: string, ctx: ReviewChangeContext): string {
-  const originalIndex = ctx.original.questions.findIndex((question) => question.id === id);
-  const candidateIndex = ctx.candidate?.questions.findIndex((question) => question.id === id) ?? -1;
+  const originalIndex = questionPosition(ctx.original, id);
+  const candidateIndex = ctx.candidate ? questionPosition(ctx.candidate, id) : -1;
   const resolved = originalIndex >= 0 ? originalIndex : candidateIndex;
   return resolved < 0 ? ctx.t("surveys.assistant.unmapped") : ctx.t("surveys.assistant.questionIndex", { n: resolved + 1 });
+}
+
+function questionPosition(definition: SurveyDefinition, id: string): number {
+  return definition.pages.flatMap((page) => page.questionIds).indexOf(id);
+}
+
+function formatQuestionPurposes(definition: SurveyDefinition, ctx: ReviewChangeContext, changed: Set<string>): string {
+  const constructs = (definition.researchDesign?.constructs ?? []).filter((item) => changed.has(item.id));
+  return constructs.map((item) => {
+    const numbers = item.questionIds.map((id) => questionPosition(definition, id) + 1).filter((number) => number > 0);
+    const questions = numbers.length ? ctx.t("surveys.assistant.questionIndex", { n: numbers.join(ctx.t("surveys.designSummary.numberSeparator")) }) : ctx.t("surveys.assistant.unmapped");
+    return `${item.label}：${questions}`;
+  }).join("；") || ctx.t("surveys.assistant.unchangedValue");
 }
 
 function conditionValue(ctx: ReviewChangeContext, questionId: string, value: unknown) {
@@ -123,8 +139,8 @@ export function reviewChangeRows(group: SurveyReviewPlanGroup, ctx: ReviewChange
         field: fieldLabelKeys[field] ? t(fieldLabelKeys[field]!) : field,
         before: formatValue(ctx, before[field]), after: formatValue(ctx, after[field]),
       }));
-    const beforeIndex = original.questions.findIndex((question) => question.id === id);
-    const afterIndex = candidate.questions.findIndex((question) => question.id === id);
+    const beforeIndex = questionPosition(original, id);
+    const afterIndex = questionPosition(candidate, id);
     if (beforeIndex !== afterIndex) rows.push({
       key: `${id}:position`, questionId: id, location: `${reviewQuestionLabel(id, ctx)} · ${t("surveys.assistant.position")}`,
       field: t("surveys.assistant.position"),
@@ -143,12 +159,17 @@ export function reviewChangeRows(group: SurveyReviewPlanGroup, ctx: ReviewChange
     if (op.researchDesign !== undefined) {
       const before = (original.researchDesign ?? {}) as Record<string, unknown>;
       const after = (candidate.researchDesign ?? {}) as Record<string, unknown>;
+      const beforeConstructs = original.researchDesign?.constructs ?? [];
+      const afterConstructs = candidate.researchDesign?.constructs ?? [];
+      const changedConstructs = new Set([...beforeConstructs, ...afterConstructs].map((item) => item.id).filter((id) =>
+        !sameValue(beforeConstructs.find((item) => item.id === id), afterConstructs.find((item) => item.id === id))));
       const fields = [...new Set([...Object.keys(before), ...Object.keys(after)])]
         .filter((field) => !sameValue(before[field], after[field]));
       rows.push(...fields.map((field) => ({
         key: `meta:researchDesign.${field}`,
         field: designFieldLabelKeys[field] ? t(designFieldLabelKeys[field]!) : t("surveys.assistant.design"),
-        before: formatValue(ctx, before[field]), after: formatValue(ctx, after[field]),
+        before: field === "constructs" ? formatQuestionPurposes(original, ctx, changedConstructs) : formatValue(ctx, before[field]),
+        after: field === "constructs" ? formatQuestionPurposes(candidate, ctx, changedConstructs) : formatValue(ctx, after[field]),
       })));
     }
     return rows;

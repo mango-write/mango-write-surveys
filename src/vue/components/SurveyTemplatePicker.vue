@@ -16,8 +16,8 @@ const emit = defineEmits<{
   "update:visible": [value: boolean];
   select: [template: SurveyTemplate];
 }>();
-const { t } = useI18n();
-const templates = computed(() => surveyTemplates(t as unknown as (key: string) => string));
+const { t, locale } = useI18n();
+const templates = computed(() => surveyTemplates(t as unknown as (key: string) => string, locale.value));
 const selectedId = ref("");
 const selected = computed(
   () => templates.value.find((tpl) => tpl.id === selectedId.value) ?? null,

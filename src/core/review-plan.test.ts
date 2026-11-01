@@ -121,6 +121,12 @@ describe("buildSurveyReviewPlan — 共同原因与优先级", () => {
 });
 
 describe("buildSurveyReviewPlan — 候选定义与原子性", () => {
+  it("批量候选和重放对 AI 新增题目使用同一来源快照", () => {
+    const definition = makeDefinition();
+    const plan = buildSurveyReviewPlan(definition, [finding("added", { suggestedOps: [{ op: "add_question", pageId: "p1", question: { id: "ai-q", type: "text", title: "补充问题", required: false } }] })]);
+    expect(plan.candidateDefinition?.sourceRecords).toEqual([expect.objectContaining({ questionId: "ai-q", sourceId: "ai-generated-unverified" })]);
+    expect(applySurveyReviewPlan(definition, plan).definition).toEqual(plan.candidateDefinition);
+  });
   it("不修改原定义，候选定义是同一基线的新对象", () => {
     const definition = makeDefinition();
     const snapshot = structuredClone(definition);

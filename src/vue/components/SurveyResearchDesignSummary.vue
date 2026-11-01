@@ -4,12 +4,19 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import type { SurveyDefinition, SurveyResearchDesign } from "../../contracts/index.js";
+import { AI_GENERATED_SOURCE_ID, SURVEY_SOURCE_CATALOG, surveySourceState } from "../../core/index.js";
 
 const props = defineProps<{
   design: SurveyResearchDesign | null;
   definition: SurveyDefinition;
 }>();
 const { t } = useI18n();
+const sources = computed(() => (props.definition.sourceRecords ?? []).filter((record) => record.sourceId !== AI_GENERATED_SOURCE_ID).map((record) => ({
+  ...record,
+  source: Object.hasOwn(SURVEY_SOURCE_CATALOG, record.sourceId)
+    ? SURVEY_SOURCE_CATALOG[record.sourceId as keyof typeof SURVEY_SOURCE_CATALOG] : null,
+  state: surveySourceState(props.definition, record.questionId, record.baselineQuestion),
+})));
 
 // 与发布确认同判据：保存试填反馈会在无设计草稿上合成空基底，只看
 // researchDesign 存在会把空设计当「已填写」。
@@ -25,6 +32,14 @@ const questionNumbers = computed(() => {
     for (const id of page.questionIds) numbers.set(id, ++number);
   return numbers;
 });
+const generatedQuestions = computed(() => (props.definition.sourceRecords ?? [])
+  .filter((record) => record.sourceId === AI_GENERATED_SOURCE_ID)
+  .flatMap((record) => {
+    const number = questionNumbers.value.get(record.questionId);
+    return number === undefined ? [] : [{ number, state: surveySourceState(props.definition, record.questionId, record.baselineQuestion) }];
+  })
+  .filter((item) => item.state !== "missing")
+  .sort((a, b) => a.number - b.number));
 
 const constructRows = computed(() =>
   (props.design?.constructs ?? []).map((construct) => ({
@@ -86,6 +101,25 @@ function numberList(numbers: number[]) {
         <p v-for="note in design!.pendingDecisions" :key="note" class="pending-note">{{ note }}</p>
       </div>
     </template>
+    <div v-if="sources.length || generatedQuestions.length" class="design-sources">
+      <strong>{{ t("surveys.sourceRecord.title") }}</strong>
+      <p v-if="generatedQuestions.length" class="generated-source">{{ t("surveys.sourceRecord.generated", { numbers: numberList(generatedQuestions.map((item) => item.number)) }) }}</p>
+      <p v-if="generatedQuestions.some((item) => item.state === 'modified')" class="generated-source">{{ t("surveys.sourceRecord.generatedModified") }}</p>
+      <div v-for="source in sources" :key="source.questionId + source.sourceId" class="source-record">
+        <template v-if="source.source">
+          <p>{{ t("surveys.sourceRecord.sus") }}</p>
+          <p>{{ t(`surveys.sourceRecord.${source.state}`) }}</p>
+          <p>{{ t(source.language.startsWith('zh') ? 'surveys.sourceRecord.languageZh' : source.language.startsWith('en') ? 'surveys.sourceRecord.languageEn' : 'surveys.sourceRecord.languageUnknown') }}</p>
+          <p>{{ t("surveys.sourceRecord.population") }}</p>
+          <p>{{ t("surveys.sourceRecord.permission") }}</p>
+          <p>{{ t("surveys.sourceRecord.scoring") }}</p>
+          <p>{{ t("surveys.sourceRecord.evidence") }}</p>
+          <p><a :href="source.source.sourceUrl" target="_blank" rel="noopener noreferrer">{{ t("surveys.sourceRecord.original") }}</a> ·
+            <a :href="source.source.evidenceUrl" target="_blank" rel="noopener noreferrer">{{ t("surveys.sourceRecord.evidenceLink") }}</a></p>
+        </template>
+        <p v-else>{{ t("surveys.sourceRecord.unknown", { id: source.sourceId }) }}</p>
+      </div>
+    </div>
   </details>
 </template>
 <style scoped>
@@ -119,6 +153,10 @@ function numberList(numbers: number[]) {
   color: var(--color-text-tertiary);
   line-height: 1.6;
 }
+.design-sources { display: grid; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.75rem; border-top: 1px solid var(--color-border-subtle); }
+.source-record { display: grid; gap: 0.35rem; color: var(--color-text-secondary); }
+.source-record p { margin: 0; line-height: 1.5; overflow-wrap: anywhere; }
+.generated-source { margin: 0; color: var(--color-text-secondary); line-height: 1.5; overflow-wrap: anywhere; }
 .design-rows {
   margin: 0.6rem 0 0;
   display: grid;

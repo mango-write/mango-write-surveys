@@ -8,6 +8,7 @@ export {
 } from "./csv.js";
 export { importResearchDataset } from "./dataset.js";
 export { RESEARCH_ENGINE_VERSION, runResearchAnalysis } from "./engine.js";
+export { fitOlsHc3, studentTCdf, studentTQuantile } from "./statistics.js";
 export {
   renderResearchReportHtml,
   renderResearchResultCsv,

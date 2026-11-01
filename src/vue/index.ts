@@ -44,5 +44,6 @@ export type { ToolSurveyDelivery } from "../contracts/index.js";
 export { default as SurveyListPage } from "./pages/SurveyListPage.vue";
 export { default as SurveyWorkspacePage } from "./pages/SurveyWorkspacePage.vue";
 export { default as SurveyPublicPage } from "./pages/SurveyPublicPage.vue";
+export { default as SurveyPretestPage } from "./pages/SurveyPretestPage.vue";
 export { default as SurveyDataAnalysis } from "./components/SurveyDataAnalysis.vue";
 export { default as SurveyResearchPanel } from "./components/SurveyResearchPanel.vue";

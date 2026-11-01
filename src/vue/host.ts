@@ -21,7 +21,7 @@ export class SurveysApiError extends Error {
 export interface SurveysTransport {
   /** JSON / FormData 请求。非 2xx 抛 SurveysApiError；认证 cookie、租户头、
    *  baseUrl、CSRF 等全部由宿主实现持有，包不感知。 */
-  request<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T>;
+  request<T>(path: string, init?: { method?: string; body?: unknown; responseType?: "blob" }): Promise<T>;
   /** 字节下载（CSV/变量字典导出）：宿主负责触发浏览器下载与文件名落盘。 */
   download?(path: string, filename: string): Promise<void>;
   /** 卸载瞬间（pagehide）的 keepalive 同步落盘：宿主带自己的认证/租户头立即

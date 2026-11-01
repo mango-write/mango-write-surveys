@@ -14,6 +14,8 @@ const t = (key: string, params?: Record<string, unknown>) => {
     "surveys.assistant.position": "题目顺序",
     "surveys.assistant.unmapped": "映射待更新",
     "surveys.assistant.questionIndex": "第 {n} 题",
+    "surveys.assistant.questionPurpose": "题目用途",
+    "surveys.designSummary.numberSeparator": "、",
     "surveys.assistant.unchangedValue": "未设置",
     "surveys.assistant.yes": "是",
     "surveys.assistant.no": "否",
@@ -51,6 +53,20 @@ function singleRow(overrides: Partial<Review> = {}) {
 }
 
 describe("review-change-rows（诊断条候选项核对）", () => {
+  it("拆题时用题号展示研究用途映射的实际变化", () => {
+    const ctx = context();
+    ctx.original.researchDesign = { researchQuestion: "问题", population: "", recruitment: "", analysisPlan: "描述", assumptions: [], pendingDecisions: [],
+      constructs: [{ id: "c1", label: "使用情况", definition: "用途", questionIds: ["q1"] }] };
+    const nextDesign = { ...ctx.original.researchDesign, constructs: [{ ...ctx.original.researchDesign.constructs[0]!, questionIds: ["q1", "q_new"] }] };
+    ctx.findings = [{ id: "split", questionId: "q1", title: "拆题", severity: "major", reason: "两件事", recommendation: "拆开",
+      suggestedOps: [{ op: "add_question", pageId: "p1", question: { id: "q_new", type: "text", title: "补充问题", required: false } }, { op: "set_meta", researchDesign: nextDesign }] }];
+    const plan = buildSurveyReviewPlan(ctx.original, ctx.findings);
+    if (!plan.candidateDefinition) throw new Error("计划不可应用");
+    ctx.candidate = plan.candidateDefinition;
+    const row = reviewChangeRows(plan.groups[0]!, ctx).find((item) => item.field === "题目用途");
+    expect(row?.before).toBe("使用情况：第 1 题");
+    expect(row?.after).toBe("使用情况：第 1、3 题");
+  });
   it("题目字段修改展示真实前后，不做盲投影", () => {
     const { rows } = singleRow();
     expect(rows).toHaveLength(1);
@@ -108,7 +124,8 @@ describe("review-change-rows（诊断条候选项核对）", () => {
 
   it("题目顺序变化成行，题号定位可核对", () => {
     const original = makeDefinition();
-    const candidate = { ...original, questions: [...original.questions].reverse() };
+    const candidate = { ...original, pages: original.pages.map((page, index) => index === 0
+      ? { ...page, questionIds: [...page.questionIds].reverse() } : page) };
     const group = {
       id: "check:flow.order", severity: "minor" as const, title: "调序", findingIds: ["f-move"],
       ops: [{ op: "move_question" as const, questionId: original.questions[0]!.id, toPageId: "p1", index: 0 }],
@@ -124,5 +141,11 @@ describe("review-change-rows（诊断条候选项核对）", () => {
     const ctx = context();
     expect(reviewQuestionLabel("q1", ctx)).toBe("第 1 题");
     expect(reviewQuestionLabel("q-missing", ctx)).toBe("映射待更新");
+  });
+
+  it("题号按页面顺序而不是底层题目数组顺序显示", () => {
+    const ctx = context();
+    ctx.original.questions.reverse();
+    expect(reviewQuestionLabel("q1", ctx)).toBe("第 1 题");
   });
 });

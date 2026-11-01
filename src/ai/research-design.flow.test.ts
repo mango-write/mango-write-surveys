@@ -18,8 +18,8 @@ const researchDesign = {
   recruitment: "院系邮件列表",
   purpose: "describe" as const,
   timeBudgetMinutes: 10,
-  constructs: [{ id: "c1", label: "使用频率", definition: "近三个月使用频率", questionIds: ["q1"] }],
-  analysisPlan: "描述统计与按年级分组",
+  constructs: [{ id: "c1", label: "使用频率", definition: "使用频率", questionIds: ["q1"] }],
+  analysisPlan: "描述统计",
   assumptions: [],
   pendingDecisions: ["是否需要按学科分层"],
 };
@@ -147,7 +147,8 @@ const definitionWithDesign = {
     { id: "q2", type: "text" as const, title: "最近一次使用是什么场景？", required: false },
   ],
   pages: [{ id: "p1", title: "第 1 页", questionIds: ["q1", "q2"] }],
-  researchDesign: { ...researchDesign, constructs: [{ ...researchDesign.constructs[0]!, questionIds: ["q1"] }] },
+  researchDesign: { ...researchDesign, constructs: [{ ...researchDesign.constructs[0]!, questionIds: ["q1"] },
+    { id: "c2", label: "使用场景", definition: "最近一次使用场景", questionIds: ["q2"] }] },
 };
 
 describe("研究设计与诊断 — 真实 service facade 往返", () => {
@@ -156,7 +157,7 @@ describe("研究设计与诊断 — 真实 service facade 往返", () => {
 
     const created = await tools.surveyCreate.run(
       { title: definitionWithDesign.title, definition: definitionWithDesign },
-      { actor, scopeSurveyId: null, operationId: "op-create-1" },
+      { actor, scopeSurveyId: null, operationId: "op-create-1", userTexts: ["调查在读博士生，填写时间不超过10分钟。本次调查匿名，仅用于研究。"] },
     );
     expect(created.ok).toBe(true);
     const surveyId = String(created.surveyId);

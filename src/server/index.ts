@@ -43,6 +43,15 @@ export {
   createSurveysCollection,
   type SurveysCollection,
 } from "./collection.js";
+export {
+  createPretestService,
+  PretestSubmissionSchema,
+  PRETEST_LINK_TTL_MS,
+  PRETEST_ANSWER_TTL_MS,
+  type PretestRecord,
+  type PretestStoragePort,
+  type PretestSummary,
+} from "./pretest.js";
 export { createSurveysMedia, type SurveysMedia } from "./media.js";
 export {
   createSurveysManageRoutes,

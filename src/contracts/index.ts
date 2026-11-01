@@ -177,6 +177,13 @@ export const ApplySurveyReviewFindingInputSchema = z.strictObject({
 });
 export type ApplySurveyReviewFindingInput = z.infer<typeof ApplySurveyReviewFindingInputSchema>;
 
+export const ApplySurveyReviewPlanInputSchema = z.strictObject({
+  expectedVersion: z.number().int().min(1),
+  operationId: z.string().min(6).max(64),
+  candidateFingerprint: z.string().regex(/^[0-9a-f]{64}$/),
+  findingIds: z.array(z.string().min(1)).min(2).max(20).refine((ids) => new Set(ids).size === ids.length),
+});
+
 export const PublicSurveySchema = z.object({
   id: IdSchema,
   slug: SurveySlugSchema,

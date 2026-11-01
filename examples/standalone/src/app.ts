@@ -110,6 +110,7 @@ export function buildStandaloneApp(config: StandaloneAppConfig): Hono {
       surveyId?: unknown;
       operationId?: unknown;
       prompt?: unknown;
+      includePretestFeedback?: unknown;
     } | null;
     const surveyId = typeof body?.surveyId === "string" ? body.surveyId : "";
     const operationId = typeof body?.operationId === "string" ? body.operationId : "";
@@ -133,8 +134,8 @@ export function buildStandaloneApp(config: StandaloneAppConfig): Hono {
     const result = await reviewStandaloneSurvey(
       config.routerDeps.service,
       config.aiModel,
-      { actor: config.routerDeps.actorOf(c), surveyId, operationId, prompt },
-      { signal: c.req.raw.signal, timeoutMs: config.aiTimeoutMs },
+      { actor: config.routerDeps.actorOf(c), surveyId, operationId, prompt, includePretestFeedback: body?.includePretestFeedback === true },
+      { signal: c.req.raw.signal, timeoutMs: config.aiTimeoutMs, pretest: config.routerDeps.pretest },
     );
     if (!result.ok) {
       const status = result.code === "model_failed" || result.code === "invalid_model_response"

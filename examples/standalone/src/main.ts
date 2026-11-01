@@ -10,6 +10,7 @@ import {
   createSurveysCollection,
   createSurveysMedia,
   createSurveysService,
+  createPretestService,
   createResearchService,
 } from "@mango-write/surveys/server";
 import {
@@ -50,6 +51,7 @@ const app = buildStandaloneApp({
     service: createSurveysService(ports),
     collection: createSurveysCollection(ports),
     media: createSurveysMedia(ports),
+    pretest: createPretestService(ports, ports.storage.pretests),
     actorOf: () => standaloneAdminActor(),
   },
   research: {
@@ -60,6 +62,11 @@ const app = buildStandaloneApp({
 });
 
 await initStandaloneSchema(DATABASE_URL);
+const sweepPretestAnswers = () => {
+  ports.storage.purgeExpiredPretestAnswers().catch((error) => console.error("[pretest] cleanup failed:", error));
+};
+sweepPretestAnswers();
+setInterval(sweepPretestAnswers, 60 * 60 * 1000).unref();
 serve({ fetch: app.fetch, port: PORT }, (info) => {
   console.log(`surveys standalone listening on http://localhost:${info.port}`);
 });

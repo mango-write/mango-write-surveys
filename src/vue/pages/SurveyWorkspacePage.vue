@@ -27,6 +27,8 @@ import {
   applySurveyOps,
   canonicalContentJson,
   canonicalSurveyJson,
+  canRecordAiAddedQuestions,
+  recordAiAddedQuestions,
   sha256Hex,
   validateSurveyDefinition,
 } from "../../core/index.js";
@@ -42,7 +44,7 @@ import {
   type SurveysCopilotSurfacePresentation,
 } from "../host.js";
 import { useSurveysNotify } from "../notify.js";
-import { useSurveysApi } from "../api.js";
+import { useSurveysApi, type PretestSummaryView } from "../api.js";
 import SurveyDesignCanvas from "../components/SurveyDesignCanvas.vue";
 import SurveyDataAnalysis from "../components/SurveyDataAnalysis.vue";
 import SurveyLifecycleTrack from "../components/SurveyLifecycleTrack.vue";
@@ -55,6 +57,7 @@ import SurveyResearchDesignSummary from "../components/SurveyResearchDesignSumma
 import SurveySwitcher from "../components/SurveySwitcher.vue";
 import SurveyInlineReview from "../components/SurveyInlineReview.vue";
 import SurveyStageNavigation from "../components/SurveyStageNavigation.vue";
+import { reviewChangeRows, type ReviewChangeRow } from "../lib/review-change-rows.js";
 import type { SurveyStageNavigation as SurveyStageNavigationModel } from "../workspace-navigation.js";
 import {
   takeAiCreatedSurveyHandoff,
@@ -130,6 +133,10 @@ const history = useSurveyDraftHistory({
 const definition = computed(() => history.current.value.definition);
 const responseLimit = computed(() => history.current.value.responseLimit);
 const draftVersion = ref(1);
+function definitionForSave(value: SurveyDetail["definition"]) {
+  return value.sourceRecords === undefined && survey.value?.definition.sourceRecords?.length
+    ? { ...value, sourceRecords: [] } : value;
+}
 
 const autosave = useSurveyAutosave({
   getState: () => history.current.value,
@@ -139,7 +146,7 @@ const autosave = useSurveyAutosave({
     const next = await surveysApi.save(
       survey.value!.id,
       expectedVersion,
-      state.definition,
+      definitionForSave(state.definition),
       state.responseLimit,
     );
     // 工作副本是唯一真相：服务端回包只更新外壳字段，不回写 definition。
@@ -156,7 +163,7 @@ const autosave = useSurveyAutosave({
     if (!target) return;
     host.transport.beacon?.(`/api/surveys/${target.id}`, {
       expectedVersion,
-      definition: state.definition,
+      definition: definitionForSave(state.definition),
       responseLimit: state.responseLimit,
     });
   },
@@ -216,6 +223,7 @@ const {
   discardFinding,
   request: askResearch,
   applyFinding,
+  applyPlan,
 } = useSurveyReviewSession({
   surveyId: () => surveyId.value,
   canWrite: () => !!survey.value?.canWrite,
@@ -229,6 +237,46 @@ const {
   notify,
   t,
 });
+const batchPreview = ref<{ operationId: string; version: number; candidateFingerprint: string; findingIds: string[]; rows: ReviewChangeRow[] } | null>(null);
+const batchConfirming = ref(false);
+const batchFields = new Set(["title", "required", "min", "max", "minLabel", "maxLabel", "multiline", "maxLength"]);
+const canPreviewBatch = computed(() => {
+  const plan = reviewPlan.value;
+  const report = reviewReport.value;
+  if (!survey.value?.canWrite || reviewStale.value || !report || plan?.status !== "ready" || !plan.candidateDefinition) return false;
+  const ids = plan.groups.flatMap((group) => group.findingIds);
+  const base = canonicalSurveyJson(definition.value);
+  if (report.findings.filter((item) => ids.includes(item.id)).some((item) => {
+    const result = applySurveyOps(definition.value, item.suggestedOps ?? []);
+    return result.rejected.length > 0 || canonicalSurveyJson(result.definition) === base;
+  })) return false;
+  return ids.length >= 2 && plan.ops.every((op) => op.op === "update_question" &&
+    Object.entries(op.patch).length > 0 && Object.entries(op.patch).every(([field, value]) =>
+      batchFields.has(field) && (typeof value === "string" || typeof value === "number" || typeof value === "boolean")));
+});
+async function openBatchPreview() {
+  const plan = reviewPlan.value;
+  const report = reviewReport.value;
+  if (!canPreviewBatch.value || !plan?.candidateDefinition || !report) return;
+  const context = { original: definition.value, candidate: plan.candidateDefinition, findings: report.findings, t };
+  const rows = [...new Map(plan.groups.flatMap((group) => reviewChangeRows(group, context)).map((row) => [row.key, row])).values()];
+  if (!rows.length) return;
+  const version = draftVersion.value;
+  const candidateFingerprint = await sha256Hex(canonicalSurveyJson(plan.candidateDefinition));
+  if (reviewPlan.value !== plan || reviewReport.value !== report || draftVersion.value !== version || reviewStale.value) return;
+  batchPreview.value = { operationId: report.operationId, version, candidateFingerprint,
+    findingIds: plan.groups.flatMap((group) => group.findingIds), rows };
+}
+async function confirmBatchPreview() {
+  const preview = batchPreview.value;
+  if (!preview || batchConfirming.value) return;
+  batchConfirming.value = true;
+  try {
+    if (await applyPlan(preview.operationId, preview.candidateFingerprint, preview.findingIds, preview.version)) batchPreview.value = null;
+  } finally {
+    batchConfirming.value = false;
+  }
+}
 const reviewQuestionIds = computed(() => [
   ...new Set((reviewReport.value?.findings ?? []).flatMap((finding) => finding.questionId ? [finding.questionId] : [])),
 ]);
@@ -251,10 +299,15 @@ const reviewAdditions = computed(() => (reviewReport.value?.findings ?? []).flat
 const aiCreatedCard = ref<AiCreatedSurveyHandoff | null>(null);
 
 function applyEditDelivery(delivery: SurveyEditDelivery) {
-  const result = applySurveyOps(history.current.value.definition, delivery.appliedOps);
+  const before = history.current.value.definition;
+  const result = applySurveyOps(before, delivery.appliedOps);
+  if (!canRecordAiAddedQuestions(before, result.definition)) {
+    notify.warn(t("surveys.copilot.sourceCapacity"));
+    return;
+  }
   if (result.definition !== history.current.value.definition) {
     history.commit(
-      { ...history.current.value, definition: result.definition },
+      { ...history.current.value, definition: recordAiAddedQuestions(before, result.definition) },
       { source: "assistant", label: delivery.summary },
     );
     autosave.schedule();
@@ -539,51 +592,138 @@ const publishDesignUsable = computed(() => {
   const design = definition.value.researchDesign;
   return !!design && !!design.researchQuestion.trim();
 });
-// 试填记录（作者自报）：唯一数据是 definition.researchDesign.pretest；工作台
-// 顶栏直达面板（复制提纲 + 按题反馈），发布确认只留聚合摘要。保存走
-// commitDefinition 同一历史/自动保存链路，不新增服务器路由。
 const pretestOpen = ref(false);
+const pretestSaving = ref(false);
+const pretestCreating = ref(false);
+const pretestReviewing = ref(false);
+const pretestInvitations = ref<PretestSummaryView[]>([]);
+const pretestInvitationsLoading = ref(false);
+const pretestInvitationsError = ref(false);
+const pretestInvitationUrl = ref("");
+const pretestCurrentFingerprint = ref("");
+watch(definition, async (current, _previous, onCleanup) => {
+  let cancelled = false;
+  onCleanup(() => { cancelled = true; });
+  pretestCurrentFingerprint.value = "";
+  const fingerprint = await sha256Hex(canonicalContentJson(current));
+  if (!cancelled) pretestCurrentFingerprint.value = fingerprint;
+}, { immediate: true });
+async function loadPretestInvitations() {
+  const target = survey.value?.id;
+  if (!target) return;
+  pretestInvitationsLoading.value = true;
+  pretestInvitationsError.value = false;
+  try {
+    const response = await surveysApi.listPretests(target);
+    if (survey.value?.id === target) pretestInvitations.value = response.items ?? [];
+  } catch {
+    if (survey.value?.id === target) pretestInvitationsError.value = true;
+  } finally {
+    if (survey.value?.id === target) pretestInvitationsLoading.value = false;
+  }
+}
+watch(pretestOpen, (open) => { if (open) void loadPretestInvitations(); });
+watch(publishOpen, (open) => { if (open) void loadPretestInvitations(); });
+watch(surveyId, () => { pretestInvitationUrl.value = ""; pretestInvitations.value = []; });
+async function createPretestInvitation() {
+  const target = survey.value?.id;
+  if (!target || !survey.value?.canWrite || pretestCreating.value) return;
+  pretestCreating.value = true;
+  try {
+    if (!(await autosave.flush())) {
+      notify.warn(t("surveys.assistant.saveFirst"));
+      return;
+    }
+    if (survey.value?.id !== target) return;
+    const result = await surveysApi.createPretest(target, draftVersion.value);
+    if (survey.value?.id !== target) return;
+    pretestInvitationUrl.value = `${window.location.origin}/s/pretest#${encodeURIComponent(result.token)}`;
+    await loadPretestInvitations();
+  } catch {
+    notify.warn(t("surveys.pretestPanel.createFailed"));
+  } finally {
+    pretestCreating.value = false;
+  }
+}
+async function reviewPretestFeedback() {
+  if (pretestReviewing.value || !survey.value?.canWrite || !host.copilot?.sendPrompt) return;
+  pretestReviewing.value = true;
+  try {
+    if (!(await autosave.flush())) {
+      notify.warn(t("surveys.assistant.saveFirst"));
+      return;
+    }
+    pretestOpen.value = false;
+    await host.copilot.sendPrompt(t("surveys.pretestPanel.reviewFeedbackPrompt"), ["survey_read", "survey_review"], { skillId: "survey-pretest-review" });
+  } catch {
+    notify.warn(t("surveys.assistant.requestFailed"));
+  } finally {
+    pretestReviewing.value = false;
+  }
+}
 function openPretestFromPublish() {
   publishOpen.value = false;
   pretestOpen.value = true;
 }
-function savePretest(payload: {
+const hasPretestSaveConflict = () => autosave.status.value === "conflict";
+async function savePretest(payload: {
   participantCount: number;
   notes: string;
   revisionId?: string;
   itemFeedback: SurveyPretestItemFeedback[];
 }) {
-  if (!survey.value?.canWrite) return;
+  if (!survey.value?.canWrite || pretestSaving.value) return;
   // 冲突是终态：不再提交任何变更，提示与全局冲突横幅一致，不给「已记录」假成功。
-  if (autosave.status.value === "conflict") {
+  if (hasPretestSaveConflict()) {
     notify.warn(t("surveys.conflict"));
     return;
   }
-  commitDefinition(
-    {
-      ...definition.value,
-      researchDesign: {
-        // 草稿尚无研究设计时按 schema 基底补全，避免缺字段对象流入模板/发布。
-        researchQuestion: "",
-        population: "",
-        recruitment: "",
-        purpose: "describe",
-        timeBudgetMinutes: 5,
-        constructs: [],
-        analysisPlan: "",
-        assumptions: [],
-        pendingDecisions: [],
-        ...publishDesign.value,
-        pretest: {
-          ...payload,
-          recordedAt: new Date().toISOString(),
+  pretestSaving.value = true;
+  try {
+    const surveyId = survey.value.id;
+    const content = canonicalContentJson(definition.value);
+    const contentFingerprint = await sha256Hex(content);
+    if (survey.value?.id !== surveyId || !survey.value.canWrite || content !== canonicalContentJson(definition.value) || hasPretestSaveConflict()) {
+      notify.warn(t("surveys.pretestPanel.contentChanged"));
+      return;
+    }
+    const revisionId = currentRevision.value?.contentFingerprint === contentFingerprint
+      ? currentRevision.value.id
+      : undefined;
+    commitDefinition(
+      {
+        ...definition.value,
+        researchDesign: {
+          // 草稿尚无研究设计时按 schema 基底补全，避免缺字段对象流入模板/发布。
+          researchQuestion: "",
+          population: "",
+          recruitment: "",
+          constructs: [],
+          analysisPlan: "",
+          assumptions: [],
+          pendingDecisions: [],
+          ...publishDesign.value,
+          pretest: {
+            ...payload,
+            revisionId,
+            contentFingerprint,
+            recordedAt: new Date().toISOString(),
+          },
         },
       },
-    },
-    "pretest",
-  );
-  pretestOpen.value = false;
-  notify.success(t("surveys.pretestPanel.saved"));
+      "pretest",
+    );
+    if (!(await autosave.flush())) {
+      notify.warn(hasPretestSaveConflict() ? t("surveys.conflict") : t("surveys.pretestPanel.saveFailed"));
+      return;
+    }
+    pretestOpen.value = false;
+    notify.success(t("surveys.pretestPanel.saved"));
+  } catch {
+    notify.warn(t("surveys.pretestPanel.saveFailed"));
+  } finally {
+    pretestSaving.value = false;
+  }
 }
 // 发布确认的聚合口径：按题反馈条数与四类分布，从已保存记录即时汇总。
 const pretestAspectCounts = computed<Record<SurveyPretestItemFeedback["aspect"], number>>(() => {
@@ -591,15 +731,45 @@ const pretestAspectCounts = computed<Record<SurveyPretestItemFeedback["aspect"],
   for (const item of publishDesign.value?.pretest?.itemFeedback ?? []) counts[item.aspect] += 1;
   return counts;
 });
+const pretestContentMatches = ref<boolean | null>(null);
+watch(
+  [definition, () => publishDesign.value?.pretest?.contentFingerprint],
+  async ([current, fingerprint], _previous, onCleanup) => {
+    let cancelled = false;
+    onCleanup(() => { cancelled = true; });
+    pretestContentMatches.value = null;
+    if (!fingerprint) return;
+    const matches = await sha256Hex(canonicalContentJson(current)) === fingerprint;
+    if (!cancelled) pretestContentMatches.value = matches;
+  },
+  { immediate: true },
+);
 const pretestRevisionLine = computed(() => {
   // 人读版本序数（发布框同款口径）：从 revisions 列表把 id 换成第 n 版。
   const revisionId = publishDesign.value?.pretest?.revisionId;
   const ordinal = revisionId
     ? survey.value?.revisions.find((revision) => revision.id === revisionId)?.revision
     : undefined;
+  if (pretestContentMatches.value === false) return t("surveys.publishCheck.pretestChanged");
+  if (publishDesign.value?.pretest?.contentFingerprint && !ordinal)
+    return t("surveys.publishCheck.pretestDraft");
   return ordinal
     ? t("surveys.publishCheck.pretestRevision", { n: ordinal })
     : t("surveys.publishCheck.pretestRevisionNone");
+});
+const publishPretestLine = computed(() => {
+  if (pretestInvitationsLoading.value || (!pretestCurrentFingerprint.value && !pretestInvitationsError.value))
+    return t("surveys.pretestPanel.loadingInvitations");
+  if (pretestInvitationsError.value) return t("surveys.pretestPanel.invitationsFailed");
+  const current = pretestInvitations.value.filter((item) => item.contentFingerprint === pretestCurrentFingerprint.value)
+    .reduce((sum, item) => sum + item.submissions.length, 0);
+  if (current) return t("surveys.publishCheck.pretestSubmissions", { n: current });
+  const older = pretestInvitations.value.reduce((sum, item) => sum + item.submissions.length, 0);
+  if (older) return t("surveys.publishCheck.pretestOlderSubmissions", { n: older });
+  if (pretestContentMatches.value === false) return t("surveys.publishCheck.pretestChanged");
+  return publishDesign.value?.pretest
+    ? t("surveys.publishCheck.pretestDone", { n: publishDesign.value.pretest.participantCount })
+    : t("surveys.publishCheck.noPretest");
 });
 const pendingReview = computed(() =>
   reviewReport.value && reviewPlan.value
@@ -928,6 +1098,13 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
                 <template #icon><Eye :size="17" /></template>
               </Button>
               <Button
+                v-if="stage === 'design' && canPreviewBatch"
+                severity="secondary"
+                variant="text"
+                :label="t('surveys.assistant.batchPreview')"
+                @click="openBatchPreview"
+              />
+              <Button
                 v-if="survey.canWrite"
                 severity="secondary"
                 variant="text"
@@ -1089,12 +1266,41 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
       :pretest="publishDesign?.pretest ?? null"
       :revision-id="survey.currentRevisionId ?? ''"
       :revision-number="currentRevisionNumber"
-      :busy="busy"
+      :busy="busy || pretestSaving || pretestCreating || pretestReviewing"
+      :invitation-url="pretestInvitationUrl"
+      :invitations="pretestInvitations"
+      :invitations-loading="pretestInvitationsLoading"
+      :invitations-error="pretestInvitationsError"
+      :current-fingerprint="pretestCurrentFingerprint"
+      :can-review-feedback="!!survey.canWrite && !!host.copilot?.sendPrompt && pretestInvitations.some((invitation) => invitation.submissions.some((submission) => submission.feedback.length > 0))"
+      @create-invitation="createPretestInvitation"
+      @retry-invitations="loadPretestInvitations"
+      @review-feedback="reviewPretestFeedback"
       @save="savePretest"
       @update:visible="pretestOpen = $event"
     />
     <!-- 发布前确认（issue #224 M3）：结构校验在打开前已完成并通过，这里只
          陈述事实与提醒，区分「建议确认」与「结构阻断」，不虚构全部通过。 -->
+    <Dialog :visible="!!batchPreview" modal :header="t('surveys.assistant.batchTitle')"
+      :style="{ width: 'min(42rem, calc(100vw - 2rem))' }"
+      @update:visible="(visible: boolean) => { if (!visible && !reviewApplying) batchPreview = null; }">
+      <div v-if="batchPreview" class="batch-review">
+        <p>{{ t("surveys.assistant.batchHint") }}</p>
+        <div v-for="row in batchPreview.rows" :key="row.key" class="batch-review__row">
+          <strong>{{ row.location ?? row.field }}</strong>
+          <p><span>{{ t("surveys.inlineReview.before") }}</span> {{ row.before }}</p>
+          <p><span>{{ t("surveys.inlineReview.after") }}</span> {{ row.after }}</p>
+        </div>
+        <Message v-if="!batchConfirming && (reviewStale || reviewReport?.operationId !== batchPreview.operationId || draftVersion !== batchPreview.version)"
+          severity="warn" :closable="false">{{ t("surveys.assistant.stale") }}</Message>
+      </div>
+      <template #footer>
+        <Button :label="t('surveys.cancel')" severity="secondary" text :disabled="reviewApplying" @click="batchPreview = null" />
+        <Button :label="t('surveys.assistant.batchApply')" :loading="reviewApplying"
+          :disabled="reviewStale || reviewReport?.operationId !== batchPreview?.operationId || draftVersion !== batchPreview?.version"
+          @click="confirmBatchPreview" />
+      </template>
+    </Dialog>
     <Dialog
       v-model:visible="publishOpen"
       modal
@@ -1127,12 +1333,10 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
               <span>{{ t("surveys.publishCheck.noPending") }}</span>
             </div>
           </template>
-          <div role="listitem" class="publish-reminder" :class="{ 'is-ok': !!publishDesign?.pretest }">
-            <i class="pi" :class="publishDesign?.pretest ? 'pi-check' : 'pi-exclamation-triangle'" aria-hidden="true" />
+          <div role="listitem" class="publish-reminder">
+            <i class="pi pi-exclamation-triangle" aria-hidden="true" />
             <span>
-              {{ publishDesign?.pretest
-                ? t("surveys.publishCheck.pretestDone", { n: publishDesign.pretest.participantCount })
-                : t("surveys.publishCheck.noPretest") }}
+              {{ publishPretestLine }}
             </span>
           </div>
           <div v-if="pendingReview" role="listitem" class="publish-reminder" :class="{ 'is-stale': pendingReview.stale }">
@@ -1157,7 +1361,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
             <p class="publish-pretest-hint">{{ t("surveys.assistant.trialRecorded") }}</p>
           </template>
           <template v-else>
-            <p class="publish-pretest-hint">{{ t("surveys.publishCheck.noPretest") }}</p>
+            <p class="publish-pretest-hint">{{ publishPretestLine }}</p>
             <p class="publish-pretest-hint">{{ t("surveys.publishCheck.pretestHint") }}</p>
           </template>
           <Button :label="t('surveys.pretestPanel.open')" severity="secondary" @click="openPretestFromPublish" />
@@ -1274,7 +1478,11 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
   .topbar-actions {
     width: 100%;
     justify-content: flex-end;
+    flex-wrap: wrap;
+    gap: 0.25rem;
   }
+  .topbar-actions > * { flex-shrink: 0; }
+  .topbar-actions :deep(.p-button-label) { white-space: nowrap; }
   .stage-body {
     padding: var(--layout-card-padding);
   }
@@ -1348,6 +1556,11 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
   font-weight: 600;
   font-size: 0.85rem;
 }
+.batch-review { display: grid; gap: 1rem; }
+.batch-review > p { margin: 0; color: var(--color-text-secondary); }
+.batch-review__row { border-top: 1px solid var(--color-border-subtle); padding-top: 1rem; }
+.batch-review__row p { margin: 0.5rem 0 0; overflow-wrap: anywhere; }
+.batch-review__row p span { display: block; color: var(--color-text-secondary); font-size: 0.8rem; }
 .publish-pretest-hint {
   margin: 0;
   font-size: 0.8rem;

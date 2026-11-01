@@ -51,7 +51,7 @@ export function createStandaloneCopilot(): {
     focusComposer() {
       state.open = true;
     },
-    async sendPrompt(text, toolNames) {
+    async sendPrompt(text, toolNames, options) {
       if (!toolNames?.includes("survey_review")) {
         host.fillComposer(text);
         host.focusComposer();
@@ -66,7 +66,7 @@ export function createStandaloneCopilot(): {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ surveyId: scope.id, operationId: crypto.randomUUID(), prompt: text }),
+          body: JSON.stringify({ surveyId: scope.id, operationId: crypto.randomUUID(), prompt: text, includePretestFeedback: options?.skillId === "survey-pretest-review" }),
         });
         const value: unknown = await response.json().catch(() => null);
         if (!response.ok) throw new SurveysApiError(response.status, "review_failed", value);

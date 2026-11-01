@@ -3,6 +3,8 @@ export * from "./validate-definition.js";
 export * from "./ops.js";
 export * from "./cognitive-interview.js";
 export * from "./review-plan.js";
+export * from "./review-safety.js";
+export * from "./source-provenance.js";
 export * from "./path.js";
 export * from "./answers.js";
 export * from "./hash.js";

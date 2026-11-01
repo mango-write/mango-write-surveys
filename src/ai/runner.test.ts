@@ -23,6 +23,7 @@ const goodDefinition = {
     },
   ],
   pages: [{ id: "p1", title: "页", questionIds: ["q1"] }],
+  researchDesign: { researchQuestion: "了解使用情况", population: "", recruitment: "", constructs: [{ id: "c1", label: "使用", definition: "使用情况", questionIds: ["q1"] }], analysisPlan: "描述", assumptions: [], pendingDecisions: [] },
 };
 
 function modelReplying(text: string): SurveyModelPort {
@@ -30,6 +31,27 @@ function modelReplying(text: string): SurveyModelPort {
 }
 
 describe("generateSurveyDefinition", () => {
+  it("独立建卷不接受模型伪造来源，也不保存未确认的匿名承诺", async () => {
+    const fakeSource = [{ sourceId: "sus-brooke-1996", questionId: "q1", language: "zh-CN", baselineQuestion: "{}" }];
+    const result = await generateSurveyDefinition(modelReplying(JSON.stringify({ ...goodDefinition, sourceRecords: fakeSource })), { title: "调查", brief: "了解使用情况" });
+    if (!result.ok) throw new Error(result.error);
+    expect(result.definition.sourceRecords?.[0]?.sourceId).toBe("ai-generated-unverified");
+    const unsupported = await generateSurveyDefinition(modelReplying(JSON.stringify({ ...goodDefinition, consent: "匿名汇总" })), { title: "调查", brief: "不收集姓名" });
+    expect(unsupported).toMatchObject({ ok: false, error: expect.stringContaining("未经确认") });
+  });
+  it("独立生成同样只保留用户明确提供的填写时长", async () => {
+    const researchDesign = {
+      researchQuestion: "使用情况", population: "", recruitment: "", constructs: [{ id: "c1", label: "使用情况", definition: "使用情况", questionIds: ["q1"] }],
+      analysisPlan: "描述", assumptions: [], pendingDecisions: [], timeBudgetMinutes: 8,
+    };
+    const model = modelReplying(JSON.stringify({ ...goodDefinition, researchDesign }));
+    const unknown = await generateSurveyDefinition(model, { title: "科研工具调查", brief: "了解工具使用" });
+    const explicit = await generateSurveyDefinition(model, { title: "科研工具调查", brief: "填写时间不超过8分钟" });
+    if (!unknown.ok || !explicit.ok) throw new Error("生成失败");
+    expect(unknown.definition.researchDesign).not.toHaveProperty("timeBudgetMinutes");
+    expect(explicit.definition.researchDesign?.timeBudgetMinutes).toBe(8);
+  });
+
   it("从 ```json 围栏里解析候选；标题以调用方给定为准", async () => {
     const reply = { ...goodDefinition, title: "模型自作主张的标题" };
     const model = modelReplying("以下是问卷：\n```json\n" + JSON.stringify(reply) + "\n```");

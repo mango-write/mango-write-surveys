@@ -3,7 +3,7 @@
 // surveys.detail → /surveys/:surveyId，surveys.public → /s/:slug。
 import { createRouter, createWebHistory } from "vue-router";
 
-import { SurveyListPage, SurveyPublicPage, SurveyWorkspacePage } from "@mango-write/surveys/vue";
+import { SurveyListPage, SurveyPretestPage, SurveyPublicPage, SurveyWorkspacePage } from "@mango-write/surveys/vue";
 
 import LoginPage from "./pages/LoginPage.vue";
 import { isSignedIn, markSignedIn, probeSession } from "./session";
@@ -13,6 +13,7 @@ export const router = createRouter({
   routes: [
     { path: "/login", name: "login", component: LoginPage },
     { path: "/", name: "surveys.list", component: SurveyListPage },
+    { path: "/s/pretest", name: "surveys.pretest", component: SurveyPretestPage, props: (route) => ({ token: route.hash.slice(1) }) },
     { path: "/s/:slug", name: "surveys.public", component: SurveyPublicPage, props: true },
     { path: "/surveys/:surveyId", name: "surveys.detail", component: SurveyWorkspacePage },
   ],
@@ -21,7 +22,7 @@ export const router = createRouter({
 // /s/* 是匿名采集面；其余页面未登录一律送 /login。登录态探测只在本地无标记时
 // 发一次 GET /api/surveys（HttpOnly cookie 前端不可读，只能问服务端）。
 router.beforeEach(async (to) => {
-  if (to.name === "surveys.public" || to.name === "login") return true;
+  if (to.name === "surveys.public" || to.name === "surveys.pretest" || to.name === "login") return true;
   if (isSignedIn()) return true;
   if (await probeSession()) {
     markSignedIn();

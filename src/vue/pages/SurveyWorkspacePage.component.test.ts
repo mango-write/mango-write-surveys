@@ -25,10 +25,13 @@ const mocks = vi.hoisted(() => ({
   get: vi.fn(),
   save: vi.fn(),
   applyReview: vi.fn(),
+  applyReviewPlan: vi.fn(),
   dismissReview: vi.fn(),
   publish: vi.fn(),
   status: vi.fn(),
   remove: vi.fn(),
+  createPretest: vi.fn(),
+  listPretests: vi.fn(),
 }));
 
 // confirm 全 mock：ConfirmDialog 不 teleport 进测试树，require 只收回调。
@@ -115,6 +118,8 @@ function makeHost(
         const body = (init?.body ?? {}) as PatchBody;
         const segments = path.split("/").filter(Boolean);
         if (method === "GET" && path === "/api/surveys") return { items: [] };
+        if (method === "GET" && path.endsWith("/pretests")) return mocks.listPretests(segments.at(-2));
+        if (method === "POST" && path.endsWith("/pretests")) return mocks.createPretest(segments.at(-2), body.expectedVersion);
         if (method === "GET") return mocks.get(segments.at(-1)!);
         if (method === "PATCH")
           return mocks.save(
@@ -123,6 +128,7 @@ function makeHost(
             body.definition,
             body.responseLimit,
           );
+        if (method === "POST" && path.endsWith("/review/apply")) return mocks.applyReviewPlan(segments.at(-3), init?.body);
         if (method === "POST" && path.includes("/review/findings/")) {
           const surveyId = segments.at(-5)!;
           const findingId = decodeURIComponent(segments.at(-2)!);
@@ -380,6 +386,8 @@ beforeEach(() => {
     (options: { accept?: () => void }) => options.accept?.(),
   );
   mocks.get.mockImplementation(async () => detail({ currentRevisionId: null }));
+  mocks.listPretests.mockResolvedValue({ items: [] });
+  mocks.createPretest.mockResolvedValue({ id: "pilot-1", token: "a".repeat(43), expiresAt: "2026-11-04T00:00:00Z", draftVersion: 2 });
   mocks.applyReview.mockImplementation(async (_id, findingId, expectedVersion) =>
     reviewDetail(findingId, expectedVersion + 1, true),
   );
@@ -620,6 +628,32 @@ describe("SurveyWorkspacePage 生命周期轨道（issue #217）", () => {
     // 冲掉自动保存防抖：排队的保存在本用例内落地，不漏给后续用例。
     await vi.advanceTimersByTimeAsync(1600);
     expect(wrapper.find(".segment-badge--dirty").exists()).toBe(true);
+    wrapper.unmount();
+  });
+
+  it("试填绑定实际草稿内容：草稿不同于发布版时不误标发布版本，之后修改提示重试填", async () => {
+    const current = detail({ currentRevisionId: "00000000-0000-4000-8000-000000000002" });
+    current.revisions[0]!.contentFingerprint = sha256Hex(canonicalContentJson(definition("已发布版")));
+    mocks.get.mockResolvedValue(current);
+    mocks.save.mockResolvedValue(current);
+    const { wrapper, notifySuccess } = await mountWorkspace();
+    wrapper.findComponent(SurveyPretestPanel).vm.$emit("save", {
+      participantCount: 2,
+      notes: "试填草稿",
+      revisionId: current.currentRevisionId,
+      itemFeedback: [],
+    });
+    await vi.waitFor(() => expect(notifySuccess).toHaveBeenCalledWith(t("surveys.pretestPanel.saved")));
+    await publishButton(wrapper).trigger("click");
+    await flushPromises();
+    const saved = mocks.save.mock.calls[0]![2] as SurveyDefinition;
+    expect(saved.researchDesign?.pretest?.revisionId).toBeUndefined();
+    expect(saved.researchDesign?.pretest?.contentFingerprint).toBe(sha256Hex(canonicalContentJson(definition())));
+
+    await changeDefinition(wrapper);
+    await vi.waitFor(() => expect(publishDialog(wrapper).text()).toContain(t("surveys.publishCheck.pretestChanged")));
+    await publishButton(wrapper).trigger("click");
+    await flushPromises();
     wrapper.unmount();
   });
 });
@@ -985,6 +1019,44 @@ describe("SurveyWorkspacePage 发布确认与离开保护（issue #217）", () =
     wrapper.unmount();
   });
 
+  it("创建试填链接先保存草稿并绑定落盘版本，显示可复制链接", async () => {
+    const current = detail({ currentRevisionId: null });
+    mocks.get.mockResolvedValue(current);
+    mocks.save.mockResolvedValue({ ...current, draftVersion: 3 });
+    const { wrapper } = await mountWorkspace();
+    await changeDefinition(wrapper);
+    await wrapper.findAll("button").find((button) => button.text() === t("surveys.pretestPanel.open"))!.trigger("click");
+    const panel = wrapper.findComponent(SurveyPretestPanel);
+    panel.vm.$emit("create-invitation");
+    await vi.waitFor(() => expect(mocks.createPretest).toHaveBeenCalledWith(current.id, 3));
+    expect(mocks.save).toHaveBeenCalledTimes(1);
+    expect(panel.props("invitationUrl")).toContain(`/s/pretest#${"a".repeat(43)}`);
+    wrapper.unmount();
+  });
+
+  it("发布前区分当前内容与旧内容的试填答卷，不把试填显示为验证通过", async () => {
+    const current = detail({ currentRevisionId: null });
+    mocks.get.mockResolvedValue(current);
+    const invitation = {
+      id: "p1", draftVersion: current.draftVersion, expiresAt: "2026-11-04T00:00:00Z",
+      contentFingerprint: sha256Hex(canonicalContentJson(current.definition)),
+      questions: [], answerSummary: { availableAnswers: 0, questions: [] },
+      submissions: [{ id: "s1", completedAt: "2026-10-28T00:00:00Z", feedback: [] }],
+    };
+    mocks.listPretests.mockResolvedValue({ items: [invitation] });
+    const { wrapper } = await mountWorkspace();
+    await publishButton(wrapper).trigger("click");
+    await vi.waitFor(() => expect(publishDialog(wrapper).text()).toContain(t("surveys.publishCheck.pretestSubmissions", { n: 1 })));
+    expect(publishDialog(wrapper).text()).not.toContain(t("surveys.publishCheck.noPretest"));
+    wrapper.unmount();
+
+    mocks.listPretests.mockResolvedValue({ items: [{ ...invitation, contentFingerprint: "old" }] });
+    const second = await mountWorkspace();
+    await publishButton(second.wrapper).trigger("click");
+    await vi.waitFor(() => expect(publishDialog(second.wrapper).text()).toContain(t("surveys.publishCheck.pretestOlderSubmissions", { n: 1 })));
+    second.wrapper.unmount();
+  });
+
   it("研究设计缺少研究问题时仍按未整理提醒，不出绿色「没有待确认事项」", async () => {
     const target = detail({ currentRevisionId: null });
     target.definition = {
@@ -1033,6 +1105,20 @@ describe("SurveyWorkspacePage 发布确认与离开保护（issue #217）", () =
     await vi.advanceTimersByTimeAsync(1600);
     expect(mocks.save).toHaveBeenCalledTimes(1);
     expect(notifyWarn).not.toHaveBeenCalledWith(t("surveys.pretestPanel.saved"));
+    wrapper.unmount();
+  });
+
+  it("试填保存失败时不报告成功，面板保留以便重试", async () => {
+    const current = detail({ currentRevisionId: null });
+    mocks.get.mockResolvedValue(current);
+    mocks.save.mockRejectedValueOnce(new Error("network"));
+    const { wrapper, notifySuccess, notifyWarn } = await mountWorkspace();
+    await wrapper.findAll("button").find((button) => button.text() === t("surveys.pretestPanel.open"))!.trigger("click");
+    const panel = wrapper.findComponent(SurveyPretestPanel);
+    panel.vm.$emit("save", { participantCount: 2, notes: "试填", itemFeedback: [] });
+    await vi.waitFor(() => expect(notifyWarn).toHaveBeenCalledWith(t("surveys.pretestPanel.saveFailed")));
+    expect(notifySuccess).not.toHaveBeenCalledWith(t("surveys.pretestPanel.saved"));
+    expect(panel.props("visible")).toBe(true);
     wrapper.unmount();
   });
 
@@ -1515,6 +1601,23 @@ describe("SurveyWorkspacePage AI 交付新鲜度（#223）", () => {
     };
   }
 
+  it("AI 新增题目的来源随题目保存，撤销同时移除", async () => {
+    mocks.save.mockResolvedValue(detail({ currentRevisionId: null }));
+    const { wrapper, copilotRegister } = await mountWorkspace("/u/surveys/s-1", "outline", { copilot: true });
+    vi.useFakeTimers();
+    const handlers = await deliveryHandlers(copilotRegister!);
+    await handlers.onSurveyDeliveryFrame({ ...editDelivery(2), appliedOps: [{ op: "add_question", pageId: "p1", question: { id: "ai-q", type: "text", title: "补充问题", required: false } }] });
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(1600);
+    const saved = mocks.save.mock.calls[0]![2] as SurveyDefinition;
+    expect(saved.sourceRecords).toEqual([expect.objectContaining({ questionId: "ai-q", sourceId: "ai-generated-unverified" })]);
+    const undoButton = wrapper.findAll("button").find((button) => button.attributes("aria-label") === t("surveys.undo"))!;
+    await undoButton.trigger("click");
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(mocks.save.mock.calls[1]![2]).toEqual({ ...definition(), sourceRecords: [] });
+    wrapper.unmount();
+  });
+
   it("基线一致且无未保存编辑：自动重放进撤销栈并自动保存", async () => {
     mocks.save.mockResolvedValue(detail({ currentRevisionId: null }));
     const { wrapper, copilotRegister } = await mountWorkspace(
@@ -1821,6 +1924,37 @@ describe("SurveyWorkspacePage 诊断会话与视图边界（issue #224）", () =
   const review = (version = 2, findings = [finding("f1", { title: "过去一学期的备注" })]) => ({
     type: "survey_review" as const, surveyId: "s-1", operationId: "review-view-1",
     baseDraftVersion: version, summary: "澄清时间范围", findings,
+  });
+
+  it("多题标题建议可完整预览后一次应用，撤销回到原问卷", async () => {
+    const initial = detail({ currentRevisionId: null });
+    initial.definition.questions.push({ id: "q2", type: "text", title: "第二题", required: false });
+    initial.definition.pages[0]!.questionIds.push("q2");
+    mocks.get.mockResolvedValue(initial);
+    const applied = structuredClone(initial);
+    applied.draftVersion = 3;
+    applied.definition.questions[0]!.title = "修改第一题";
+    applied.definition.questions[1]!.title = "修改第二题";
+    applied.review = null;
+    mocks.applyReviewPlan.mockResolvedValue(applied);
+    const { wrapper, copilotRegister } = await mountWorkspace("/u/surveys/s-1", "outline", { copilot: true });
+    const second = { ...finding("f2", { title: "修改第二题" }), questionId: "q2", suggestedOps: [{ op: "update_question" as const, questionId: "q2", patch: { title: "修改第二题" } }] };
+    copilotRegister!.mock.calls[0]![0].onSurveyDeliveryFrame(review(2, [finding("f1", { title: "修改第一题" }), second]));
+    await flushPromises();
+    await wrapper.findAll("button").find((button) => button.text() === t("surveys.assistant.batchPreview"))!.trigger("click");
+    await flushPromises();
+    const dialog = wrapper.find(".dialog-stub");
+    expect(dialog.text()).toContain("备注");
+    expect(dialog.text()).toContain("修改第一题");
+    expect(dialog.text()).toContain("第二题");
+    expect(dialog.text()).toContain("修改第二题");
+    await dialog.findAll("button").find((button) => button.text() === t("surveys.assistant.batchApply"))!.trigger("click");
+    await flushPromises();
+    expect(mocks.applyReviewPlan).toHaveBeenCalledTimes(1);
+    expect(wrapper.find(".dialog-stub").exists()).toBe(false);
+    await wrapper.find(`button[aria-label="${t("surveys.undo")}"]`).trigger("click");
+    expect(wrapper.findComponent(CanvasStub).props("modelValue").questions.map((q: { title: string }) => q.title)).toEqual(["备注", "第二题"]);
+    wrapper.unmount();
   });
 
   it("survey_review 帧到达：诊断落题旁 Inline（无顶部诊断条），但不切 tab、不展开左栏、不打开移动导航", async () => {

@@ -147,6 +147,7 @@ export interface SurveysLock {
     patch: { findings: unknown; baseDraftVersion?: number },
   ): Promise<void>;
   deleteReview(surveyId: string): Promise<void>;
+  deletePretests?(surveyId: string): Promise<void>;
   /** 调用方负责校验返回的 revision 属于当前 survey（跨卷 revisionId 不可借道）。 */
   findRevisionById(id: string): Promise<SurveyRevisionRecord | null>;
   latestRevisionNumber(surveyId: string): Promise<number>;

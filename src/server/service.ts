@@ -3,8 +3,14 @@
 // 锁与事务由宿主 storage port 的 withSurveyLock 提供，锁序写在 ports.ts。
 import {
   applySurveyOps,
+  buildSurveyReviewPlan,
   canonicalContentJson,
   canonicalSurveyJson,
+  recordAiAddedQuestions,
+  sanitizeReviewRecommendation,
+  sanitizeReviewImpact,
+  humanizeReviewText,
+  unresolvedReviewChoice,
   surveyCellValue,
   surveyVariables,
   surveyVariablesOf,
@@ -97,6 +103,36 @@ function asReview(row: SurveyReviewRecord | null): SurveyReviewDelivery | null {
     throw new SurveyError("invalid_review", 500, "诊断记录格式不合法");
   }
   return parsed.data;
+}
+
+function safeReview(review: SurveyReviewDelivery | null, definition: SurveyDefinition): SurveyReviewDelivery | null {
+  if (!review) return null;
+  return {
+    ...review,
+    findings: review.findings.map((finding) => {
+      finding = { ...finding, title: humanizeReviewText(finding.title), reason: humanizeReviewText(finding.reason), recommendation: humanizeReviewText(finding.recommendation) };
+      const question = definition.questions.find((item) => item.id === finding.questionId);
+      if (finding.impact) finding = { ...finding, impact: humanizeReviewText(sanitizeReviewImpact(finding.impact, !!question && ["single", "dropdown", "image_single"].includes(question.type))) };
+      const unresolved = finding.suggestedOps?.length && unresolvedReviewChoice(finding.suggestedOps, definition);
+      if (!unresolved) return { ...finding, recommendation: sanitizeReviewRecommendation(finding.recommendation, !!finding.suggestedOps?.length) };
+      const { suggestedOps: _suggestedOps, ...manual } = finding;
+      return {
+        ...manual,
+        recommendation: unresolved === "period" ? "请先确定适合研究问题的时间范围，再修改题目。"
+          : unresolved === "required" ? "请先确认是否需要将此题设为必答，再修改题目。"
+          : unresolved === "order" ? "请先核对当前题目顺序及研究目的，再决定是否调整。"
+          : unresolved === "scope" ? "请先确认研究对象和示例范围，再修改题目。"
+          : unresolved === "metadata" ? "请根据实际研究用途、数据处理和参与条件核对说明，再手动修改。"
+          : unresolved === "specify" ? "请核对其他选项是否需要补充填写，并为受访者提供实际填写入口。"
+          : unresolved === "routing" ? "请先核对筛选条件和题目顺序，再调整跳题逻辑。"
+          : unresolved === "response_format" ? "请同时核对题干和选项，使回答方式与问题相匹配。"
+          : unresolved === "structure" ? "请先核对相关题目和选项，避免破坏现有问卷逻辑。"
+          : unresolved === "mapping" ? "请先确认新增或调整后的题目如何对应研究用途，再修改问卷。"
+          : unresolved === "source_capacity" ? "无法完整记录新增题目的来源，请在画布中手动添加。"
+          : "请先确认缺失内容，再重新检查建议。",
+      };
+    }),
+  };
 }
 
 /** 收集定义里 image_* 题型选项引用的 imageFileId（发布时校验绑定行存在）。 */
@@ -256,7 +292,7 @@ export function createSurveysService(ports: SurveysPorts) {
         contentHash: r.contentHash,
         contentFingerprint: contentFingerprintOf(asDefinition(r.definition)),
       })),
-      review: asReview(review),
+      review: safeReview(asReview(review), asDefinition(access.survey.draftJson)),
       canWrite: access.canWrite,
       canDelete: access.canDelete,
     };
@@ -337,6 +373,57 @@ export function createSurveysService(ports: SurveysPorts) {
       });
     },
 
+    async applyReviewPlan(
+      userId: string,
+      surveyId: string,
+      input: { expectedVersion: number; operationId: string; candidateFingerprint: string; findingIds: string[] },
+    ): Promise<SurveyDetail> {
+      await loadSurveyAccess(ports, userId, surveyId, "write");
+      await storage.withSurveyLock(surveyId, async (tx) => {
+        const [row, storedReview] = await Promise.all([tx.survey(), tx.review()]);
+        if (!row || row.deletedAt) throw new SurveyError("not_found", 404);
+        if (row.draftVersion !== input.expectedVersion) throw new SurveyError("version_conflict", 409);
+        const base = asDefinition(row.draftJson);
+        const review = safeReview(asReview(storedReview), base);
+        if (!review || review.operationId !== input.operationId) throw new SurveyError("review_stale", 409);
+        const unchanged = review.baseContentFingerprint
+          ? contentFingerprintOf(base) === review.baseContentFingerprint
+          : review.baseDraftVersion === row.draftVersion;
+        if (!unchanged) throw new SurveyError("review_stale", 409);
+        const plan = buildSurveyReviewPlan(base, review.findings);
+        const ids = plan.groups.flatMap((group) => group.findingIds);
+        const applied = review.findings.filter((item) => ids.includes(item.id));
+        const noEffect = applied.some((item) => {
+          const result = applySurveyOps(base, item.suggestedOps ?? []);
+          return result.rejected.length > 0 || canonicalSurveyJson(base) === canonicalSurveyJson(result.definition);
+        });
+        if (plan.status !== "ready" || !plan.candidateDefinition || ids.length < 2 ||
+          noEffect ||
+          input.findingIds.length !== ids.length || new Set(input.findingIds).size !== ids.length ||
+          ids.some((id) => !input.findingIds.includes(id)) ||
+          canonicalSurveyJson(base) === canonicalSurveyJson(plan.candidateDefinition) ||
+          sha256Hex(canonicalSurveyJson(plan.candidateDefinition)) !== input.candidateFingerprint) {
+          throw new SurveyError("review_plan_conflict", 409);
+        }
+        const next = plan.candidateDefinition;
+        const findings = review.findings.filter((item) => !ids.includes(item.id)).map((item) => {
+          if (!item.suggestedOps?.length) return item;
+          const remaining = applySurveyOps(next, item.suggestedOps);
+          const conflict = applied.some((finding) => buildSurveyReviewPlan(base, [finding, item]).conflicts.length > 0);
+          if (!conflict && !remaining.rejected.length && canonicalSurveyJson(remaining.definition) !== canonicalSurveyJson(next)) return item;
+          const { suggestedOps: _suggestedOps, ...manual } = item;
+          return { ...manual, recommendation: "其他建议已修改相关内容，请重新检查问卷后再处理此建议。" };
+        });
+        const nextVersion = row.draftVersion + 1;
+        await tx.updateSurvey({ title: next.title, draftJson: next, draftVersion: nextVersion });
+        if (findings.length) await tx.updateReview(surveyId, {
+          findings: reviewEnvelope(findings, contentFingerprintOf(next)), baseDraftVersion: nextVersion,
+        });
+        else await tx.deleteReview(surveyId);
+      });
+      return getSurveyDetail(userId, surveyId);
+    },
+
     async applyReviewFinding(
       userId: string,
       surveyId: string,
@@ -367,6 +454,9 @@ export function createSurveysService(ports: SurveysPorts) {
           throw new SurveyError("review_not_applicable", 409, "这条建议没有可自动应用的操作");
         }
         const base = asDefinition(row.draftJson);
+        if (unresolvedReviewChoice(finding.suggestedOps, base)) {
+          throw new SurveyError("review_not_applicable", 409, "建议包含尚未确定的内容，请先确认后重新检查");
+        }
         const result = applySurveyOps(base, finding.suggestedOps);
         if (
           result.rejected.length > 0 ||
@@ -383,11 +473,25 @@ export function createSurveysService(ports: SurveysPorts) {
             })),
           );
         }
+        const next = recordAiAddedQuestions(base, result.definition);
         const nextVersion = row.draftVersion + 1;
-        const findings = review.findings.filter((item) => item.id !== findingId);
+        const findings = review.findings
+          .filter((item) => item.id !== findingId)
+          .map((item) => {
+            if (!item.suggestedOps?.length) return item;
+            const plan = buildSurveyReviewPlan(base, [finding, item]);
+            const remaining = applySurveyOps(next, item.suggestedOps);
+            const unchanged = canonicalSurveyJson(remaining.definition) === canonicalSurveyJson(next);
+            if (plan.conflicts.length === 0 && remaining.rejected.length === 0 && !unchanged) return item;
+            const { suggestedOps: _suggestedOps, ...manual } = item;
+            return {
+              ...manual,
+              recommendation: "其他建议已修改相关内容，请重新检查问卷后再处理此建议。",
+            };
+          });
         await tx.updateSurvey({
-          title: result.definition.title,
-          draftJson: result.definition,
+          title: next.title,
+          draftJson: next,
           draftVersion: nextVersion,
         });
         if (findings.length) {
@@ -395,7 +499,7 @@ export function createSurveysService(ports: SurveysPorts) {
           await tx.updateReview(surveyId, {
             findings: reviewEnvelope(
               findings,
-              contentFingerprintOf(result.definition),
+              contentFingerprintOf(next),
             ),
             baseDraftVersion: nextVersion,
           });
@@ -493,9 +597,15 @@ export function createSurveysService(ports: SurveysPorts) {
         if (row.draftVersion !== input.expectedVersion) {
           throw new SurveyError("version_conflict", 409, "草稿已在别处被修改");
         }
+        const storedSources = asDefinition(row.draftJson).sourceRecords;
+        const nextDefinition = definition.sourceRecords === undefined && storedSources
+          ? { ...definition, sourceRecords: storedSources }
+          : definition.sourceRecords?.length === 0
+            ? (({ sourceRecords: _sourceRecords, ...rest }) => rest)(definition)
+            : definition;
         await tx.updateSurvey({
-          title: definition.title,
-          draftJson: definition,
+          title: nextDefinition.title,
+          draftJson: nextDefinition,
           draftVersion: input.expectedVersion + 1,
           ...(input.responseLimit !== undefined
             ? { responseLimit: input.responseLimit }
@@ -589,6 +699,7 @@ export function createSurveysService(ports: SurveysPorts) {
       const released = await storage.withSurveyLock(surveyId, async (tx) => {
         await tx.updateSurvey({ deletedAt: new Date() });
         await tx.deleteReview(surveyId);
+        await tx.deletePretests?.(surveyId);
         // 级联清选项图绑定；物理字节回收在锁外按宿主池规则进行，但逐 sha 与
         // 上传路径（put+绑定）互斥——同内容重传不能落进 GC 的检查与删除之间。
         return tx.deleteMediaBindings(surveyId);

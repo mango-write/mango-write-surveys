@@ -518,7 +518,10 @@ function applyOp(
       return { ok: true, op, definition: { ...definition, pages } };
     }
     case "replace_all": {
-      return { ok: true, op, definition: op.definition };
+      const replacement = op.definition.sourceRecords === undefined && definition.sourceRecords
+        ? { ...op.definition, sourceRecords: definition.sourceRecords }
+        : op.definition;
+      return { ok: true, op: { ...op, definition: replacement }, definition: replacement };
     }
   }
 }

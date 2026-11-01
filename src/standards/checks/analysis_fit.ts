@@ -42,11 +42,11 @@ export const analysisFitChecks: StandardsCheck[] = [
     dimension: "analysis_fit",
     title: "矩阵题整体当分类变量",
     claim:
-      "矩阵题按行展开为多个有序或分类变量，不能把整组矩阵当作一个分类变量与另一变量交叉。一次分析只能使用单行，或其事后合成的总分；合成须在系统外按预注册规则完成。",
+      "矩阵题按行展开为多个有序或分类变量，不能把整组矩阵当作一个分类变量与另一变量交叉。可逐行分析，或按研究设计中声明的规则计算构念合成分数。",
     citations: [
       {
         source: "product",
-        note: "research-data 将矩阵、排序与多项填空按行或项展开成多变量；维度合成与反向题反转不在系统内自动完成（docs/product/research-data.md）",
+        note: "research-data 将矩阵、排序与多项填空按行或项展开；构念合成按声明的计分规则处理反向题与缺失（docs/product/research-data.md）",
       },
     ],
     appliesTo: {
@@ -66,7 +66,7 @@ export const analysisFitChecks: StandardsCheck[] = [
       why: "矩阵不是单一分类变量，整体交叉在工具里没有定义；人工合并会掩盖行间差异，也无法说明用的是哪一行或什么权重。",
     },
     handling:
-      "逐行分析并在图表中标明行标签；需要总分时在导出后按预注册规则合成，写明反向题处理与缺失规则，并在报告中给出计算过程；不要用首行代替整体。",
+      "逐行分析并在图表中标明行标签；需要合成分数时写明构念、反向题与缺失规则，并在报告中给出计算过程；不要用首行代替整体。",
   },
   {
     id: "analysis_fit.group_sample_feasibility",
@@ -108,11 +108,11 @@ export const analysisFitChecks: StandardsCheck[] = [
     dimension: "analysis_fit",
     title: "量表无合成与信度计划",
     claim:
-      "使用多题量表时，分析计划须写明维度合成规则、反向题处理、缺失处理与信度评估方式。系统不自动计算 α、合成分数或反转反向题；未写计划就宣称「量表可信」「维度得分高」，属于没有计算来源的结论。",
+      "计划报告多题量表得分或 α 时，须写明构念、合成规则、反向题处理和缺失口径，并基于实际运行报告；α 不证明量表效度。",
     citations: [
       {
         source: "product",
-        note: "research-data 不支持信度分析、合成分数自动计算与反向题自动反转；量表题只逐题输出分布与统计量（docs/product/research-data.md）",
+        note: "research-data 支持按声明的构念计分规则计算合成分数与 Cronbach α（docs/product/research-data.md）",
       },
       {
         source: "cosmin",
@@ -133,10 +133,10 @@ export const analysisFitChecks: StandardsCheck[] = [
     errorExample: {
       description: "报告直接给出信度系数与维度得分，但从未在系统内外计算。",
       snippet: "本量表 Cronbach α=0.89，信度良好；工作投入维度得分 4.2。",
-      why: "系统不产出这些数字，报告也没有计算过程与样本说明；读者无法复核，反向题若未反转，维度得分方向甚至可能是错的。",
+      why: "报告没有计算来源与样本说明；读者无法复核，反向题若未反转，维度得分方向可能是错的，α 也不能单独证明量表可靠。",
     },
     handling:
-      "分析计划写清合成规则、反向题清单、缺失处理与信度计算工具和版本；这些步骤在系统外完成并在报告中给出过程。系统内只报逐题分布，不生成「信度良好」结论。",
+      "分析计划写清合成规则、反向题清单和缺失处理，引用实际固定运行或其他可复核的计算来源；不把 α 解释为量表已经验证。",
   },
   {
     id: "analysis_fit.multiselect_denominator",

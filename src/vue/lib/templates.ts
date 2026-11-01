@@ -3,6 +3,7 @@
 // 不新增 API。内容全部自制——不收录 SCL-90 等受版权量表；SUS 由 John Brooke
 // 公开免费使用，按其公开题目整理。文案经注入的 t：同一模板按当前语言构建。
 import type { SurveyDefinition, SurveyQuestion } from "../../contracts/index.js";
+import { canonicalSurveyJson } from "../../core/index.js";
 
 type Translate = (key: string) => string;
 
@@ -90,12 +91,12 @@ function satisfaction(t: Translate): SurveyDefinition {
   );
 }
 
-function sus(t: Translate): SurveyDefinition {
+function sus(t: Translate, language: string): SurveyDefinition {
   const statements = Array.from({ length: 10 }, (_, i) => ({
     id: `s${i + 1}`,
     label: t(`surveys.templates.sus.statement.s${i + 1}`),
   }));
-  return definition(
+  const result = definition(
     t("surveys.templates.sus.name"),
     t("surveys.templates.sus.description"),
     [
@@ -117,6 +118,9 @@ function sus(t: Translate): SurveyDefinition {
       },
     ],
   );
+  result.sourceRecords = [{ sourceId: "sus-brooke-1996", questionId: "sus_matrix", language,
+    baselineQuestion: canonicalSurveyJson(result.questions[0]) }];
+  return result;
 }
 
 function nps(t: Translate): SurveyDefinition {
@@ -299,7 +303,7 @@ function baseline(t: Translate): SurveyDefinition {
 }
 
 /** 按给定 t（当前 locale）构建模板清单（内容即定义本体）。展示顺序即选择顺序。 */
-export function surveyTemplates(t: Translate): SurveyTemplate[] {
+export function surveyTemplates(t: Translate, language = "und"): SurveyTemplate[] {
   return [
     {
       id: "satisfaction",
@@ -313,7 +317,7 @@ export function surveyTemplates(t: Translate): SurveyTemplate[] {
       name: t("surveys.templates.sus.name"),
       description: t("surveys.templates.sus.desc"),
       scene: t("surveys.templates.sus.scene"),
-      definition: sus(t),
+      definition: sus(t, language),
     },
     {
       id: "nps",

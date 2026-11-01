@@ -27,6 +27,11 @@ import type {
 } from "../contracts/index.js";
 import { SURVEY_MAX_RESPONSES } from "../server/limits.js";
 import { newSurveySlug } from "../server/serialize.js";
+import { sha256Hex } from "../server/serialize.js";
+import { canonicalContentJson } from "../core/index.js";
+import { SurveyError } from "../server/errors.js";
+import { asDefinition, toPublicDefinition } from "../server/service.js";
+import type { PretestRecord, PretestStoragePort } from "../server/pretest.js";
 
 export function standaloneDdlSql(): Promise<string> {
   return readFile(new URL("./ddl.sql", import.meta.url), "utf8");
@@ -232,6 +237,10 @@ function makeLock(tx: postgres.TransactionSql, surveyId: string): SurveysLock {
     deleteReview: async (sid) => {
       await tx`DELETE FROM survey_reviews WHERE survey_id = ${sid}`;
     },
+    deletePretests: async (sid) => {
+      await tx`DELETE FROM survey_pretest_submissions WHERE survey_id = ${sid}`;
+      await tx`DELETE FROM survey_pretests WHERE survey_id = ${sid}`;
+    },
     findRevisionById: async (id) => {
       const rows = await tx<RevisionRow[]>`SELECT * FROM survey_revisions WHERE id = ${id}`;
       return rows[0] ? toRevision(rows[0]) : null;
@@ -367,6 +376,8 @@ function toResearchRun(row: ResearchRunRow): ResearchRunRecord {
 }
 
 export interface StandaloneSurveysStorage extends SurveysStoragePort, ResearchStoragePort {
+  pretests: PretestStoragePort;
+  purgeExpiredPretestAnswers(now?: Date): Promise<number>;
   /** 选项图字节回收前的绑定复查（独立站无 source_files 池，绑定行即引用计数）。 */
   hasMediaBinding(sha256: string): Promise<boolean>;
   close(): Promise<void>;
@@ -375,7 +386,76 @@ export interface StandaloneSurveysStorage extends SurveysStoragePort, ResearchSt
 export function createPgStorage(databaseUrl: string): StandaloneSurveysStorage {
   const sql = postgres(databaseUrl);
 
+  interface PretestRow {
+    id: string; survey_id: string; token_hash: string; draft_version: number;
+    definition_json: unknown; content_fingerprint: string; expires_at: Date;
+  }
+  const toPretest = (row: PretestRow): PretestRecord => ({
+    id: row.id, surveyId: row.survey_id, definition: row.definition_json,
+    draftVersion: row.draft_version, contentFingerprint: row.content_fingerprint, expiresAt: row.expires_at,
+  });
+  const pretests: PretestStoragePort = {
+    async create(input) {
+      return sql.begin(async (tx) => {
+        const surveys = await tx<SurveyRow[]>`SELECT * FROM surveys WHERE id = ${input.surveyId} FOR UPDATE`;
+        const survey = surveys[0];
+        if (!survey || survey.deleted_at) throw new SurveyError("not_found", 404);
+        if (survey.draft_version !== input.expectedVersion) throw new SurveyError("version_conflict", 409);
+        const fingerprint = sha256Hex(canonicalContentJson(survey.draft_json));
+        const rows = await tx<PretestRow[]>`
+          INSERT INTO survey_pretests (survey_id, token_hash, draft_version, definition_json, content_fingerprint, expires_at)
+          VALUES (${input.surveyId}, ${input.tokenHash}, ${survey.draft_version}, ${tx.json(toPublicDefinition(asDefinition(survey.draft_json)) as postgres.JSONValue)}, ${fingerprint}, ${input.expiresAt}) RETURNING *`;
+        return toPretest(rows[0]!);
+      });
+    },
+    async findByTokenHash(tokenHash) {
+      const rows = await sql<PretestRow[]>`SELECT * FROM survey_pretests WHERE token_hash = ${tokenHash}`;
+      return rows[0] ? toPretest(rows[0]) : null;
+    },
+    async list(surveyId) {
+      const [records, submissions] = await Promise.all([
+        sql<PretestRow[]>`SELECT * FROM survey_pretests WHERE survey_id = ${surveyId} ORDER BY created_at DESC`,
+        sql<Array<{ id: string; pretest_id: string; completed_at: Date; feedback_json: unknown; answers_json: unknown; answer_expires_at: Date }>>`
+          SELECT id, pretest_id, completed_at, feedback_json, answers_json, answer_expires_at FROM survey_pretest_submissions WHERE survey_id = ${surveyId} ORDER BY completed_at`,
+      ]);
+      return records.map((row) => ({ ...toPretest(row), submissions: submissions.filter((s) => s.pretest_id === row.id).map((s) => ({
+        id: s.id, completedAt: s.completed_at, feedback: s.feedback_json, answers: s.answers_json, answerExpiresAt: s.answer_expires_at,
+      })) }));
+    },
+    async submit(input) {
+      return sql.begin(async (tx) => {
+        const surveys = await tx<SurveyRow[]>`SELECT * FROM surveys WHERE id = ${input.surveyId} FOR UPDATE`;
+        const rows = await tx<PretestRow[]>`SELECT * FROM survey_pretests WHERE id = ${input.pretestId}`;
+        const survey = surveys[0], pretest = rows[0];
+        const completedAt = new Date(Math.max(input.now.getTime(), Date.now()));
+        if (!survey || survey.deleted_at || !pretest || pretest.survey_id !== survey.id || pretest.token_hash !== input.tokenHash || pretest.expires_at <= completedAt)
+          throw new SurveyError("not_found", 404);
+        const existing = await tx<Array<{ id: string; completed_at: Date; input_hash: string }>>`
+          SELECT id, completed_at, input_hash FROM survey_pretest_submissions
+          WHERE pretest_id = ${input.pretestId} AND submission_hash = ${input.submissionHash}`;
+        if (existing[0]) {
+          if (existing[0].input_hash !== input.inputHash) throw new SurveyError("answers_conflict", 409);
+          return { id: existing[0].id, completedAt: existing[0].completed_at };
+        }
+        const count = await tx<{ n: number }[]>`SELECT count(*)::int AS n FROM survey_pretest_submissions WHERE pretest_id = ${input.pretestId}`;
+        if ((count[0]?.n ?? 0) >= input.maxSubmissions) throw new SurveyError("response_limit_reached", 409);
+        const result = await tx<Array<{ id: string; completed_at: Date }>>`
+          INSERT INTO survey_pretest_submissions (pretest_id, survey_id, submission_hash, input_hash, answers_json, feedback_json, completed_at, answer_expires_at)
+          VALUES (${input.pretestId}, ${input.surveyId}, ${input.submissionHash}, ${input.inputHash},
+            ${tx.json(input.answers as postgres.JSONValue)}, ${tx.json(input.feedback as postgres.JSONValue)}, ${completedAt}, ${new Date(completedAt.getTime() + input.answerExpiresAt.getTime() - input.now.getTime())}) RETURNING id, completed_at`;
+        return { id: result[0]!.id, completedAt: result[0]!.completed_at };
+      });
+    },
+  };
+
   return {
+    pretests,
+    async purgeExpiredPretestAnswers(now = new Date()) {
+      const rows = await sql<{ id: string }[]>`
+        UPDATE survey_pretest_submissions SET answers_json = NULL
+        WHERE answer_expires_at <= ${now} AND answers_json IS NOT NULL RETURNING id`;
+      return rows.length;
+    },
     async findById(id, opts) {
       const rows = await sql<SurveyRow[]>`
         SELECT * FROM surveys

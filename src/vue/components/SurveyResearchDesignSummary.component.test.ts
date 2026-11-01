@@ -6,6 +6,9 @@ import { mountSurveysComponent, createTestHost } from "../test-mount.js";
 import { makeDefinition } from "../../core/test-fixtures.js";
 import type { SurveyDefinition, SurveyResearchDesign } from "../../contracts/index.js";
 import SurveyResearchDesignSummary from "./SurveyResearchDesignSummary.vue";
+import { surveyTemplates } from "../lib/templates.js";
+import { createSurveysTestI18n } from "../test-mount.js";
+import { canonicalSurveyJson } from "../../core/index.js";
 
 const design: SurveyResearchDesign = {
   researchQuestion: "研究生如何选用科研工具",
@@ -42,6 +45,26 @@ function mountSummary(props: { design: SurveyResearchDesign | null; definition?:
 }
 
 describe("SurveyResearchDesignSummary", () => {
+  it("AI 建卷题目显示来源未核验，修改后如实提醒", () => {
+    const definition = makeDefinition();
+    definition.sourceRecords = [{ sourceId: "ai-generated-unverified", questionId: "q1", language: "und", baselineQuestion: canonicalSurveyJson(definition.questions[0]) }];
+    definition.questions[0]!.title = "修改后的题目";
+    const wrapper = mountSummary({ design: null, definition });
+    expect(wrapper.text()).toContain("第 1 题由 AI 生成");
+    expect(wrapper.text()).toContain("参考来源与使用许可尚未核验");
+    expect(wrapper.text()).toContain("其中有题目已修改");
+    expect(wrapper.text()).not.toContain("未在资料目录中核验");
+    wrapper.unmount();
+  });
+  it("来源记录即使没有研究设计也可展开核对，不冒充验证结果", () => {
+    const i18n = createSurveysTestI18n();
+    const template = surveyTemplates((key) => i18n.global.t(key), "zh-CN")[1]!;
+    const wrapper = mountSummary({ design: null, definition: template.definition });
+    expect(wrapper.text()).toContain("题目参考来源");
+    expect(wrapper.text()).toContain("未经验证");
+    expect(wrapper.findAll("a").some((link) => link.attributes("href")?.includes("SUS_Brooke1996.pdf"))).toBe(true);
+    wrapper.unmount();
+  });
   it("默认折叠：只露标题与已填写状态", () => {
     const wrapper = mountSummary({ design });
     const details = wrapper.find("details.design-summary");

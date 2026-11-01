@@ -80,7 +80,7 @@ const heading = computed(() => {
     >
       <template #icon><Sparkles :size="16" /></template>
     </Button>
-    <Popover ref="panel" :aria-label="t('surveys.inlineReview.title')"
+    <Popover ref="panel" class="survey-inline-review-popover" :aria-label="t('surveys.inlineReview.title')"
       @show="opened = true" @hide="opened = false">
       <div class="review-popover">
         <Message v-if="stale" severity="warn" :closable="false">{{ t("surveys.assistant.stale") }}</Message>
@@ -139,6 +139,7 @@ const heading = computed(() => {
 <style scoped>
 .inline-review { display: inline-flex; }
 .inline-review__trigger { white-space: nowrap; }
+:global(.survey-inline-review-popover.p-popover-flipped) { margin-top: 0; }
 .review-popover {
   display: grid;
   gap: 16px;
@@ -150,10 +151,10 @@ const heading = computed(() => {
 .review-finding {
   display: grid;
   gap: 16px;
-  padding: 20px;
-  border: 1px solid var(--material-inlay-border);
-  border-radius: var(--radius-lg);
-  background: var(--material-inlay);
+}
+.review-finding + .review-finding {
+  padding-top: 16px;
+  border-top: 1px solid var(--color-border-subtle);
 }
 .review-finding__heading {
   display: flex;
@@ -259,7 +260,6 @@ const heading = computed(() => {
   gap: 8px;
 }
 @media (max-width: 767.98px) {
-  .review-finding { padding: 16px; }
   .review-change__grid { grid-template-columns: 1fr; }
 }
 </style>

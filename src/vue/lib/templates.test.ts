@@ -1,8 +1,9 @@
-// 模板注册表用例：每个模板必须是可发布的合法定义（schema + 语义校验双过），
-// 题型结构按模板设计断言。版权红线在此兜底：模板只能出自本文件的自制文案。
+// 模板注册表用例：每个模板必须是可发布的合法定义（schema + 语义校验双过）。
 import { describe, expect, it } from "vitest";
 import {
   SurveyDefinitionSchema,
+  applySurveyOps,
+  surveySourceState,
   validateSurveyDefinition,
 } from "../../core/index.js";
 
@@ -79,6 +80,21 @@ describe("surveyTemplates", () => {
     // 奇偶题正负交替：偶数题文案必须与奇数题区分（SUS 规范的关键锚点）。
     const [s1, s2] = matrix.rows;
     expect(s1!.label).not.toBe(s2!.label);
+  });
+
+  it("SUS 来源随问卷保留，并据实际题目判断编辑和删除状态", () => {
+    const definition = surveyTemplates(t, "zh-CN")[1]!.definition;
+    const record = definition.sourceRecords![0]!;
+    expect(record.language).toBe("zh-CN");
+    expect(SurveyDefinitionSchema.parse(definition).sourceRecords).toEqual(definition.sourceRecords);
+    expect(surveySourceState(definition, record.questionId, record.baselineQuestion)).toBe("unchanged");
+    const meta = applySurveyOps(definition, [{ op: "set_meta", title: "新标题" }]);
+    expect(meta.definition.sourceRecords).toEqual(definition.sourceRecords);
+    const result = applySurveyOps(definition, [{ op: "update_question", questionId: "sus_matrix", patch: { title: "更新后的表述" } }]);
+    expect(result.definition.sourceRecords).toEqual(definition.sourceRecords);
+    expect(surveySourceState(result.definition, record.questionId, record.baselineQuestion)).toBe("modified");
+    const removed = applySurveyOps(definition, [{ op: "remove_question", questionId: "sus_matrix" }]);
+    expect(surveySourceState(removed.definition, record.questionId, record.baselineQuestion)).toBe("missing");
   });
 
   it("NPS：nps 题 0–10，两端锚点用默认文案", () => {

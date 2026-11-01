@@ -12,6 +12,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import type { SurveyDefinition } from "../core/index.js";
 import { SURVEY_MAX_RESPONSES } from "../server/limits.js";
+import { createPretestService, createSurveysService } from "../server/index.js";
 import { createStandaloneSurveysPorts, initStandaloneSchema } from "./index.js";
 
 const TEST_DB = "mango_surveys_test";
@@ -96,6 +97,37 @@ suite(`surveys standalone adapters (DB)`, () => {
     const owned = await ports.storage.listByOwner("admin", null);
     expect(owned.map((survey) => survey.id)).toContain(created.id);
     expect(await ports.storage.listByOwner("someone-else", null)).toEqual([]);
+  });
+
+  it("独立站试填保存隔离快照与反馈，清理过期答卷后反馈仍可读取", async () => {
+    const surveyService = createSurveysService(ports);
+    const service = createPretestService(ports, ports.storage.pretests);
+    const created = await surveyService.createSurvey({ userId: "admin", space: { kind: "personal" } }, { title: "试填" });
+    const draft = {
+      version: 1 as const, title: "试填", description: "", consent: "",
+      questions: [{ id: "q1", type: "text" as const, title: "问题", required: true }],
+      pages: [{ id: "p1", title: "第一页", questionIds: ["q1"] }],
+    };
+    const saved = await surveyService.updateSurvey("admin", created.id, { expectedVersion: created.draftVersion, definition: draft });
+    const now = new Date();
+    const invite = await service.create("admin", created.id, saved.draftVersion, now);
+    const body = { submissionToken: "b".repeat(43), consent: true, answers: { q1: "答案" }, feedback: [{ questionId: "q1", aspect: "general", note: "反馈" }] };
+    const first = await service.submit(invite.token, body, now);
+    expect(await service.submit(invite.token, body, now)).toEqual(first);
+    expect(await ports.storage.countStarted(created.id)).toBe(0);
+    expect((await service.list("admin", created.id))[0]?.answerSummary).toEqual({ availableAnswers: 1, questions: [{ questionId: "q1", displayed: 1, unanswered: 0 }] });
+    expect(await ports.storage.purgeExpiredPretestAnswers(new Date(now.getTime() + 31 * 86400000))).toBe(1);
+    expect((await service.list("admin", created.id))[0]?.submissions[0]?.feedback).toEqual(body.feedback);
+    expect((await service.list("admin", created.id))[0]?.answerSummary.availableAnswers).toBe(0);
+    const sql = postgres(databaseUrl(), { max: 1 });
+    try {
+      await sql`UPDATE survey_pretests SET expires_at = ${new Date(Date.now() - 1000)} WHERE id = ${invite.id}`;
+      await expect(service.submit(invite.token, body, new Date(Date.now() - 2000))).rejects.toMatchObject({ code: "not_found" });
+    } finally {
+      await sql.end({ timeout: 5 });
+    }
+    await surveyService.deleteSurvey("admin", created.id);
+    await expect(service.list("admin", created.id)).rejects.toMatchObject({ code: "not_found" });
   });
 
   it("withSurveyLock serializes concurrent sections and exposes the lock read/write face", async () => {

@@ -86,6 +86,36 @@ CREATE INDEX IF NOT EXISTS survey_responses_user_id_team_id_idx
 CREATE INDEX IF NOT EXISTS survey_responses_finished_expires_at_idx
   ON survey_responses (finished, expires_at);
 
+CREATE TABLE IF NOT EXISTS survey_pretests (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  survey_id uuid NOT NULL,
+  token_hash text NOT NULL UNIQUE,
+  draft_version integer NOT NULL,
+  definition_json jsonb NOT NULL,
+  content_fingerprint text NOT NULL,
+  created_at timestamptz(6) NOT NULL DEFAULT now(),
+  expires_at timestamptz(6) NOT NULL
+);
+CREATE INDEX IF NOT EXISTS survey_pretests_survey_created_idx
+  ON survey_pretests (survey_id, created_at);
+
+CREATE TABLE IF NOT EXISTS survey_pretest_submissions (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  pretest_id uuid NOT NULL,
+  survey_id uuid NOT NULL,
+  submission_hash text NOT NULL,
+  input_hash text NOT NULL,
+  answers_json jsonb,
+  feedback_json jsonb NOT NULL,
+  completed_at timestamptz(6) NOT NULL,
+  answer_expires_at timestamptz(6) NOT NULL,
+  UNIQUE (pretest_id, submission_hash)
+);
+CREATE INDEX IF NOT EXISTS survey_pretest_submissions_survey_completed_idx
+  ON survey_pretest_submissions (survey_id, completed_at);
+CREATE INDEX IF NOT EXISTS survey_pretest_submissions_answer_expires_idx
+  ON survey_pretest_submissions (answer_expires_at);
+
 CREATE TABLE IF NOT EXISTS survey_files (
   id          uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   survey_id   uuid NOT NULL,

@@ -610,7 +610,7 @@ export const defectCases: DefectCase[] = [
       {
         checkId: "analysis_fit.scale_without_plan",
         at: "q6",
-        note: "直接报告 α 与维度得分（「量表」即 q3 矩阵四行感受题），但未写合成规则、反向题处理与计算工具，系统也不产出这些数字。",
+        note: "直接报告 α 与维度得分（「量表」即 q3 矩阵四行感受题），但未写构念合成规则、反向题处理与实际计算来源。",
       },
       {
         checkId: "analysis_fit.variable_type_mismatch",

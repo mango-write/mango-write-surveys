@@ -7,6 +7,7 @@ import { useI18n } from "vue-i18n";
 import Button from "primevue/button";
 import Dialog from "primevue/dialog";
 import InputNumber from "primevue/inputnumber";
+import InputText from "primevue/inputtext";
 import Select from "primevue/select";
 import SelectButton from "primevue/selectbutton";
 import Textarea from "primevue/textarea";
@@ -22,6 +23,7 @@ import {
   type SurveyResearchPretest,
 } from "../../core/index.js";
 import { useSurveysNotify } from "../notify.js";
+import type { PretestSummaryView } from "../api.js";
 
 const props = defineProps<{
   visible: boolean;
@@ -32,9 +34,18 @@ const props = defineProps<{
   /** 当前采集版本的序数（人读「第 n 版」）；未发布为 null。 */
   revisionNumber: number | null;
   busy?: boolean;
+  invitationUrl?: string;
+  invitations?: PretestSummaryView[];
+  invitationsLoading?: boolean;
+  invitationsError?: boolean;
+  currentFingerprint?: string;
+  canReviewFeedback?: boolean;
 }>();
 const emit = defineEmits<{
   "update:visible": [visible: boolean];
+  "create-invitation": [];
+  "retry-invitations": [];
+  "review-feedback": [];
   save: [
     payload: {
       participantCount: number;
@@ -59,6 +70,7 @@ const formCount = ref<number | null>(null);
 // 不静默丢掉已录入的反馈。
 const baseline = ref("");
 const confirmDiscard = ref(false);
+const manualOpen = ref(false);
 const isDirty = computed(
   () =>
     JSON.stringify({
@@ -82,6 +94,7 @@ watch(
     formNote.value = "";
     formCount.value = null;
     confirmDiscard.value = false;
+    manualOpen.value = false;
     baseline.value = JSON.stringify({
       count: participantCount.value,
       notes: notes.value.trim(),
@@ -127,11 +140,7 @@ const aspectLabel = (aspect: SurveyPretestAspect) =>
 const questionLabel = (questionId: string) =>
   questionOptions.value.find((option) => option.id === questionId)?.label ?? questionId;
 
-const revisionLabel = computed(() =>
-  props.revisionNumber
-    ? t("surveys.pretestPanel.revision", { n: props.revisionNumber })
-    : t("surveys.pretestPanel.revisionNone"),
-);
+const revisionLabel = computed(() => t("surveys.pretestPanel.currentContent"));
 
 function phrasing(): CognitiveInterviewPhrasing {
   return {
@@ -147,6 +156,15 @@ async function copyGuide() {
   try {
     await navigator.clipboard.writeText(text);
     notify.success(t("surveys.pretestPanel.copyGuideDone"));
+  } catch {
+    notify.error(t("surveys.pretestPanel.copyGuideFailed"));
+  }
+}
+async function copyInvitation() {
+  if (!props.invitationUrl) return;
+  try {
+    await navigator.clipboard.writeText(props.invitationUrl);
+    notify.success(t("surveys.pretestPanel.invitationCopied"));
   } catch {
     notify.error(t("surveys.pretestPanel.copyGuideFailed"));
   }
@@ -195,6 +213,47 @@ function save() {
     @update:visible="requestClose"
   >
     <div class="pretest-body">
+      <section class="pretest-invite">
+        <p class="pretest-section-title">{{ t("surveys.pretestPanel.inviteTitle") }}</p>
+        <p class="pretest-hint">{{ t("surveys.pretestPanel.inviteHint") }}</p>
+        <Button :label="t('surveys.pretestPanel.createInvitation')" severity="secondary" :disabled="busy" @click="emit('create-invitation')" />
+        <div v-if="invitationUrl" class="pretest-link">
+          <InputText :model-value="invitationUrl" readonly :aria-label="t('surveys.pretestPanel.invitationLink')" fluid />
+          <Button :label="t('surveys.pretestPanel.copyInvitation')" severity="secondary" @click="copyInvitation" />
+        </div>
+        <p v-if="invitationsLoading" class="pretest-hint">{{ t("surveys.pretestPanel.loadingInvitations") }}</p>
+        <p v-else-if="invitationsError" class="pretest-hint">
+          {{ t("surveys.pretestPanel.invitationsFailed") }}
+          <Button :label="t('surveys.pretestPanel.retryInvitations')" text @click="emit('retry-invitations')" />
+        </p>
+        <details v-for="invitation in invitations ?? []" :key="invitation.id">
+          <summary>{{ t("surveys.pretestPanel.invitationResults", { count: invitation.submissions.length }) }}</summary>
+          <p class="pretest-hint">{{ t("surveys.pretestPanel.invitationExpiry", { date: new Date(invitation.expiresAt).toLocaleDateString() }) }}</p>
+          <p v-if="currentFingerprint && invitation.contentFingerprint !== currentFingerprint" class="pretest-hint">{{ t("surveys.pretestPanel.invitationOlder") }}</p>
+          <details v-if="invitation.answerSummary.availableAnswers">
+            <summary>{{ t("surveys.pretestPanel.answerSummary") }}</summary>
+            <p class="pretest-hint">{{ t("surveys.pretestPanel.answerSummaryHint", { count: invitation.answerSummary.availableAnswers }) }}</p>
+            <ul class="pretest-entry-list">
+              <li v-for="item in invitation.answerSummary.questions" :key="item.questionId" class="pretest-entry">
+                <span>{{ invitation.questions.find((question) => question.id === item.questionId)?.title ?? t("surveys.pretestPanel.previousQuestion") }}</span>
+                <span class="pretest-entry-meta">{{ t("surveys.pretestPanel.answerCounts", { displayed: item.displayed, unanswered: item.unanswered }) }}</span>
+              </li>
+            </ul>
+          </details>
+          <ul class="pretest-entry-list">
+            <li v-for="submission in invitation.submissions.filter((item) => item.feedback.length)" :key="submission.id" class="pretest-entry">
+              <div v-for="(feedback, index) in submission.feedback" :key="index" class="pretest-entry-main">
+                <span class="pretest-entry-meta">{{ invitation.questions.find((question) => question.id === feedback.questionId)?.title ?? t("surveys.pretestPanel.previousQuestion") }}</span>
+                <span class="pretest-entry-note">{{ feedback.note }}</span>
+              </div>
+            </li>
+          </ul>
+        </details>
+        <div v-if="canReviewFeedback" class="pretest-ai">
+          <Button :label="t('surveys.pretestPanel.reviewFeedback')" severity="secondary" :disabled="busy" @click="emit('review-feedback')" />
+          <p class="pretest-hint">{{ t("surveys.pretestPanel.reviewFeedbackHint") }}</p>
+        </div>
+      </section>
       <div v-if="confirmDiscard" class="discard-confirm" role="alertdialog" :aria-label="t('surveys.pretestPanel.discardTitle')">
         <p class="discard-text">{{ t("surveys.pretestPanel.discardTitle") }}</p>
         <div class="discard-actions">
@@ -202,6 +261,8 @@ function save() {
           <Button :label="t('surveys.pretestPanel.discardClose')" severity="danger" @click="discardAndClose" />
         </div>
       </div>
+      <details :open="manualOpen" class="manual-pretest">
+        <summary @click.prevent="manualOpen = !manualOpen">{{ t("surveys.pretestPanel.manualTitle") }}</summary>
       <section class="pretest-guide">
         <p class="pretest-hint">{{ guideIntro }}</p>
         <Button
@@ -255,13 +316,14 @@ function save() {
           <Button :label="t('surveys.pretestPanel.add')" severity="secondary" :disabled="!canAddEntry || busy" @click="addEntry" />
         </div>
       </section>
+      </details>
     </div>
     <template #footer>
       <div class="pretest-footer">
-        <small v-if="!canSave && !busy" class="save-hint">{{ t("surveys.pretestPanel.saveHint") }}</small>
+        <small v-if="manualOpen && !canSave && !busy" class="save-hint">{{ t("surveys.pretestPanel.saveHint") }}</small>
         <div class="footer-buttons">
           <Button :label="t('surveys.cancel')" text severity="secondary" :disabled="busy" @click="requestClose" />
-          <Button class="pretest-save" :label="t('surveys.pretestPanel.save')" icon="pi pi-check" :disabled="!canSave" @click="save" />
+          <Button v-show="manualOpen" class="pretest-save" :label="t('surveys.pretestPanel.save')" icon="pi pi-check" :disabled="!canSave" @click="save" />
         </div>
       </div>
     </template>
@@ -272,6 +334,12 @@ function save() {
   display: grid;
   gap: var(--layout-card-padding);
 }
+.pretest-link { display: flex; gap: var(--space-2); margin-top: var(--space-3); }
+.pretest-link :deep(input) { min-width: 0; }
+.pretest-link :deep(button) { flex: none; white-space: nowrap; }
+.pretest-ai { display: grid; gap: var(--space-2); justify-items: start; margin-top: var(--space-3); }
+.manual-pretest { display: grid; gap: var(--layout-card-padding); }
+.manual-pretest > summary { cursor: pointer; padding-block: var(--space-2); }
 .pretest-guide,
 .pretest-meta,
 .pretest-entries {

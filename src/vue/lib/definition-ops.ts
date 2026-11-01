@@ -9,7 +9,7 @@ import type {
   SurveyPage,
   SurveyQuestion,
 } from "../../contracts/index.js";
-import { applySurveyOps, retargetQuestionType } from "../../core/index.js";
+import { applySurveyOps, canonicalSurveyJson, retargetQuestionType, SURVEY_LIMITS } from "../../core/index.js";
 
 type Translate = (key: string, params?: Record<string, unknown>) => string;
 
@@ -367,6 +367,8 @@ export function duplicateQuestion(
   const source = definition.questions.find((q) => q.id === id);
   const page = pageOf(definition, id);
   if (!source || !page) return { definition, newId: "" };
+  const sourceRecords = (definition.sourceRecords ?? []).filter((record) => record.questionId === id);
+  if ((definition.sourceRecords?.length ?? 0) + sourceRecords.length > SURVEY_LIMITS.maxQuestions) return { definition, newId: "" };
   const newId = uid("q");
   // 选项/行/列/项 id 是题内作用域，复制时统一重新生成，避免跨题同 id 的混淆。
   const relabel = (nodes: { id: string; label: string }[], prefix: string) =>
@@ -394,7 +396,29 @@ export function duplicateQuestion(
   const index = page.questionIds.indexOf(id);
   const next = insertQuestion(definition, page.id, copy, index + 1);
   // 加题被 ops 拒绝（如达题数上限）时如实报「没复制」。
-  return next === definition ? { definition, newId: "" } : { definition: next, newId };
+  if (next === definition) return { definition, newId: "" };
+  if (!sourceRecords.length) return { definition: next, newId };
+  const ids = new Map([[source.id, copy.id]]);
+  for (const field of ["options", "rows", "columns", "items"] as const) {
+    const oldNodes = (source as unknown as Record<string, unknown>)[field];
+    const newNodes = (copy as unknown as Record<string, unknown>)[field];
+    if (!Array.isArray(oldNodes) || !Array.isArray(newNodes)) continue;
+    oldNodes.forEach((node, index) => {
+      if (typeof node?.id === "string" && typeof newNodes[index]?.id === "string") ids.set(node.id, newNodes[index].id);
+    });
+  }
+  function remap(value: unknown): unknown {
+    if (Array.isArray(value)) return value.map(remap);
+    if (!value || typeof value !== "object") return value;
+    return Object.fromEntries(Object.entries(value).map(([key, item]) =>
+      [key, key === "id" && typeof item === "string" ? ids.get(item) ?? item : remap(item)]));
+  }
+  const copiedRecords = sourceRecords.map((record) => {
+    let baselineQuestion = record.baselineQuestion;
+    try { baselineQuestion = canonicalSurveyJson(remap(JSON.parse(baselineQuestion))); } catch { /* Keep an unverifiable baseline as modified. */ }
+    return { ...record, questionId: newId, baselineQuestion };
+  });
+  return { definition: { ...next, sourceRecords: [...(next.sourceRecords ?? []), ...copiedRecords] }, newId };
 }
 
 /** 删除题目并清理引用：showIf 指向它的题、跳页条件指向它的页一并移除（ops 语义）。 */

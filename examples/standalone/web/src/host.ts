@@ -63,7 +63,7 @@ export function createWebHost(
 
   return {
     transport: {
-      async request<T>(path: string, init?: { method?: string; body?: unknown }): Promise<T> {
+      async request<T>(path: string, init?: { method?: string; body?: unknown; responseType?: "blob" }): Promise<T> {
         const isPublic = path.startsWith("/api/survey-public");
         const hasBody = init?.body !== undefined;
         const response = await fetch(path, {
@@ -80,6 +80,7 @@ export function createWebHost(
               : JSON.stringify(init?.body)
             : undefined,
         });
+        if (response.ok && init?.responseType === "blob") return await response.blob() as T;
         const value: unknown = await response.json().catch(() => null);
         if (!response.ok) {
           // 会话过期：清本地标记并送回登录页（当前页的报错 toast 仍会弹出）。

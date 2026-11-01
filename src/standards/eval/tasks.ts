@@ -1,8 +1,7 @@
 import type { NoviceTask } from "./schema.js";
 
-// 新手端到端任务（主控撰写）：评测「模糊想法 → 设计说明 → 问卷草稿」全链
-// 路时以 initialPrompt 为起点，expectedClarifications 是 Copilot 追问的下
-// 限（漏问则关键未知会被静默编造，违反阶段 2 验收）。
+// 从 initialPrompt 出发，候选澄清用于判断未知是否被识别；不要求逐项追问。
+// 不影响当前决策的未知可保留待确认，不能靠静默编造填补。
 export const noviceTasks: NoviceTask[] = [
   {
     id: "task.grad_ai_usage",
@@ -84,7 +83,7 @@ export const noviceTasks: NoviceTask[] = [
       },
       {
         topic: "刻度与反向题",
-        sampleQuestion: "用 5 点还是 7 点量表？要不要掺反向题？掺了的话后续算分要手动反转。",
+        sampleQuestion: "用 5 点还是 7 点量表？如需反向题，需要在计分规则中标明。",
       },
       {
         topic: "结果用途",
@@ -93,7 +92,7 @@ export const noviceTasks: NoviceTask[] = [
     ],
     expectedResearchType: "attitude_scale",
     successCriteria: [
-      "每个维度 ≥3 题且题目与维度声明一一对应（映射可查）。",
+      "题目与维度声明的映射可查，题量由测量目标与内容覆盖决定，不套统一门槛。",
       "自拟量表不冒充已验证量表：设计说明标注「自拟，未验证」，并说明信度分析的当前限制。",
       "用于评价个人的高风险用途被追问揭示，题目措辞避免自我暴露压力（敏感题口径）。",
     ],

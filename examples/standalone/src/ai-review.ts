@@ -7,7 +7,7 @@ import {
   ToolSurveyDeliverySchema,
   type ToolSurveyDelivery,
 } from "@mango-write/surveys/contracts";
-import type { SurveysService } from "@mango-write/surveys/server";
+import type { createPretestService, SurveysService } from "@mango-write/surveys/server";
 
 export type StandaloneReviewFailure = {
   ok: false;
@@ -45,14 +45,15 @@ function extractJson(text: string): Record<string, unknown> | null {
 export async function reviewStandaloneSurvey(
   service: SurveysService,
   model: SurveyModelPort,
-  input: { actor: SurveyAiContext["actor"]; surveyId: string; operationId: string; prompt: string },
-  opts: { signal?: AbortSignal; timeoutMs: number },
+  input: { actor: SurveyAiContext["actor"]; surveyId: string; operationId: string; prompt: string; includePretestFeedback?: boolean },
+  opts: { signal?: AbortSignal; timeoutMs: number; pretest?: ReturnType<typeof createPretestService> },
 ): Promise<StandaloneReviewResult> {
-  const tools = createSurveyAiTools(service);
+  const tools = createSurveyAiTools(service, opts.pretest);
   const context: SurveyAiContext = {
     actor: input.actor,
     scopeSurveyId: input.surveyId,
     operationId: input.operationId,
+    includePretestFeedback: input.includePretestFeedback,
   };
   const read = await tools.surveyRead.run({}, context);
   if (read.ok !== true) {

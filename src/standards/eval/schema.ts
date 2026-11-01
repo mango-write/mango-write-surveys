@@ -77,7 +77,7 @@ export const NoviceTaskSchema = z.object({
   title: z.string().min(2).max(80),
   scenario: z.string().min(10).max(300),
   initialPrompt: z.string().min(10).max(500),
-  // Copilot 应问出的澄清：topic + 通俗问法示例（阶段 2 追问链路的基准）。
+  // 候选未知与通俗问法；是否追问取决于其对当前决策的影响。
   expectedClarifications: z
     .array(
       z.object({

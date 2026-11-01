@@ -21,11 +21,26 @@ import type {
 } from "../contracts/index.js";
 import { SurveysApiError, useSurveysHost, type SurveysWebHost } from "./host.js";
 
+export interface PretestFeedbackEntry {
+  questionId: string;
+  aspect: "comprehension" | "recall" | "judgment" | "response" | "general";
+  note: string;
+}
+export interface PretestSummaryView {
+  id: string;
+  draftVersion: number;
+  contentFingerprint: string;
+  expiresAt: string;
+  questions: Array<{ id: string; title: string }>;
+  answerSummary: { availableAnswers: number; questions: Array<{ questionId: string; displayed: number; unanswered: number }> };
+  submissions: Array<{ id: string; completedAt: string; feedback: PretestFeedbackEntry[] }>;
+}
+
 /** 对 transport 的薄封装：解析 JSON、非 2xx 归一为 SurveysApiError。 */
 async function call<T>(
   host: SurveysWebHost,
   path: string,
-  init?: { method?: string; body?: unknown },
+  init?: { method?: string; body?: unknown; responseType?: "blob" },
 ): Promise<T> {
   try {
     return await host.transport.request<T>(path, init);
@@ -44,6 +59,9 @@ export function createSurveysApi(host: SurveysWebHost) {
     create: (title: string) =>
       call<SurveyDetail>(host, "/api/surveys", { method: "POST", body: { title } }),
     get: (id: string) => call<SurveyDetail>(host, `/api/surveys/${id}`),
+    createPretest: (id: string, expectedVersion: number) =>
+      call<{ id: string; token: string; expiresAt: string; draftVersion: number }>(host, `/api/surveys/${id}/pretests`, { method: "POST", body: { expectedVersion } }),
+    listPretests: (id: string) => call<{ items: PretestSummaryView[] }>(host, `/api/surveys/${id}/pretests`),
     save: (
       id: string,
       expectedVersion: number,
@@ -57,6 +75,10 @@ export function createSurveysApi(host: SurveysWebHost) {
           definition,
           ...(responseLimit !== undefined ? { responseLimit } : {}),
         },
+      }),
+    applyReviewPlan: (id: string, expectedVersion: number, operationId: string, candidateFingerprint: string, findingIds: string[]) =>
+      call<SurveyDetail>(host, `/api/surveys/${id}/review/apply`, {
+        method: "POST", body: { expectedVersion, operationId, candidateFingerprint, findingIds },
       }),
     applyReviewFinding: (id: string, findingId: string, expectedVersion: number) =>
       call<SurveyDetail>(
@@ -170,6 +192,14 @@ export function createPublicSurveysApi(host: SurveysWebHost) {
   const path = (slug: string, suffix: string) =>
     `/api/survey-public/${encodeURIComponent(slug)}${suffix}`;
   return {
+    readPretest: (token: string) =>
+      call<{ definition: SurveyDefinition; expiresAt: string; answerRetentionDays: number }>(host, "/api/survey-public/pretests/read", { method: "POST", body: { token } }),
+    submitPretest: (token: string, submissionToken: string, answers: SurveyAnswers, feedback: PretestFeedbackEntry[]) =>
+      call<{ id: string; completedAt: string }>(host, "/api/survey-public/pretests/responses", {
+        method: "POST", body: { token, submission: { submissionToken, consent: true, answers, feedback } },
+      }),
+    readPretestAsset: (token: string, fileId: string) =>
+      call<Blob>(host, `/api/survey-public/pretests/assets/${encodeURIComponent(fileId)}`, { method: "POST", body: { token }, responseType: "blob" }),
     get: (slug: string) => call<PublicSurvey>(host, path(slug, "")),
     start: (slug: string, resumeToken?: string) =>
       call<SurveySession>(host, path(slug, "/start"), {

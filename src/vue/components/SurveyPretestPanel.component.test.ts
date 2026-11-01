@@ -177,6 +177,7 @@ describe("SurveyPretestPanel", () => {
 
   it("保存禁用给明原因（人数缺失），禁用按钮明确置灰样式（走查 P1 复审）", async () => {
     const { wrapper } = mountPanel();
+    await wrapper.find(".manual-pretest > summary").trigger("click");
     expect(wrapper.text()).toContain("先填写试填人数，才能保存。");
     expect(wrapper.find(".pretest-save").classes()).toContain("pretest-save");
 
@@ -188,11 +189,11 @@ describe("SurveyPretestPanel", () => {
 
   it("版本标签用人读序数：未发布显示无版本说明（走查 P2）", async () => {
     const numbered = mountPanel({ revisionNumber: 2, revisionId: "rev-uuid" });
-    expect(numbered.wrapper.text()).toContain("记录将绑定当前版本（第 2 版）");
+    expect(numbered.wrapper.text()).toContain("记录将绑定当前问卷内容。");
     numbered.wrapper.unmount();
 
     const unpublished = mountPanel({ revisionNumber: null, revisionId: "" });
-    expect(unpublished.wrapper.text()).toContain("问卷还没有发布版本，记录不带版本号。");
+    expect(unpublished.wrapper.text()).toContain("记录将绑定当前问卷内容。");
     unpublished.wrapper.unmount();
   });
 

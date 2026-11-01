@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { SurveyDefinition, SurveyQuestion } from "../../contracts/index.js";
+import { canonicalSurveyJson, surveySourceState } from "../../core/index.js";
 
 import {
   changeQuestionType,
@@ -149,6 +150,19 @@ describe("definition-ops（画布纯变换）", () => {
         (option) => !original.options.some((o) => o.id === option.id),
       ),
     ).toBe(true);
+  });
+
+  it("复制保留题目来源，并保留原题已经修改的事实", () => {
+    const def = definition();
+    const baseline = canonicalSurveyJson(def.questions[0]);
+    def.sourceRecords = [{ sourceId: "sus-brooke-1996", questionId: "q1", language: "zh-CN", baselineQuestion: baseline }];
+    const unchanged = duplicateQuestion(def, "q1");
+    const copied = unchanged.definition.sourceRecords!.find((record) => record.questionId === unchanged.newId)!;
+    expect(surveySourceState(unchanged.definition, copied.questionId, copied.baselineQuestion)).toBe("unchanged");
+    def.questions[0]!.title = "已经修改";
+    const changed = duplicateQuestion(def, "q1");
+    const changedCopy = changed.definition.sourceRecords!.find((record) => record.questionId === changed.newId)!;
+    expect(surveySourceState(changed.definition, changedCopy.questionId, changedCopy.baselineQuestion)).toBe("modified");
   });
 
   it("删除题目：清理页引用、指向它的 showIf 与跳页设置", () => {

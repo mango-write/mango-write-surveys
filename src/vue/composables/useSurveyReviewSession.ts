@@ -31,7 +31,7 @@ export interface SurveyReviewSessionOptions {
     status: Ref<SurveySaveStatus>;
     flush(): Promise<boolean>;
   };
-  api: Pick<SurveysApi, "applyReviewFinding" | "dismissReviewFinding">;
+  api: Pick<SurveysApi, "applyReviewFinding" | "applyReviewPlan" | "dismissReviewFinding">;
   onApply: (detail: SurveyDetail, label: string) => void;
   onDismiss: (detail: SurveyDetail) => void;
   copilot: Pick<SurveysCopilotHost, "sendPrompt" | "fillComposer" | "focusComposer"> | undefined;
@@ -143,5 +143,26 @@ export function useSurveyReviewSession(options: SurveyReviewSessionOptions) {
     }
   }
 
-  return { report, busy, applying, plan, addedQuestions, stale, receive, discard, discardFinding, request, applyFinding };
+  async function applyPlan(operationId: string, candidateFingerprint: string, findingIds: string[], version: number): Promise<boolean> {
+    const current = report.value;
+    const ids = plan.value?.groups.flatMap((group) => group.findingIds) ?? [];
+    if (!current || current.operationId !== operationId || stale.value || applying.value || !options.canWrite() ||
+      version !== options.draftVersion() || plan.value?.status !== "ready" ||
+      ids.length !== findingIds.length || ids.some((id) => !findingIds.includes(id))) return false;
+    applying.value = true;
+    try {
+      const detail = await options.api.applyReviewPlan(options.surveyId(), version, operationId, candidateFingerprint, findingIds);
+      options.onApply(detail, options.t("surveys.assistant.batchTitle"));
+      if (report.value === current) report.value = detail.review ?? null;
+      options.notify.success(options.t("surveys.assistant.applied"));
+      return true;
+    } catch {
+      options.notify.warn(options.t("surveys.assistant.planUnavailable"));
+      return false;
+    } finally {
+      applying.value = false;
+    }
+  }
+
+  return { report, busy, applying, plan, addedQuestions, stale, receive, discard, discardFinding, request, applyFinding, applyPlan };
 }

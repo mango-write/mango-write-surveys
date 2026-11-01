@@ -4,3 +4,4 @@ export * from "./anchors.js";
 export * from "./model.js";
 export * from "./runner.js";
 export * from "./standards-hint.js";
+export * from "./pretest-completion.js";

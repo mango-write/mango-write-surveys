@@ -90,6 +90,7 @@ function makeHarness(startVersion = 2) {
     focusComposer: vi.fn(() => {}),
   };
   const api = {
+    applyReviewPlan: vi.fn(async (_id: string, version: number) => detail(version + 1, null, "澄清后的单选")),
     applyReviewFinding: vi.fn(async (_id: string, findingId: string, expectedVersion: number) => {
       const findings = findingId === "f1" ? [F2] : [];
       const title = findingId === "f1" ? "澄清后的单选" : "澄清后的多选";
@@ -153,6 +154,25 @@ function makeHarness(startVersion = 2) {
 }
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+describe("批量应用", () => {
+  it("以预览时的报告和版本提交一次，并作为一个历史步骤", async () => {
+    const h = makeHarness();
+    h.session.receive(report({ findings: [F1, F2] }));
+    expect(await h.session.applyPlan("review-op-1", "hash", ["f1", "f2"], 2)).toBe(true);
+    expect(h.api.applyReviewPlan).toHaveBeenCalledWith(SURVEY_ID, 2, "review-op-1", "hash", ["f1", "f2"]);
+    expect(h.commits).toHaveLength(1);
+    expect(h.session.report.value).toBeNull();
+  });
+
+  it("预览后版本或报告变更时不提交", async () => {
+    const h = makeHarness();
+    h.session.receive(report({ findings: [F1, F2] }));
+    h.setDraftVersion(3);
+    expect(await h.session.applyPlan("review-op-1", "hash", ["f1", "f2"], 2)).toBe(false);
+    expect(h.api.applyReviewPlan).not.toHaveBeenCalled();
+  });
+});
 
 describe("useSurveyReviewSession 报告与过期", () => {
   it("只收同卷报告；plan 与 core 计划器同源", () => {

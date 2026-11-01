@@ -29,6 +29,7 @@ const baseDefinition = {
     },
   ],
   pages: [{ id: "p1", title: "页", questionIds: ["q1"] }],
+  researchDesign: { researchQuestion: "了解情况", population: "", recruitment: "", constructs: [{ id: "c1", label: "情况", definition: "情况", questionIds: ["q1"] }], analysisPlan: "描述", assumptions: [], pendingDecisions: [] },
 };
 
 function stubDeps() {
@@ -262,8 +263,9 @@ describe("独立站鉴权边界", () => {
       operationId: "review-success-1",
       baseDraftVersion: 2,
       summary: reviewArgs.summary,
-      findings: [{ id: "f1", suggestedOps: reviewArgs.findings[0]!.suggestedOps }],
+      findings: [{ id: "f1", recommendation: "请先确定适合研究问题的时间范围，再修改题目。" }],
     });
+    expect(deps.service.recordReview.mock.calls[0]![2].findings[0]).not.toHaveProperty("suggestedOps");
     expect(deps.service.requireSurveyAccess).toHaveBeenCalledWith("standalone-admin", SURVEY_ID, "read");
     expect(model.complete).toHaveBeenCalledTimes(1);
     expect(model.complete.mock.calls[0]![0]).toMatchObject({ timeoutMs: 5_000 });

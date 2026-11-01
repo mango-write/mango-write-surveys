@@ -369,8 +369,9 @@ export const SurveyResearchPretestSchema = z.object({
   participantCount: z.number().int().min(1).max(100000),
   notes: designText,
   recordedAt: z.string().datetime(),
-  // 试填针对的草稿版本（记录时取当前采集版本；从未发布过则缺省）。
+  // 内容与已发布版本一致时可关联该版本；旧记录可能缺少指纹。
   revisionId: z.string().min(1).max(64).optional(),
+  contentFingerprint: z.string().regex(/^[0-9a-f]{64}$/).optional(),
   itemFeedback: z
     .array(SurveyPretestItemFeedbackSchema)
     .max(SURVEY_LIMITS.maxPretestItemFeedback)
@@ -419,8 +420,8 @@ export const SurveyResearchDesignSchema = z.object({
   researchQuestion: designText,
   population: designText,
   recruitment: designText,
-  purpose: z.enum(["describe", "compare", "measure"]),
-  timeBudgetMinutes: z.number().int().min(1).max(SURVEY_LIMITS.maxTimeBudgetMinutes),
+  purpose: z.enum(["describe", "compare", "measure"]).optional(),
+  timeBudgetMinutes: z.number().int().min(1).max(SURVEY_LIMITS.maxTimeBudgetMinutes).optional(),
   constructs: z.array(SurveyResearchConstructSchema).max(SURVEY_LIMITS.maxConstructs),
   analysisPlan: designText,
   analysisModels: z.array(SurveyAnalysisModelSchema).max(SURVEY_LIMITS.maxAnalysisModels).optional(),
@@ -453,6 +454,14 @@ export const SurveyPageSchema = z.object({
 });
 export type SurveyPage = z.infer<typeof SurveyPageSchema>;
 
+export const SurveySourceRecordSchema = z.object({
+  sourceId: z.string().min(1).max(64),
+  questionId: idSchema,
+  language: z.string().min(1).max(32),
+  baselineQuestion: z.string().min(1).max(50000),
+});
+export type SurveySourceRecord = z.infer<typeof SurveySourceRecordSchema>;
+
 export const SurveyDefinitionSchema = z.object({
   version: z.literal(1),
   title: z.string().min(1).max(SURVEY_LIMITS.maxTitleLength),
@@ -461,6 +470,7 @@ export const SurveyDefinitionSchema = z.object({
   questions: z.array(SurveyQuestionSchema).max(SURVEY_LIMITS.maxQuestions),
   pages: z.array(SurveyPageSchema).max(SURVEY_LIMITS.maxPages),
   researchDesign: SurveyResearchDesignSchema.optional(),
+  sourceRecords: z.array(SurveySourceRecordSchema).max(SURVEY_LIMITS.maxQuestions).optional(),
 });
 export type SurveyDefinition = z.infer<typeof SurveyDefinitionSchema>;
 

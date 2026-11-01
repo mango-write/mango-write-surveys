@@ -7,6 +7,7 @@ import type {
   SurveyReviewSeverity,
 } from "./definition.js";
 import { applySurveyOps, type SurveyOp, type SurveyOpRejection } from "./ops.js";
+import { canRecordAiAddedQuestions, recordAiAddedQuestions } from "./source-provenance.js";
 
 /** 默认只呈现最重要的几组；超出的可自动修复发现进 deferred，不静默丢弃。 */
 export const SURVEY_REVIEW_PLAN_MAX_GROUPS = 3;
@@ -391,11 +392,19 @@ export function buildSurveyReviewPlan(
     };
   }
 
+  if (!canRecordAiAddedQuestions(definition, applied.definition)) {
+    return {
+      status: "blocked", groups: describeGroups(drafts), ops, candidateDefinition: null,
+      issues: [], manual: sortedManual, deferred,
+      rejections: [{ op: ops, reason: "无法完整记录新增题目的来源" }], conflicts: [],
+    };
+  }
+
   return {
     status: "ready",
     groups: describeGroups(drafts, applied.applied),
     ops: applied.applied,
-    candidateDefinition: applied.definition,
+    candidateDefinition: recordAiAddedQuestions(definition, applied.definition),
     issues: applied.issues,
     manual: sortedManual,
     deferred,
@@ -420,5 +429,8 @@ export function applySurveyReviewPlan(
   if (result.rejected.length > 0) {
     return { ok: false, issues: [], rejections: result.rejected };
   }
-  return { ok: true, definition: result.definition, issues: result.issues, rejections: [] };
+  if (!canRecordAiAddedQuestions(definition, result.definition)) {
+    return { ok: false, issues: [], rejections: [{ op: plan.ops, reason: "无法完整记录新增题目的来源" }] };
+  }
+  return { ok: true, definition: recordAiAddedQuestions(definition, result.definition), issues: result.issues, rejections: [] };
 }

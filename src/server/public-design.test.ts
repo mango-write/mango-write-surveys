@@ -10,12 +10,14 @@ describe("匿名问卷投影", () => {
       purpose: "describe", timeBudgetMinutes: 5, constructs: [], analysisPlan: "仅描述",
       assumptions: ["private-assumption"], pendingDecisions: [],
     };
+    definition.sourceRecords = [{ sourceId: "sus-brooke-1996", questionId: "q1", language: "zh-CN", baselineQuestion: "private-source-snapshot" }];
     if (withImage) definition.questions = [{
       id: "q1", title: "图片", type: "image_single", required: false,
       options: [{ id: "o1", label: "选项", imageFileId: "file-1" }],
     }];
     const result = toPublicDefinition(definition);
     expect(result).not.toHaveProperty("researchDesign");
+    expect(result).not.toHaveProperty("sourceRecords");
     expect(JSON.stringify(result)).not.toContain("private-");
     expect(definition.researchDesign.recruitment).toBe("private-recruitment-notes");
     if (withImage) expect(result.questions[0]).toMatchObject({

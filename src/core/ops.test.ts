@@ -21,6 +21,14 @@ const questionIds = (definition: SurveyDefinition) =>
   definition.pages.flatMap((page) => page.questionIds);
 
 describe("applySurveyOps — set_meta / replace_all", () => {
+  it("整卷替换未包含来源字段时保留原记录，避免旧客户端丢失来源", () => {
+    const original = makeDefinition();
+    original.sourceRecords = [{ sourceId: "sus-brooke-1996", questionId: "q1", language: "zh-CN", baselineQuestion: "{}" }];
+    const replacement = makeDefinition();
+    const result = apply(original, [{ op: "replace_all", definition: replacement }]);
+    expect(result.definition.sourceRecords).toEqual(original.sourceRecords);
+    expect(result.applied[0]).toMatchObject({ definition: { sourceRecords: original.sourceRecords } });
+  });
   it("set_meta 改标题/说明/consent，未给字段不动", () => {
     const result = apply(makeDefinition(), [
       { op: "set_meta", title: "新标题", consent: "同意条款" },
