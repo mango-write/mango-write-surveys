@@ -1,4 +1,4 @@
-import { SURVEY_LIMITS, type SurveyDefinition } from "../core/index.js";
+import { collectsIdentifyingInfo, SURVEY_LIMITS, type SurveyDefinition } from "../core/index.js";
 import { hasUnverifiedConsentClaim } from "./consent-evidence.js";
 import { hasExplicitTimeBudget, parseWrittenMinutes, WRITTEN_MINUTES } from "./time-budget.js";
 
@@ -82,10 +82,15 @@ export function unverifiedGeneratedInstitution(definition: SurveyDefinition, use
   return names.find((name) => !known.some((item) => name.endsWith(item) || item.endsWith(name))) ?? null;
 }
 
+// 系统可核实的事实基线：答卷经匿名令牌提交、存储不记受访者身份，
+// 问卷不含身份信息题时由系统直接写入参与说明，不作为待确认事项交给作者。
+export const PARTICIPATION_FACTS = "参与自愿，可随时退出。问卷不收集姓名、联系方式等个人身份信息，答卷匿名保存。";
+
 export function stripUnverifiedParticipationText(definition: SurveyDefinition, userTexts: readonly string[]): { privacy: boolean; duration: boolean } {
   let privacy = false, duration = false;
   const filter = (text: string) => (text.match(/[^，,。；;！？!?\n]+[，,。；;！？!?\n]?/g) ?? []).filter((sentence) => {
-    const hasPrivacy = hasUnverifiedConsentClaim(sentence, userTexts);
+    const isSystemFact = PARTICIPATION_FACTS.includes(sentence.trim());
+    const hasPrivacy = !isSystemFact && hasUnverifiedConsentClaim(sentence, userTexts);
     const estimates = [...sentence.matchAll(new RegExp(`(${WRITTEN_MINUTES})\\s*(?:[-–—~至]\\s*(${WRITTEN_MINUTES})\\s*)?(?:分钟|minutes?|mins?)`, "gi"))];
     const vague = sentence.match(/几分钟|数分钟|a few minutes/i)?.[0];
     const hasDuration = /预计|约|大约|需要|用时|耗时|完成|填写|作答|survey|take|complete|finish/i.test(sentence) &&
@@ -96,16 +101,23 @@ export function stripUnverifiedParticipationText(definition: SurveyDefinition, u
     privacy ||= hasPrivacy;
     duration ||= hasDuration;
     return !hasPrivacy && !hasDuration;
-  }).join("").trim();
+  }).join("").replace(/[，,](?=[。！？!?])/g, "").trim();
   definition.description = filter(definition.description);
   definition.consent = filter(definition.consent);
   for (const question of definition.questions) if (question.type === "statement") { question.body = filter(question.body); question.title = filter(question.title); }
   if (definition.researchDesign) {
     definition.researchDesign.recruitment = filter(definition.researchDesign.recruitment);
     definition.researchDesign.assumptions = definition.researchDesign.assumptions.map(filter).filter(Boolean);
-    if (privacy && definition.researchDesign.pendingDecisions.length < SURVEY_LIMITS.maxDesignNotes && !definition.researchDesign.pendingDecisions.includes("数据处理方式待确认")) {
+    // 身份信息题存在时匿名事实不成立，数据处理才真正待作者确认；
+    // 否则系统直接写事实基线，不把可判定的事交给作者当作业。
+    if (privacy && collectsIdentifyingInfo(definition) && definition.researchDesign.pendingDecisions.length < SURVEY_LIMITS.maxDesignNotes && !definition.researchDesign.pendingDecisions.includes("数据处理方式待确认")) {
       definition.researchDesign.pendingDecisions.push("数据处理方式待确认");
     }
+  }
+  if (!collectsIdentifyingInfo(definition) && !definition.consent.includes("匿名保存")) {
+    const voluntary = /自愿/.test(definition.consent) ? "" : "参与自愿，可随时退出。";
+    const joiner = definition.consent && !/[。！？!?]$/.test(definition.consent) ? "。" : "";
+    definition.consent = `${definition.consent}${joiner}${voluntary}问卷不收集姓名、联系方式等个人身份信息，答卷匿名保存。`;
   }
   return { privacy, duration };
 }

@@ -16,13 +16,17 @@ const t = ((key: string) => i18n.global.t(key)) as (key: string) => string;
 describe("surveyTemplates", () => {
   const templates = surveyTemplates(t);
 
-  it("提供 5 个模板，id 与题目编号唯一", () => {
+  it("提供 9 个模板，id 与题目编号唯一", () => {
     expect(templates.map((tpl) => tpl.id)).toEqual([
       "satisfaction",
       "sus",
       "nps",
       "event",
       "baseline",
+      "gse",
+      "phq9",
+      "gad7",
+      "who5",
     ]);
     for (const template of templates) {
       const questionIds = template.definition.questions.map((q) => q.id);
@@ -122,5 +126,96 @@ describe("surveyTemplates", () => {
     // 演示 markdown 能力：正文含标题与列表。
     expect(notice.body).toContain("###");
     expect(notice.body).toContain("- ");
+  });
+
+  // 公开量表模板：单页单矩阵 + 每模板一条来源记录，条目数对齐原版。
+  const scaleShapes = [
+    { id: "gse", questionId: "gse_matrix", sourceId: "gse-schwarzer-1995", rows: 10, columns: 4 },
+    { id: "phq9", questionId: "phq9_matrix", sourceId: "phq9-kroenke-2001", rows: 9, columns: 4 },
+    { id: "gad7", questionId: "gad7_matrix", sourceId: "gad7-spitzer-2006", rows: 7, columns: 4 },
+    { id: "who5", questionId: "who5_matrix", sourceId: "who5-who-1998", rows: 5, columns: 6 },
+  ] as const;
+
+  it.each(scaleShapes)(
+    "$id：单页 1 题 $rows 行 × $columns 列矩阵，来源记录挂矩阵题且基线快照未变",
+    ({ id, questionId, sourceId, rows, columns }) => {
+      const template = templates.find((tpl) => tpl.id === id)!;
+      expect(template.definition.pages).toHaveLength(1);
+      expect(template.definition.questions).toHaveLength(1);
+      const matrix = template.definition.questions.find((q) => q.id === questionId)!;
+      expect(matrix.type).toBe("matrix_single");
+      expect(matrix.required).toBe(true);
+      if (matrix.type !== "matrix_single") return;
+      expect(matrix.rows).toHaveLength(rows);
+      expect(matrix.columns).toHaveLength(columns);
+      const record = template.definition.sourceRecords![0]!;
+      expect(record.sourceId).toBe(sourceId);
+      expect(record.questionId).toBe(questionId);
+      expect(record.baselineQuestion).toBeTruthy();
+    },
+  );
+
+  it("公开量表的来源随问卷保留，按当前语言记录且基线快照未变", () => {
+    for (const { id, questionId } of scaleShapes) {
+      const definition = surveyTemplates(t, "zh-CN").find((tpl) => tpl.id === id)!.definition;
+      const record = definition.sourceRecords![0]!;
+      expect(record.language).toBe("zh-CN");
+      expect(SurveyDefinitionSchema.parse(definition).sourceRecords).toEqual(definition.sourceRecords);
+      expect(surveySourceState(definition, record.questionId, record.baselineQuestion)).toBe("unchanged");
+      const meta = applySurveyOps(definition, [{ op: "set_meta", title: "新标题" }]);
+      expect(meta.definition.sourceRecords).toEqual(definition.sourceRecords);
+      const result = applySurveyOps(definition, [{ op: "update_question", questionId, patch: { title: "更新后的表述" } }]);
+      expect(surveySourceState(result.definition, record.questionId, record.baselineQuestion)).toBe("modified");
+    }
+  });
+
+  it("GSE：4 级为『完全不正确…完全正确』，描述写明 10–40 计分与无反向题", () => {
+    const template = templates.find((tpl) => tpl.id === "gse")!;
+    const matrix = template.definition.questions[0]!;
+    if (matrix.type !== "matrix_single") return;
+    expect(matrix.columns.map((c) => c.label)).toEqual([
+      "完全不正确",
+      "几乎不正确",
+      "基本正确",
+      "完全正确",
+    ]);
+    expect(template.definition.description).toContain("10–40");
+    expect(template.definition.description).toContain("无反向题");
+  });
+
+  it("PHQ-9：4 级为 0–3 频率档，第 9 题自伤条目保留原位，描述含筛查边界", () => {
+    const template = templates.find((tpl) => tpl.id === "phq9")!;
+    const matrix = template.definition.questions[0]!;
+    if (matrix.type !== "matrix_single") return;
+    expect(matrix.columns.map((c) => c.label)).toEqual([
+      "完全没有",
+      "有几天",
+      "超过一半的天数",
+      "几乎每天",
+    ]);
+    // 条目顺序对齐原版：第 9 条是自伤条目且仍收尾。
+    expect(matrix.rows.at(-1)!.label).toContain("伤害自己");
+    expect(template.definition.description).toContain("不构成临床诊断");
+    expect(template.definition.description).toContain("第 9 题");
+  });
+
+  it("GAD-7：7 题保留原版顺序（第 7 条为惊恐式表述），描述含筛查边界与 0–21 计分", () => {
+    const template = templates.find((tpl) => tpl.id === "gad7")!;
+    const matrix = template.definition.questions[0]!;
+    if (matrix.type !== "matrix_single") return;
+    expect(matrix.rows[0]!.label).toContain("紧张");
+    expect(matrix.rows.at(-1)!.label).toContain("可怕的事情");
+    expect(template.definition.description).toContain("0–21");
+    expect(template.definition.description).toContain("不构成临床诊断");
+  });
+
+  it("WHO-5：6 级为『所有时间…完全没有』，全部条目正向且描述写明 0–25 折算百分比", () => {
+    const template = templates.find((tpl) => tpl.id === "who5")!;
+    const matrix = template.definition.questions[0]!;
+    if (matrix.type !== "matrix_single") return;
+    expect(matrix.columns[0]!.label).toBe("所有时间");
+    expect(matrix.columns.at(-1)!.label).toBe("完全没有");
+    expect(template.definition.description).toContain("0–25");
+    expect(template.definition.description).toContain("无反向题");
   });
 });

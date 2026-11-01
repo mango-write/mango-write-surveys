@@ -103,7 +103,7 @@ export const RESEARCH_DESIGN_HINT =
   "因子数、被试量这类没有依据的数字不编造——留空并写进 pendingDecisions。" +
   "analysisPlan 只承诺问卷与产品真能支撑的分析：Cronbach α 等内部一致性只对两题及以上的构念声称，单题构念只做描述；" +
   "分组超过两组时不默认均值比较或 t 检验，先写描述与交叉表，两组以上检验注明需外部工具；" +
-  "数据处理与匿名承诺只能复述用户已确认的内容，未确认的写进 pendingDecisions，不要写进说明块或同意文字。" +
+  "参与说明的系统事实（匿名采集、不收集身份信息、自愿参与）由系统自动补写，模型不要替作者承诺研究侧的用途、去向或保存期限；pendingDecisions 只写用户的研究决定，不写产品能力边界。" +
   "人群、招募渠道、许可与既有验证状态不了解时写进 pendingDecisions（或留空并在 analysisPlan/assumptions 说明）；用途或时长不明确时省略对应字段，不要编造；" +
   "已有问卷补设计用 survey_edit 的 set_meta.researchDesign（null = 清除）。" +
   "可选 pretest:{participantCount,notes,recordedAt,revisionId?,itemFeedback?} 是作者自报的试填记录，引用它不等于做完独立核验或量表验证。";

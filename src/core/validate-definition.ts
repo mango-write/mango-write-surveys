@@ -368,6 +368,28 @@ export function validateSurveyDefinition(def: unknown): SurveyIssue[] {
   return issues;
 }
 
+// 采集是否落到身份信息：答卷存储本身不记受访者身份（仅匿名令牌），
+// 参与说明里「匿名/不收集身份信息」的事实性由此函数判定真假。
+const IDENTITY_QUESTION =
+  /姓名|你的名字|学号|工号|考号|手机|电话|联系电话|邮箱|电子邮件|e-?mail|微信|微信号|qq号?|身份证|护照号|工牌/i;
+
+export function collectsIdentifyingInfo(d: SurveyDefinition): boolean {
+  return d.questions.some((q) => {
+    if (q.type === "statement") return false;
+    if (IDENTITY_QUESTION.test(q.title)) return true;
+    const items = q.type === "multi_text" ? q.items.map((item) => item.label) : q.type === "matrix_text" || q.type === "matrix_single" || q.type === "matrix_multiple" ? q.rows.map((row) => row.label) : [];
+    return items.some((label) => IDENTITY_QUESTION.test(label));
+  });
+}
+
+// 匿名矛盾是发布硬门禁而非结构校验：草稿里允许存在，交给评审发现；
+// 生成路径由 strip 兜底（有身份题不写基线、研究侧声明被剥离）。
+export function consentAnonymityClaim(d: SurveyDefinition): string | null {
+  if (!collectsIdentifyingInfo(d)) return null;
+  const claims = [d.consent, d.description, ...d.questions.filter((q) => q.type === "statement").flatMap((q) => [q.title, q.body])];
+  return claims.find((text) => /匿名|不收集[^。！？!?\n]{0,30}(?:身份|姓名|个人信|联系方式)/.test(text)) ?? null;
+}
+
 // 题目映射仅产生方法学提示，发布硬门禁仍由 validateSurveyDefinition 拥有。
 export function validateSurveyDesign(
   definition: SurveyDefinition,

@@ -1,7 +1,8 @@
 // 模板注册表（issue #217）：纯客户端静态 SurveyDefinition，选模板后走既有
 // create + save 草稿通道落定义（幂等：创建后立即保存为草稿 v1，标题可改），
-// 不新增 API。内容全部自制——不收录 SCL-90 等受版权量表；SUS 由 John Brooke
-// 公开免费使用，按其公开题目整理。文案经注入的 t：同一模板按当前语言构建。
+// 不新增 API。自制模板内容全部自拟——不收录 SCL-90 等受版权量表；公开量表
+// （SUS、GSE、PHQ-9、GAD-7、WHO-5）按各自公开版本的条目整理并挂来源记录。
+// 文案经注入的 t：同一模板按当前语言构建。
 import type { SurveyDefinition, SurveyQuestion } from "../../contracts/index.js";
 import { canonicalSurveyJson } from "../../core/index.js";
 
@@ -302,6 +303,69 @@ function baseline(t: Translate): SurveyDefinition {
   );
 }
 
+// 公开可用量表沿用 SUS 的口径：题目按可核验的公开版本整理（条目顺序与计分
+// 对齐原版），中文表述为整理时自行翻译，不宣称已验证译本；来源记录挂在矩阵
+// 题上，编辑/删除题目的变化判定由 surveySourceState 承担。sourceId 不在 core
+// 的 SURVEY_SOURCE_CATALOG 内时，AI 侧来源详情回落为空，这是既有机制的已知
+// 边界，不为此改 core。
+function scaleDefinition(
+  t: Translate,
+  templateId: string,
+  sourceId: string,
+  language: string,
+  statementCount: number,
+  columnCount: number,
+): SurveyDefinition {
+  const questionId = `${templateId}_matrix`;
+  const result = definition(
+    t(`surveys.templates.${templateId}.name`),
+    t(`surveys.templates.${templateId}.description`),
+    [
+      {
+        id: questionId,
+        title: t(`surveys.templates.${templateId}.matrix`),
+        required: true,
+        type: "matrix_single",
+        rows: Array.from({ length: statementCount }, (_, i) => ({
+          id: `s${i + 1}`,
+          label: t(`surveys.templates.${templateId}.statement.s${i + 1}`),
+        })),
+        columns: Array.from({ length: columnCount }, (_, i) => ({
+          id: `c${i + 1}`,
+          label: t(`surveys.templates.${templateId}.column.c${i + 1}`),
+        })),
+      },
+    ],
+    [
+      {
+        id: `${templateId}_p1`,
+        title: t(`surveys.templates.${templateId}.page1`),
+        description: t(`surveys.templates.${templateId}.pageNote`),
+        questionIds: [questionId],
+      },
+    ],
+  );
+  result.sourceRecords = [{ sourceId, questionId, language,
+    baselineQuestion: canonicalSurveyJson(result.questions[0]) }];
+  return result;
+}
+
+function gse(t: Translate, language: string): SurveyDefinition {
+  return scaleDefinition(t, "gse", "gse-schwarzer-1995", language, 10, 4);
+}
+
+function phq9(t: Translate, language: string): SurveyDefinition {
+  return scaleDefinition(t, "phq9", "phq9-kroenke-2001", language, 9, 4);
+}
+
+function gad7(t: Translate, language: string): SurveyDefinition {
+  return scaleDefinition(t, "gad7", "gad7-spitzer-2006", language, 7, 4);
+}
+
+function who5(t: Translate, language: string): SurveyDefinition {
+  return scaleDefinition(t, "who5", "who5-who-1998", language, 5, 6);
+}
+
 /** 按给定 t（当前 locale）构建模板清单（内容即定义本体）。展示顺序即选择顺序。 */
 export function surveyTemplates(t: Translate, language = "und"): SurveyTemplate[] {
   return [
@@ -339,6 +403,34 @@ export function surveyTemplates(t: Translate, language = "und"): SurveyTemplate[
       description: t("surveys.templates.baseline.desc"),
       scene: t("surveys.templates.baseline.scene"),
       definition: baseline(t),
+    },
+    {
+      id: "gse",
+      name: t("surveys.templates.gse.name"),
+      description: t("surveys.templates.gse.desc"),
+      scene: t("surveys.templates.gse.scene"),
+      definition: gse(t, language),
+    },
+    {
+      id: "phq9",
+      name: t("surveys.templates.phq9.name"),
+      description: t("surveys.templates.phq9.desc"),
+      scene: t("surveys.templates.phq9.scene"),
+      definition: phq9(t, language),
+    },
+    {
+      id: "gad7",
+      name: t("surveys.templates.gad7.name"),
+      description: t("surveys.templates.gad7.desc"),
+      scene: t("surveys.templates.gad7.scene"),
+      definition: gad7(t, language),
+    },
+    {
+      id: "who5",
+      name: t("surveys.templates.who5.name"),
+      description: t("surveys.templates.who5.desc"),
+      scene: t("surveys.templates.who5.scene"),
+      definition: who5(t, language),
     },
   ];
 }

@@ -338,13 +338,13 @@ describe("survey_create run", () => {
     expect(String(result.error)).toContain("参与同意题");
     expect(service.createSurvey).not.toHaveBeenCalled();
   });
-  it("不把未经用户确认的匿名承诺写入参与说明", async () => {
+  it("研究侧匿名承诺被移除，系统事实基线直接写入参与说明", async () => {
     service.createSurvey.mockResolvedValueOnce({ id: SURVEY_ID, draftVersion: 1 });
     const result = await tools.surveyCreate.run(
       { title: "新问卷", definition: { ...baseDefinition, consent: "数据匿名汇总。" } },
       { actor: ACTOR, scopeSurveyId: null, operationId: OP_ID, userTexts: ["不收集姓名"] },
     );
-    expect(service.updateSurvey.mock.calls[0]![2].definition.consent).toBe("");
+    expect(service.updateSurvey.mock.calls[0]![2].definition.consent).toBe("参与自愿，可随时退出。问卷不收集姓名、联系方式等个人身份信息，答卷匿名保存。");
     expect(result.issues).toEqual(expect.arrayContaining([expect.objectContaining({ code: "consent_unverified_data_handling" })]));
   });
   it("由系统记录 AI 建卷题目及原始内容，但不声称来源或许可已核验", async () => {

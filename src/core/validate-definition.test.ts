@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { validateSurveyDefinition, validateSurveyDesign } from "./index.js";
+import { consentAnonymityClaim, validateSurveyDefinition, validateSurveyDesign } from "./index.js";
 import { makeChainDefinition, makeDefinition } from "./test-fixtures.js";
 
 const codes = (issues: { code: string }[]) => issues.map((i) => i.code);
@@ -9,6 +9,22 @@ describe("validateSurveyDefinition", () => {
   it("接受合法基准定义", () => {
     expect(validateSurveyDefinition(makeDefinition())).toEqual([]);
     expect(validateSurveyDefinition(makeChainDefinition())).toEqual([]);
+  });
+
+  it("匿名矛盾由发布口判定，结构校验保持方法学中立", () => {
+    const mismatch = makeDefinition();
+    mismatch.consent = "问卷匿名保存，不收集个人身份信息。";
+    mismatch.questions.push({ id: "qid", type: "text", title: "你的学号是？", required: true });
+    mismatch.pages[0]!.questionIds.push("qid");
+    expect(consentAnonymityClaim(mismatch)).toContain("匿名");
+    expect(codes(validateSurveyDefinition(mismatch))).not.toContain("consent_anonymity_mismatch");
+    mismatch.questions.pop();
+    mismatch.pages[0]!.questionIds.pop();
+    expect(consentAnonymityClaim(mismatch)).toBeNull();
+    const silent = makeDefinition();
+    silent.questions.push({ id: "qid", type: "text", title: "你的学号是？", required: true });
+    silent.pages[0]!.questionIds.push("qid");
+    expect(consentAnonymityClaim(silent)).toBeNull();
   });
 
   it("拒绝 schema 形状错误（版本、类型、上限）", () => {

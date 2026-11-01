@@ -29,7 +29,31 @@ export const SURVEY_SOURCE_CATALOG = {
     name: "System Usability Scale (SUS)",
     author: "John Brooke",
     sourceUrl: "https://hci-studies.org/methods-and-measures/downloads/SUS_Brooke1996.pdf",
-    evidenceUrl: "https://iihm.imag.fr/coutrix/ens/M2-MoSIG-HiL/1stAssignment/UsabilityQuestionnaire/JUS_Brooke_February_2013.pdf",
+    evidenceUrl: "https://iihm.imag.fr/coutrix/ens/MoSIG-HiL/1stAssignment/UsabilityQuestionnaire/JUS_Brooke_February_2013.pdf",
+  },
+  "gse-schwarzer-1995": {
+    name: "General Self-Efficacy Scale (GSE)",
+    author: "Ralf Schwarzer & Matthias Jerusalem",
+    sourceUrl: "https://userpage.fu-berlin.de/~health/selfscal.htm",
+    evidenceUrl: "https://userpage.fu-berlin.de/~health/self/gse-25countries_2002.pdf",
+  },
+  "phq9-kroenke-2001": {
+    name: "Patient Health Questionnaire-9 (PHQ-9)",
+    author: "Kroenke, Spitzer & Williams",
+    sourceUrl: "https://phqscreeners.com/",
+    evidenceUrl: "https://pmc.ncbi.nlm.nih.gov/articles/PMC1495268/",
+  },
+  "gad7-spitzer-2006": {
+    name: "Generalized Anxiety Disorder-7 (GAD-7)",
+    author: "Spitzer, Kroenke, Williams & Löwe",
+    sourceUrl: "https://phqscreeners.com/",
+    evidenceUrl: "https://www.apaservices.org/practice/reimbursement/health-registry/anxiety-disorder-response.pdf",
+  },
+  "who5-who-1998": {
+    name: "WHO-5 Well-Being Index",
+    author: "World Health Organization",
+    sourceUrl: "https://www.who.int/",
+    evidenceUrl: "https://cdn.who.int/media/docs/default-source/mental-health/who-5_english-original4da539d6ed4b49389e3afe47cda2326a.pdf",
   },
 } as const;
 

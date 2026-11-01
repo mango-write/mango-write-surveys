@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { normalizeGeneratedFields, normalizeResearchMappings, redundantConsentQuestion, stripUnverifiedParticipationText, stripUnverifiedPopulation, unknownResearchMappings, unmeasuredAnalysisGroup, unsupportedGroupComparison, unverifiedGeneratedInstitution, unverifiedGeneratedPeriod, unverifiedPopulationScope, unverifiedReliabilityClaim } from "./generated-evidence.js";
+import { normalizeGeneratedFields, normalizeResearchMappings, PARTICIPATION_FACTS, redundantConsentQuestion, stripUnverifiedParticipationText, stripUnverifiedPopulation, unknownResearchMappings, unmeasuredAnalysisGroup, unsupportedGroupComparison, unverifiedGeneratedInstitution, unverifiedGeneratedPeriod, unverifiedPopulationScope, unverifiedReliabilityClaim } from "./generated-evidence.js";
 import type { SurveyDefinition } from "../core/index.js";
 
 function survey(): SurveyDefinition {
@@ -42,9 +42,9 @@ describe("AI 建卷事实依据", () => {
     definition.researchDesign!.assumptions = ["匿名自填", "采用便利样本"];
     expect(stripUnverifiedParticipationText(definition, ["不收集姓名"])).toEqual({ privacy: true, duration: true });
     expect(definition.description).toBe("本调查了解工具使用。");
-    expect(definition.consent).toBe("参与自愿。");
+    expect(definition.consent).toContain("匿名保存");
     expect(definition.researchDesign!.assumptions).toEqual(["采用便利样本"]);
-    expect(definition.researchDesign!.pendingDecisions).toContain("数据处理方式待确认");
+    expect(definition.researchDesign!.pendingDecisions).not.toContain("数据处理方式待确认");
   });
   it("只保留有依据的数据用途和不同语言的填写时间", () => {
     const definition = survey();
@@ -52,12 +52,13 @@ describe("AI 建卷事实依据", () => {
     definition.consent = "The survey takes five minutes. It takes a few minutes to complete.";
     expect(stripUnverifiedParticipationText(definition, [])).toEqual({ privacy: true, duration: true });
     expect(definition.description).toBe("");
-    expect(definition.consent).toBe("");
+    expect(definition.consent).toBe(PARTICIPATION_FACTS);
     definition.description = "数据仅用于汇总分析。填写大约十分钟。";
     definition.consent = "The survey takes five minutes.";
     expect(stripUnverifiedParticipationText(definition, ["数据仅用于汇总分析", "填写时间十分钟", "finish in five minutes"])).toEqual({ privacy: false, duration: false });
     expect(definition.description).toContain("汇总分析");
     expect(definition.consent).toContain("five minutes");
+    expect(definition.consent).toContain("匿名保存");
   });
   it("不会把泛指的学生推断成研究生", () => {
     const definition = survey();
@@ -106,6 +107,25 @@ describe("AI 建卷事实依据", () => {
     expect(stripUnverifiedParticipationText(definition, ["通过学院群自愿招募"])).toEqual({ privacy: true, duration: true });
     expect(definition.researchDesign!.recruitment).toContain("通过学院群自愿招募");
     expect(definition.researchDesign!.recruitment).not.toContain("匿名");
+  });
+  it("不含身份信息题时系统直接写入匿名事实基线，不留给作者当待办", () => {
+    const definition = survey();
+    definition.consent = "";
+    definition.description = "本调查了解工具使用。";
+    expect(stripUnverifiedParticipationText(definition, [])).toEqual({ privacy: false, duration: false });
+    expect(definition.consent).toBe(PARTICIPATION_FACTS);
+    expect(definition.researchDesign!.pendingDecisions).not.toContain("数据处理方式待确认");
+    expect(stripUnverifiedParticipationText(definition, [])).toEqual({ privacy: false, duration: false });
+    expect(definition.consent).toBe(PARTICIPATION_FACTS);
+  });
+  it("含身份信息题时不写匿名基线，数据处理保留为待确认", () => {
+    const definition = survey();
+    definition.consent = "";
+    definition.questions.push({ id: "q_id", type: "text", title: "你的学号是？", required: true });
+    definition.pages[0]!.questionIds.push("q_id");
+    stripUnverifiedParticipationText(definition, []);
+    expect(definition.consent).toBe("");
+    expect(definition.researchDesign!.pendingDecisions).toContain("数据处理方式待确认");
   });
   it("单题构念不能声称 Cronbach α 等内部一致性指标", () => {
     const definition = survey();

@@ -15,7 +15,7 @@ import {
   surveyVariables,
   surveyVariablesOf,
 } from "../core/index.js";
-import { validateSurveyDefinition } from "../core/index.js";
+import { consentAnonymityClaim, validateSurveyDefinition } from "../core/index.js";
 import {
   SurveyDefinitionSchema,
   ToolSurveyDeliverySchema,
@@ -629,6 +629,14 @@ export function createSurveysService(ports: SurveysPorts) {
             "invalid_definition",
             400,
             "至少需要 1 题 1 页才能发布",
+          );
+        }
+        // 匿名矛盾只在发布拦截：草稿期由评审发现，生成路径由 strip 兜底。
+        if (consentAnonymityClaim(definition)) {
+          throw new SurveyError(
+            "invalid_definition",
+            400,
+            "参与说明声称匿名或不收集身份信息，但问卷包含收集姓名、学号、联系方式等身份信息的题目；请修改说明或移除相关题目",
           );
         }
         // 图片选项在发布时必须全部绑定到本问卷的绑定行：快照不可变，带着悬空
