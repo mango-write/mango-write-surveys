@@ -1943,7 +1943,12 @@ describe("SurveyWorkspacePage 诊断会话与视图边界（issue #224）", () =
     await flushPromises();
     await wrapper.findAll("button").find((button) => button.text() === t("surveys.assistant.batchPreview"))!.trigger("click");
     await flushPromises();
-    const dialog = wrapper.find(".dialog-stub");
+    // openBatchPreview 里 crypto.subtle 的完成回调可能晚于 flushPromises 的一拍（全量并发下实测偶发）——轮询等弹层。
+    const dialog = await vi.waitFor(() => {
+      const dialog = wrapper.find(".dialog-stub");
+      expect(dialog.exists()).toBe(true);
+      return dialog;
+    });
     expect(dialog.text()).toContain("备注");
     expect(dialog.text()).toContain("修改第一题");
     expect(dialog.text()).toContain("第二题");
@@ -1951,7 +1956,8 @@ describe("SurveyWorkspacePage 诊断会话与视图边界（issue #224）", () =
     await dialog.findAll("button").find((button) => button.text() === t("surveys.assistant.batchApply"))!.trigger("click");
     await flushPromises();
     expect(mocks.applyReviewPlan).toHaveBeenCalledTimes(1);
-    expect(wrapper.find(".dialog-stub").exists()).toBe(false);
+    // 同上：应用链路也过一次 sha256Hex，关闭可能晚一拍。
+    await vi.waitFor(() => expect(wrapper.find(".dialog-stub").exists()).toBe(false));
     await wrapper.find(`button[aria-label="${t("surveys.undo")}"]`).trigger("click");
     expect(wrapper.findComponent(CanvasStub).props("modelValue").questions.map((q: { title: string }) => q.title)).toEqual(["备注", "第二题"]);
     wrapper.unmount();
