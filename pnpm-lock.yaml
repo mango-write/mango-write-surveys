@@ -18,11 +18,11 @@ importers:
         specifier: ^3.4.17
         version: 3.4.17
       echarts:
-        specifier: 5.6.0
-        version: 5.6.0
+        specifier: ^6.1.0
+        version: 6.1.0
       echarts-wordcloud:
         specifier: 2.1.0
-        version: 2.1.0(echarts@5.6.0)
+        version: 2.1.0(echarts@6.1.0)
       hono:
         specifier: ^4.13.13
         version: 4.13.13
@@ -103,8 +103,8 @@ importers:
         specifier: workspace:*
         version: link:../..
       '@mango-write/ui':
-        specifier: git+https://github.com/mango-write/mango-write-ui.git#6e340e56733eb8c2b712cc8ffe5b26e1f1ff7312
-        version: https://codeload.github.com/mango-write/mango-write-ui/tar.gz/6e340e56733eb8c2b712cc8ffe5b26e1f1ff7312(@primeuix/themes@1.2.5)(lucide-vue-next@1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2)))(primevue@4.5.5(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue-i18n@11.4.16(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue@3.5.44(@typescript/typescript6@6.0.2))
+        specifier: git+https://github.com/mango-write/mango-write-ui.git#2c162401a572a87b4a37bfdbd2e069b44d0f38bc
+        version: https://codeload.github.com/mango-write/mango-write-ui/tar.gz/2c162401a572a87b4a37bfdbd2e069b44d0f38bc(@primeuix/themes@1.2.5)(lucide-vue-next@1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2)))(primevue@4.5.5(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue-i18n@11.4.16(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue@3.5.44(@typescript/typescript6@6.0.2))
       '@primeuix/themes':
         specifier: ^1.0.0
         version: 1.2.5
@@ -451,16 +451,6 @@ packages:
 
   '@mango-write/ui@https://codeload.github.com/mango-write/mango-write-ui/tar.gz/2c162401a572a87b4a37bfdbd2e069b44d0f38bc':
     resolution: {tarball: https://codeload.github.com/mango-write/mango-write-ui/tar.gz/2c162401a572a87b4a37bfdbd2e069b44d0f38bc}
-    version: 0.1.0
-    peerDependencies:
-      '@primeuix/themes': ^1.0.0
-      lucide-vue-next: ^1.0.0
-      primevue: ^4.4.0
-      vue: ^3.5.34
-      vue-i18n: ^11.4.7
-
-  '@mango-write/ui@https://codeload.github.com/mango-write/mango-write-ui/tar.gz/6e340e56733eb8c2b712cc8ffe5b26e1f1ff7312':
-    resolution: {tarball: https://codeload.github.com/mango-write/mango-write-ui/tar.gz/6e340e56733eb8c2b712cc8ffe5b26e1f1ff7312}
     version: 0.1.0
     peerDependencies:
       '@primeuix/themes': ^1.0.0
@@ -1076,8 +1066,8 @@ packages:
     peerDependencies:
       echarts: ^5.0.1
 
-  echarts@5.6.0:
-    resolution: {integrity: sha512-oTbVTsXfKuEhxftHqL5xprgLoc0k7uScAwtryCgWF6hPYFLRwOUHiFmHGCBKP5NPFNkDVopOieyUqYGH8Fa3kA==}
+  echarts@6.1.0:
+    resolution: {integrity: sha512-q0yaFPggC9FUdsWH4blavRWFmxdrIodbkoKNAjJudAI6CA9gNPxHtV2RcZNEepZVlk4yvBYkOkbk6HIVpIyHZA==}
 
   editorconfig@3.0.2:
     resolution: {integrity: sha512-T0ix8GhtxyKVfUFEcvdNDt3YGqlwkFHbD4/5bgFUDgFmxhI/cSRAeJ87/Sz//Cq8Eam6JX/e23RkoFO71P7aAA==}
@@ -1826,8 +1816,8 @@ packages:
   zod@4.6.7:
     resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
-  zrender@5.6.1:
-    resolution: {integrity: sha512-OFXkDJKcrlx5su2XbzJvj/34Q3m6PvyCZkVPHGYpcCJ52ek4U/ymZyfuV1nKE23AyBJ51E/6Yr0mhZ7xGTO4ag==}
+  zrender@6.1.0:
+    resolution: {integrity: sha512-oEGMDB6pOP2S6OwRR4PdVv610zrjnA3Bh+JnSG12fYJlBKjtNAoEb5fSUoCOOINlH96I2fU38/A2UpRKs67xYQ==}
 
 snapshots:
 
@@ -2020,15 +2010,6 @@ snapshots:
       '@jridgewell/sourcemap-codec': 1.6.0
 
   '@mango-write/ui@https://codeload.github.com/mango-write/mango-write-ui/tar.gz/2c162401a572a87b4a37bfdbd2e069b44d0f38bc(@primeuix/themes@1.2.5)(lucide-vue-next@1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2)))(primevue@4.5.5(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue-i18n@11.4.16(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue@3.5.44(@typescript/typescript6@6.0.2))':
-    dependencies:
-      '@primeuix/themes': 1.2.5
-      lucide-vue-next: 1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2))
-      primeicons: 7.0.0
-      primevue: 4.5.5(vue@3.5.44(@typescript/typescript6@6.0.2))
-      vue: 3.5.44(@typescript/typescript6@6.0.2)
-      vue-i18n: 11.4.16(vue@3.5.44(@typescript/typescript6@6.0.2))
-
-  '@mango-write/ui@https://codeload.github.com/mango-write/mango-write-ui/tar.gz/6e340e56733eb8c2b712cc8ffe5b26e1f1ff7312(@primeuix/themes@1.2.5)(lucide-vue-next@1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2)))(primevue@4.5.5(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue-i18n@11.4.16(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue@3.5.44(@typescript/typescript6@6.0.2))':
     dependencies:
       '@primeuix/themes': 1.2.5
       lucide-vue-next: 1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2))
@@ -2614,14 +2595,14 @@ snapshots:
 
   dotenv@17.4.2: {}
 
-  echarts-wordcloud@2.1.0(echarts@5.6.0):
+  echarts-wordcloud@2.1.0(echarts@6.1.0):
     dependencies:
-      echarts: 5.6.0
+      echarts: 6.1.0
 
-  echarts@5.6.0:
+  echarts@6.1.0:
     dependencies:
       tslib: 2.3.0
-      zrender: 5.6.1
+      zrender: 6.1.0
 
   editorconfig@3.0.2:
     dependencies:
@@ -3317,6 +3298,6 @@ snapshots:
 
   zod@4.6.7: {}
 
-  zrender@5.6.1:
+  zrender@6.1.0:
     dependencies:
       tslib: 2.3.0

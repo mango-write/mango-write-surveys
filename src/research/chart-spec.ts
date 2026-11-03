@@ -1,9 +1,12 @@
+// EChartsOption 等类型只从包根取：echarts 6 的 types/dist/echarts.d.ts 与
+// shared.d.ts 对同名接口各有一份声明（zrender Animation 私有 _head 互斥），
+// 与组件侧的 `from "echarts"` 混用会让 spec 赋值在结构比较上炸掉。
 import type {
   DefaultLabelFormatterCallbackParams as CallbackDataParams,
   TooltipComponentFormatterCallbackParams as TopLevelFormatterParams,
   EChartsOption,
   CustomSeriesRenderItem,
-} from "echarts/types/dist/echarts.js";
+} from "echarts";
 
 import type {
   ResearchRunDetail,

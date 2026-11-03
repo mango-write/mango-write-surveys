@@ -37,7 +37,7 @@
   "dependencies": {
     "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#2c162401a572a87b4a37bfdbd2e069b44d0f38bc",
     "dompurify": "^3.4.17",
-    "echarts": "5.6.0",
+    "echarts": "^6.1.0",
     "echarts-wordcloud": "2.1.0",
     "hono": "^4.13.13",
     "jsdom": "^30.0.1",
