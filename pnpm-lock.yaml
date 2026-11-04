@@ -11,6 +11,9 @@ importers:
 
   .:
     dependencies:
+      '@echarts-x/custom-word-cloud':
+        specifier: 1.0.1
+        version: 1.0.1(echarts@6.1.0)
       '@mango-write/ui':
         specifier: git+https://github.com/mango-write/mango-write-ui.git#2c162401a572a87b4a37bfdbd2e069b44d0f38bc
         version: https://codeload.github.com/mango-write/mango-write-ui/tar.gz/2c162401a572a87b4a37bfdbd2e069b44d0f38bc(@primeuix/themes@1.2.5)(lucide-vue-next@1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2)))(primevue@4.5.5(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue-i18n@11.4.16(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue@3.5.44(@typescript/typescript6@6.0.2))
@@ -20,9 +23,6 @@ importers:
       echarts:
         specifier: ^6.1.0
         version: 6.1.0
-      echarts-wordcloud:
-        specifier: 2.1.0
-        version: 2.1.0(echarts@6.1.0)
       hono:
         specifier: ^4.13.13
         version: 4.13.13
@@ -236,6 +236,11 @@ packages:
   '@csstools/css-tokenizer@4.0.2':
     resolution: {integrity: sha512-OoKoR0f76dCY666JlcbhmVTs2drYj1GUXZTYTcbUgJjh9Nv41aFfZ21bPQTERm5+L5cBDo466NltB2lplS5GBw==}
     engines: {node: '>=20.19.0'}
+
+  '@echarts-x/custom-word-cloud@1.0.1':
+    resolution: {integrity: sha512-I/Vb3LCaj1ubBCF/V/mWse+OVevZpWx67FsC0QrnEEtAnnalPgEdc23gsvrIFntT9mXBXGI+anmCYtoXd9+UvQ==}
+    peerDependencies:
+      echarts: ^6.0.0
 
   '@esbuild/aix-ppc64@0.28.2':
     resolution: {integrity: sha512-XExcO+dvLKvVtNTibSTBej1NCAbaGhWn9Ww1ZPx80qsahhPFe/8jgWP0IchNe0F3HwkU7n8ejhH8bjonqht8mQ==}
@@ -1061,11 +1066,6 @@ packages:
     resolution: {integrity: sha512-nI4U3TottKAcAD9LLud4Cb7b2QztQMUEfHbvhTH09bqXTxnSie8WnjPALV/WMCrJZ6UV/qHJ6L03OqO3LcdYZw==}
     engines: {node: '>=12'}
 
-  echarts-wordcloud@2.1.0:
-    resolution: {integrity: sha512-Kt1JmbcROgb+3IMI48KZECK2AP5lG6bSsOEs+AsuwaWJxQom31RTNd6NFYI01E/YaI1PFZeueaupjlmzSQasjQ==}
-    peerDependencies:
-      echarts: ^5.0.1
-
   echarts@6.1.0:
     resolution: {integrity: sha512-q0yaFPggC9FUdsWH4blavRWFmxdrIodbkoKNAjJudAI6CA9gNPxHtV2RcZNEepZVlk4yvBYkOkbk6HIVpIyHZA==}
 
@@ -1877,6 +1877,10 @@ snapshots:
 
   '@csstools/css-tokenizer@4.0.2': {}
 
+  '@echarts-x/custom-word-cloud@1.0.1(echarts@6.1.0)':
+    dependencies:
+      echarts: 6.1.0
+
   '@esbuild/aix-ppc64@0.28.2':
     optional: true
 
@@ -2594,10 +2598,6 @@ snapshots:
       '@types/trusted-types': 2.0.7
 
   dotenv@17.4.2: {}
-
-  echarts-wordcloud@2.1.0(echarts@6.1.0):
-    dependencies:
-      echarts: 6.1.0
 
   echarts@6.1.0:
     dependencies:

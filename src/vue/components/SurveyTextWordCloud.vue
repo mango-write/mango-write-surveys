@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { use } from "echarts/core";
 import type { EChartsOption } from "echarts";
 
 import {
@@ -21,7 +22,7 @@ const ready = ref(false);
 onMounted(async () => {
   try {
     if (!document.createElement("canvas").getContext("2d")) return;
-    await import("echarts-wordcloud");
+    use((await import("@echarts-x/custom-word-cloud")).default);
     ready.value = true;
   } catch {
     ready.value = false;
@@ -39,23 +40,30 @@ const spec = computed<ResearchChartSpec | null>(() => {
     tooltip: { trigger: "item" },
     series: [
       {
-        type: "wordCloud",
-        shape: "circle",
-        keepAspect: false,
-        gridSize: 8,
-        sizeRange: [14, 38],
-        rotationRange: [0, 0],
-        drawOutOfBound: false,
-        layoutAnimation: false,
-        textStyle: {
-          fontFamily: "system-ui, -apple-system, sans-serif",
-          color: (params: { dataIndex: number }) =>
-            RESEARCH_CHART_COLORS[
-              params.dataIndex % RESEARCH_CHART_COLORS.length
-            ],
+        type: "custom",
+        renderItem: "wordCloud",
+        coordinateSystem: "none",
+        itemPayload: {
+          shape: "circle",
+          keepAspect: false,
+          gridSize: 8,
+          sizeRange: [14, 38],
+          rotationRange: [0, 0],
+          drawOutOfBound: false,
         },
-        emphasis: { textStyle: { fontWeight: 600 } },
-        data: words.value,
+        label: {
+          fontFamily: "system-ui, -apple-system, sans-serif",
+        },
+        emphasis: { label: { fontWeight: 600 } },
+        data: words.value.map((word, index) => ({
+          name: word.name,
+          value: [word.name, word.value],
+          itemStyle: {
+            color: RESEARCH_CHART_COLORS[
+              index % RESEARCH_CHART_COLORS.length
+            ],
+          },
+        })),
       },
     ],
   } as EChartsOption;
