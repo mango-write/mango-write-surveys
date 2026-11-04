@@ -3,7 +3,6 @@
 // 布局（jsdom 无 scrollHeight），由浏览器验证覆盖，这里只钉焦点管理。
 import { beforeEach, describe, expect, it } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
-import PrimeVue from "primevue/config";
 import { createI18n } from "vue-i18n";
 
 import SurveyTypeMenu from "./SurveyTypeMenu.vue";
@@ -16,7 +15,6 @@ async function render() {
     attachTo: document.body,
     global: {
       plugins: [
-        PrimeVue,
         createI18n({
           legacy: false,
           locale: "en",

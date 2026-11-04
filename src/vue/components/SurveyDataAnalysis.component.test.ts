@@ -181,7 +181,7 @@ describe("per-question summary tab (issue #217)", () => {
     await flushPromises();
     // 默认摘要：0–1 有序变量按量表分布卡呈现（真实题型 scale，不 NPS 化）。
     expect(wrapper.findComponent(SurveyResponseSummary).exists()).toBe(true);
-    expect(wrapper.findComponent({ name: "Select" }).props("modelValue")).toBe(revision);
+    expect(wrapper.findComponent({ name: "MwSelect" }).props("modelValue")).toBe(revision);
     expect(wrapper.text()).toContain("Score");
     expect(wrapper.findAll("tbody tr")).toHaveLength(0);
     wrapper.unmount();
@@ -323,8 +323,8 @@ it("excludes selected rows with a reason, then restores them in place", async ()
   expect(wrapper.findAll("button").find((b) => b.text().includes("排除所选"))).toBeUndefined();
   await wrapper
     .findAll("tbody tr")[0]!
-    .find('input[type="checkbox"]')
-    .setValue(true);
+    .find('[role="checkbox"]')
+    .trigger("click");
   await excludeButton().trigger("click");
   await wrapper.find("textarea").setValue("重复作答");
   await wrapper
@@ -401,7 +401,7 @@ it("export goes through the host transport download with the revision id", async
     transport: { request, download: mocks.download },
   });
   await flushPromises();
-  const items = wrapper.findComponent({ name: "Menu" }).props("model") as Array<{ command: () => void }>;
+  const items = wrapper.findComponent({ name: "MwMenu" }).props("model") as Array<{ command: () => void }>;
   items[0]!.command();
   await flushPromises();
   expect(mocks.download).toHaveBeenCalledWith(
@@ -471,7 +471,7 @@ it("projects an older selected revision independently of the current publication
     },
   }, host);
   await flushPromises();
-  const select = wrapper.findComponent({ name: "Select" });
+  const select = wrapper.findComponent({ name: "MwSelect" });
   select.vm.$emit("update:modelValue", revision);
   await flushPromises();
   expect(select.props("modelValue")).toBe(revision);

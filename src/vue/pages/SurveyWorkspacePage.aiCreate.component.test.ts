@@ -28,11 +28,14 @@ const mocks = vi.hoisted(() => ({
   get: vi.fn(),
 }));
 
-// confirm 全 mock：本用例不弹确认，require 只需存在（mountSurveysComponent
-// 不装 ConfirmationService，与主工作区测试同一做法）。
-vi.mock("primevue/useconfirm", () => ({
-  useConfirm: () => ({ require: () => {} }),
-}));
+// confirm 全 mock：本用例不弹确认，require 只需存在（与主工作区测试同一做法）。
+vi.mock("@mango-write/ui/lib/confirm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@mango-write/ui/lib/confirm")>();
+  return {
+    ...actual,
+    useConfirm: () => ({ require: () => {} }),
+  };
+});
 
 const ShellStub = defineComponent({
   name: "SurveyWorkbenchShell",

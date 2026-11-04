@@ -1,13 +1,11 @@
-// 独立站前端装配：createApp + PrimeVue（MangoPreset）+ vue-router + vue-i18n。
-// 页面全部来自 @mango-write/surveys/vue，宿主契约的 provide 在 App.vue 完成
-// （useToast 需要组件上下文）。
+// 独立站前端装配：createApp + @mango-write/ui（confirm/notify/theme）+ vue-router + vue-i18n。
+// 页面全部来自 @mango-write/surveys/vue，宿主契约的 provide 在 App.vue 完成。
 import { createApp } from "vue";
 import { createI18n } from "vue-i18n";
-import PrimeVue from "primevue/config";
-import ConfirmationService from "primevue/confirmationservice";
-import ToastService from "primevue/toastservice";
 
-import { initTheme, MangoPreset, mergeUiMessages, vTooltip } from "@mango-write/ui";
+import { initTheme, mergeUiMessages, vTooltip } from "@mango-write/ui";
+import { provideConfirm } from "@mango-write/ui/lib/confirm";
+import { provideNotify } from "@mango-write/ui/lib/notify";
 import { surveysMessages } from "@mango-write/surveys/vue";
 
 import { standaloneMessages } from "./locale";
@@ -32,11 +30,8 @@ const i18n = createI18n({
 mergeUiMessages(i18n);
 
 const app = createApp(App);
-app.use(PrimeVue, {
-  theme: { preset: MangoPreset, options: { darkModeSelector: '[data-theme="dark"]' } },
-});
-app.use(ToastService);
-app.use(ConfirmationService);
+provideNotify(app);
+provideConfirm(app);
 app.use(i18n);
 app.use(router);
 app.directive("tooltip", vTooltip);

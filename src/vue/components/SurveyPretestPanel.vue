@@ -4,13 +4,13 @@
 // 自报，文案不宣称「已验证」。
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import Dialog from "primevue/dialog";
-import InputNumber from "primevue/inputnumber";
-import InputText from "primevue/inputtext";
-import Select from "primevue/select";
-import SelectButton from "primevue/selectbutton";
-import Textarea from "primevue/textarea";
+import Button from "@mango-write/ui/components/Button";
+import Dialog from "@mango-write/ui/components/Dialog";
+import InputNumber from "@mango-write/ui/components/InputNumber";
+import InputText from "@mango-write/ui/components/InputText";
+import Select from "@mango-write/ui/components/Select";
+import SelectButton from "@mango-write/ui/components/SelectButton";
+import Textarea from "@mango-write/ui/components/Textarea";
 import { Trash2 } from "lucide-vue-next";
 import {
   PRETEST_ASPECTS,

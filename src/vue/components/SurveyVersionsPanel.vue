@@ -3,8 +3,8 @@
 // contentHash 前 8 位、当前采集版本标记）+ 状态机操作。发布/状态动作永远
 // 显式人工，这里只提供入口，请求与刷新归宿主页。
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import Tag from "primevue/tag";
+import Button from "@mango-write/ui/components/Button";
+import Tag from "@mango-write/ui/components/Tag";
 
 import type { SurveyRevisionSummary, SurveyStatus } from "../../contracts/index.js";
 

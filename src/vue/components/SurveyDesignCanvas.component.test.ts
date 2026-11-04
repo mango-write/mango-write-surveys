@@ -8,11 +8,8 @@ import { defineComponent, h, ref, type Ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import type { SurveyDefinition, SurveyQuestion } from "../../contracts/index.js";
-// @ts-expect-error primevue 4.5.5 未带 confirmationeventbus 的类型声明；官方
-// 补上声明后删除本行即可。
-import ConfirmationEventBus from "primevue/confirmationeventbus";
-import ConfirmationService from "primevue/confirmationservice";
-import ConfirmDialog from "primevue/confirmdialog";
+import ConfirmHost from "@mango-write/ui/components/ConfirmHost";
+import { createConfirmStore, type ConfirmOptions } from "@mango-write/ui/lib/confirm";
 
 import { createSurveysTestI18n, createTestHost, mountSurveysComponent } from "../test-mount.js";
 import SurveyDesignCanvas from "./SurveyDesignCanvas.vue";
@@ -20,9 +17,13 @@ import SurveyDesignCanvas from "./SurveyDesignCanvas.vue";
 const i18n = createSurveysTestI18n();
 
 const confirmMocks = vi.hoisted(() => ({ require: vi.fn() }));
-vi.mock("primevue/useconfirm", () => ({
-  useConfirm: () => ({ require: confirmMocks.require }),
-}));
+vi.mock("@mango-write/ui/lib/confirm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@mango-write/ui/lib/confirm")>();
+  return {
+    ...actual,
+    useConfirm: () => ({ require: confirmMocks.require }),
+  };
+});
 
 if (typeof document !== "undefined" && !Element.prototype.scrollIntoView) {
   Element.prototype.scrollIntoView = () => {};
@@ -281,7 +282,7 @@ describe("SurveyDesignCanvas 题目卡片", () => {
     const harness = await mountCanvas();
     await selectCard(harness, "q1");
     const card = harness.wrapper.find('[data-canvas-question="q1"]');
-    await card.find(".required-toggle input").setValue(false);
+    await card.find('.required-toggle [role="checkbox"]').trigger("click");
     expect(
       harness.current().questions.find((q) => q.id === "q1")!.required,
     ).toBe(false);
@@ -448,7 +449,7 @@ describe("SurveyDesignCanvas 题目卡片", () => {
       .trigger("click");
     await flushPromises();
     const clear = document.querySelector<HTMLElement>(
-      ".survey-question-settings .p-inputnumber-clear-icon",
+      ".survey-question-settings .mw-input-number__clear",
     )!;
     clear.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
@@ -748,12 +749,15 @@ describe("SurveyDesignCanvas 点空白取消选中", () => {
 });
 
 // 审判 blocker ① 定性：换题型确认 → 点确定后弹窗必须关闭、菜单可再次打开。
-// 走真实 ConfirmDialog（App 全局那一只）+ 真实指针事件序列（pointerdown 先于
+// 走真实 ConfirmHost（App 全局那一只）+ 真实指针事件序列（pointerdown 先于
 // click，正是「菜单全局 pointerdown 监听 vs 弹窗按钮」怀疑点的形状）。
 describe("SurveyDesignCanvas 换题型确认弹窗（真实 ConfirmDialog 链路）", () => {
-  // ConfirmDialog teleport 到 body 且监听模块级单例总线：不卸载会跨用例残留，
-  // 下一个用例的 confirm 会被旧实例同时收到（弹窗「关不掉」的测试假象）。
+  // ConfirmHost teleport 到 body：不卸载会跨用例残留。
   const mounted: Array<{ unmount: () => void }> = [];
+  let confirmStore = createConfirmStore();
+  beforeEach(() => {
+    confirmStore = createConfirmStore();
+  });
   afterEach(() => {
     for (const wrapper of mounted.reverse()) wrapper.unmount();
     mounted.length = 0;
@@ -772,19 +776,19 @@ describe("SurveyDesignCanvas 换题型确认弹窗（真实 ConfirmDialog 链路
                 current.value = next;
               },
             }),
-            h(ConfirmDialog),
+            h(ConfirmHost, { store: confirmStore }),
           ] as never;
       },
     });
-    const wrapper = mountSurveysComponent(Host, { global: { plugins: [ConfirmationService] } }, createTestHost());
+    const wrapper = mountSurveysComponent(Host, {}, createTestHost());
     mounted.push(wrapper);
     return wrapper;
   }
 
-  /** 真实总线：mock 的 require 把确认转发给 App 全局 ConfirmDialog 监听的总线。 */
+  /** 真实确认状态库：mock 的 require 把确认转发给 ConfirmHost 绑定的 store。 */
   function forwardConfirmToBus() {
-    confirmMocks.require.mockImplementation((options: unknown) => {
-      ConfirmationEventBus.emit("confirm", options);
+    confirmMocks.require.mockImplementation((options: ConfirmOptions) => {
+      confirmStore.require(options);
     });
   }
 
@@ -797,16 +801,16 @@ describe("SurveyDesignCanvas 换题型确认弹窗（真实 ConfirmDialog 链路
     }
   }
 
-  async function dialogButton(className: string) {
+  async function dialogButton(selector: string) {
     const button = () =>
-      document.body.querySelector<HTMLElement>(`.${className}`);
+      document.body.querySelector<HTMLElement>(selector);
     await vi.waitFor(() => expect(button()).not.toBeNull());
     return button()!;
   }
 
   async function dialogGone() {
     await vi.waitFor(() =>
-      expect(document.body.querySelector(".p-confirmdialog")).toBeNull(),
+      expect(document.body.querySelector(".mw-confirm")).toBeNull(),
     );
   }
 
@@ -835,7 +839,7 @@ describe("SurveyDesignCanvas 换题型确认弹窗（真实 ConfirmDialog 链路
 
     // 菜单先收起、确认弹窗出现在 body（teleport）。
     expect(wrapper.find(".survey-type-menu").exists()).toBe(false);
-    const accept = await dialogButton("p-confirmdialog-accept-button");
+    const accept = await dialogButton("[data-confirm-accept]");
     fireClick(accept);
     await flushPromises();
     await dialogGone();
@@ -856,7 +860,7 @@ describe("SurveyDesignCanvas 换题型确认弹窗（真实 ConfirmDialog 链路
 
     await pickTextType(wrapper);
 
-    const reject = await dialogButton("p-confirmdialog-reject-button");
+    const reject = await dialogButton("[data-confirm-reject]");
     fireClick(reject);
     await flushPromises();
     await dialogGone();
@@ -1101,11 +1105,11 @@ describe("SurveyDesignCanvas 新题型", () => {
     const harness = await mountCanvas(initial);
     await selectCard(harness, "q2");
     const card = harness.wrapper.find('[data-canvas-question="q2"]');
-    await card.findAll("footer button").at(0)!.trigger("click");
+    await card.find('button[aria-label="' + t("surveys.moreSettings") + '"]').trigger("click");
     await flushPromises();
-    document.querySelector<HTMLElement>(".survey-question-settings .p-select")!.click();
+    document.querySelector<HTMLElement>(".survey-question-settings .mw-select")!.click();
     await flushPromises();
-    const labels = [...document.querySelectorAll(".p-select-option")].map(
+    const labels = [...document.querySelectorAll(".mw-select__option")].map(
       (node) => node.textContent ?? "",
     );
     expect(labels).toContain("年级");

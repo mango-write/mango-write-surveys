@@ -4,9 +4,9 @@
 // survey_create 交付帧交给当前页面处理（导航进工作区，与主站同一条链）。
 // 提交失败保留 operationId：网络重试复用同一操作身份，服务端不会重复建卷。
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import InputText from "primevue/inputtext";
-import Textarea from "primevue/textarea";
+import Button from "@mango-write/ui/components/Button";
+import InputText from "@mango-write/ui/components/InputText";
+import Textarea from "@mango-write/ui/components/Textarea";
 
 import type { ToolSurveyDelivery } from "@mango-write/surveys/vue";
 
@@ -125,8 +125,8 @@ async function generate() {
   gap: 10px;
   padding: 14px;
   border-radius: 12px;
-  border: 1px solid var(--p-content-border-color, #ddd);
-  background: var(--p-content-background, #fff);
+  border: 1px solid var(--color-border-subtle, #ddd);
+  background: var(--color-surface-base, #fff);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.14);
 }
 .ai-panel__head {
@@ -140,12 +140,12 @@ async function generate() {
   flex-direction: column;
   gap: 4px;
   font-size: 12.5px;
-  color: var(--p-text-muted-color, #666);
+  color: var(--color-text-secondary, #666);
 }
 .ai-panel__error {
   margin: 0;
   font-size: 12.5px;
-  color: var(--p-red-500, #e02424);
+  color: var(--color-danger-600, #e02424);
   overflow-wrap: anywhere;
 }
 .ai-panel__foot {

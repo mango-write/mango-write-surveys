@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import Column from "primevue/column";
-import DataTable from "primevue/datatable";
-import Dialog from "primevue/dialog";
-import InputText from "primevue/inputtext";
-import Textarea from "primevue/textarea";
+import Button from "@mango-write/ui/components/Button";
+import Column from "@mango-write/ui/components/Column";
+import DataTable from "@mango-write/ui/components/DataTable";
+import Dialog from "@mango-write/ui/components/Dialog";
+import InputText from "@mango-write/ui/components/InputText";
+import Textarea from "@mango-write/ui/components/Textarea";
 import type {
   SurveyDataset,
   SurveyDatasetRow,

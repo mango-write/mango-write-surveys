@@ -12,8 +12,8 @@ export default defineConfig({
   plugins: [vue(), tailwindcss()],
   resolve: {
     // 包页面（@mango-write/surveys、@mango-write/ui）与本 app 必须共享同一个
-    // vue / vue-i18n / primevue 运行时实例，provide/inject 与 Toast 上下文才成立。
-    dedupe: ["vue", "vue-router", "vue-i18n", "primevue"],
+    // vue / vue-i18n 运行时实例，provide/inject 与通知上下文才成立。
+    dedupe: ["vue", "vue-router", "vue-i18n"],
   },
   server: {
     port: Number(process.env.WEB_PORT) || 5180,

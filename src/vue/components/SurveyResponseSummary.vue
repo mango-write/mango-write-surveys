@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
+import Button from "@mango-write/ui/components/Button";
 import type { SurveyDataset } from "../lib/dataset.js";
 import {
   summarizeDataset,

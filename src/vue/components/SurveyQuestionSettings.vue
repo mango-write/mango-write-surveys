@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import Checkbox from "primevue/checkbox";
-import DatePicker from "primevue/datepicker";
-import Dialog from "primevue/dialog";
-import InputNumber from "primevue/inputnumber";
-import InputText from "primevue/inputtext";
-import Select from "primevue/select";
+import Button from "@mango-write/ui/components/Button";
+import Checkbox from "@mango-write/ui/components/Checkbox";
+import DatePicker from "@mango-write/ui/components/DatePicker";
+import Dialog from "@mango-write/ui/components/Dialog";
+import InputNumber from "@mango-write/ui/components/InputNumber";
+import InputText from "@mango-write/ui/components/InputText";
+import Select from "@mango-write/ui/components/Select";
 
 import type { SurveyCondition, SurveyQuestion } from "../../contracts/index.js";
 
@@ -141,7 +141,7 @@ function dateBoundary(value: string | undefined): Date | undefined {
       <section v-if="conditionSources.length" class="settings-group">
         <h3>{{ t("surveys.displayRules") }}</h3>
         <div class="settings-grid">
-          <label class="settings-field">
+          <div class="settings-field">
             <span>{{ t("surveys.conditionQuestion") }}</span>
             <Select
               :model-value="question.showIf?.questionId ?? null"
@@ -154,8 +154,8 @@ function dateBoundary(value: string | undefined): Date | undefined {
               :aria-label="t('surveys.showCondition')"
               @update:model-value="setShowIf"
             />
-          </label>
-          <label v-if="question.showIf" class="settings-field">
+          </div>
+          <div v-if="question.showIf" class="settings-field">
             <span>{{ t("surveys.conditionValue") }}</span>
             <Select
               v-if="conditionOptions.length"
@@ -174,7 +174,7 @@ function dateBoundary(value: string | undefined): Date | undefined {
               :aria-label="t('surveys.conditionValue')"
               @update:model-value="setConditionValue"
             />
-          </label>
+          </div>
         </div>
       </section>
 

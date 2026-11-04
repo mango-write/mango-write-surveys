@@ -7,13 +7,13 @@
 // 本页不感知 copilot-island 内部。
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import Dialog from "primevue/dialog";
-import IconField from "primevue/iconfield";
-import InputIcon from "primevue/inputicon";
-import InputText from "primevue/inputtext";
-import Tag from "primevue/tag";
-import Message from "primevue/message";
+import Button from "@mango-write/ui/components/Button";
+import Dialog from "@mango-write/ui/components/Dialog";
+import IconField from "@mango-write/ui/components/IconField";
+import InputIcon from "@mango-write/ui/components/InputIcon";
+import InputText from "@mango-write/ui/components/InputText";
+import Tag from "@mango-write/ui/components/Tag";
+import Message from "@mango-write/ui/components/Message";
 import { ClipboardList } from "lucide-vue-next";
 import type { SurveyStatus, SurveySummary } from "../../contracts/index.js";
 

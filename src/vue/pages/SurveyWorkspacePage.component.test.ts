@@ -34,11 +34,15 @@ const mocks = vi.hoisted(() => ({
   listPretests: vi.fn(),
 }));
 
-// confirm 全 mock：ConfirmDialog 不 teleport 进测试树，require 只收回调。
+// confirm 全 mock：ConfirmHost 不 teleport 进测试树，require 只收回调。
 const confirmMocks = vi.hoisted(() => ({ require: vi.fn() }));
-vi.mock("primevue/useconfirm", () => ({
-  useConfirm: () => ({ require: confirmMocks.require }),
-}));
+vi.mock("@mango-write/ui/lib/confirm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@mango-write/ui/lib/confirm")>();
+  return {
+    ...actual,
+    useConfirm: () => ({ require: confirmMocks.require }),
+  };
+});
 
 import SurveyWorkspacePage from "./SurveyWorkspacePage.vue";
 import SurveyVersionsPanel from "../components/SurveyVersionsPanel.vue";
@@ -1780,7 +1784,7 @@ describe("SurveyWorkspacePage AI 建卷落地提示（issue #217）", () => {
     expect(wrapper.text()).toContain(bannerText("科研工具使用习惯调查"));
     expect(wrapper.text()).toContain(t("surveys.copilot.aiCreatedIssues", { n: 1 }));
 
-    await wrapper.find(".p-message-close-button").trigger("click");
+    await wrapper.find(".mw-message__close").trigger("click");
     await flushPromises();
     expect(wrapper.text()).not.toContain(bannerText("科研工具使用习惯调查"));
     wrapper.unmount();
@@ -2063,11 +2067,11 @@ describe("SurveyWorkspacePage 导航收敛与 surface 呈现（issue #224 M2）"
     const { wrapper } = await mountWorkspace();
     const shell = wrapper.findComponent({ name: "SurveyWorkbenchShell" });
     expect(shell.props("tabs").map((tab: { id: string }) => tab.id)).toEqual(["outline", "versions"]);
-    expect(wrapper.find(".topbar-title .p-tag").exists()).toBe(false);
+    expect(wrapper.find(".topbar-title .mw-tag").exists()).toBe(false);
 
     await segments(wrapper)[1]!.trigger("click");
     await flushPromises();
-    expect(wrapper.find(".topbar-title .p-tag").text()).toBe(t("surveys.status.published"));
+    expect(wrapper.find(".topbar-title .mw-tag").text()).toBe(t("surveys.status.published"));
     wrapper.unmount();
   });
 

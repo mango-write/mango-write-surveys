@@ -77,7 +77,7 @@ describe("SurveyPreviewOverlay（issue #217）", () => {
     expect(start().attributes("disabled")).toBeDefined();
 
     // 勾选同意：仍停在引导页，开始按钮点亮但未进入逐页流程。
-    await dialog.find("input[type=checkbox]").setValue(true);
+    await dialog.find('[role="checkbox"]').trigger("click");
     await flushPromises();
     expect(start().attributes("disabled")).toBeUndefined();
     expect(wrapper.find(".preview-questions").exists()).toBe(false);
@@ -99,7 +99,7 @@ describe("SurveyPreviewOverlay（issue #217）", () => {
     expect(startButton(wrapper).attributes("disabled")).toBeDefined();
 
     // 勾同意 → 开始 → 第 1 页填入文本。
-    await dialog.find("input[type=checkbox]").setValue(true);
+    await dialog.find('[role="checkbox"]').trigger("click");
     await startButton(wrapper).trigger("click");
     await flushPromises();
     const answer = wrapper.find(".preview-questions textarea");
@@ -116,7 +116,7 @@ describe("SurveyPreviewOverlay（issue #217）", () => {
 
   it("「重新预览」重置到 consent", async () => {
     const wrapper = await mountOverlay(true);
-    await wrapper.find("input[type=checkbox]").setValue(true);
+    await wrapper.find('[role="checkbox"]').trigger("click");
     await startButton(wrapper).trigger("click");
     await flushPromises();
     expect(startButton(wrapper)).toBeUndefined(); // 已进入第 1 页，没有开始按钮

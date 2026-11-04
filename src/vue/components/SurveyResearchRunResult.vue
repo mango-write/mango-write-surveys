@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import DataTable from "primevue/datatable";
-import Column from "primevue/column";
-import Message from "primevue/message";
-import Tag from "primevue/tag";
+import Button from "@mango-write/ui/components/Button";
+import DataTable from "@mango-write/ui/components/DataTable";
+import Column from "@mango-write/ui/components/Column";
+import Message from "@mango-write/ui/components/Message";
+import Tag from "@mango-write/ui/components/Tag";
 import type { ResearchRunDetail, SurveyResearchTable } from "../../contracts/index.js";
 import {
   buildResearchChartSpecs,

@@ -1,12 +1,13 @@
-// 包内组件测试的最小挂载：i18n（含包自持 surveys 文案）+ PrimeVue + ui 主题面。
+// 包内组件测试的最小挂载：i18n（含包自持 surveys 文案）+ ui confirm/notify + ui 主题面。
 // 宿主注入的 host 能力（transport/notify/navigate/renderMarkdown）由用例按需
 // provide，缺省值用 no-op 实现，断言交互的用例传 spy。
 import { mount } from "@vue/test-utils";
-import type { Component } from "vue";
+import type { App, Component } from "vue";
 import { createI18n, type I18nOptions } from "vue-i18n";
-import PrimeVue from "primevue/config";
 
 import { uiMessages, vTooltip } from "@mango-write/ui";
+import { provideConfirm } from "@mango-write/ui/lib/confirm";
+import { provideNotify } from "@mango-write/ui/lib/notify";
 
 import { surveysMessages } from "./locale/index.js";
 import {
@@ -64,13 +65,25 @@ export function mountSurveysComponent(
   } as unknown as I18nOptions);
   const userGlobal = (options.global as Record<string, unknown>) ?? {};
   const userPlugins = (userGlobal.plugins as unknown[]) ?? [];
+  const rawStubs = userGlobal.stubs as Record<string, unknown> | unknown[] | undefined;
+  const normalizedStubs =
+    rawStubs && !Array.isArray(rawStubs)
+      ? {
+          ...rawStubs,
+          ...(rawStubs.Dialog && !rawStubs.MwDialog ? { MwDialog: rawStubs.Dialog } : {}),
+          ...(rawStubs.Popover && !rawStubs.MwPopover ? { MwPopover: rawStubs.Popover } : {}),
+          ...(rawStubs.Select && !rawStubs.MwSelect ? { MwSelect: rawStubs.Select } : {}),
+          ...(rawStubs.Menu && !rawStubs.MwMenu ? { MwMenu: rawStubs.Menu } : {}),
+          ...(rawStubs.DataTable && !rawStubs.MwDataTable ? { MwDataTable: rawStubs.DataTable } : {}),
+        }
+      : rawStubs;
   return mount(component, {
     ...options,
     global: {
       ...userGlobal,
+      ...(normalizedStubs !== undefined ? { stubs: normalizedStubs as never } : {}),
       directives: {
-        // v-tooltip（PrimeVue TooltipDirective 的 ui 封装）：宿主 app 全局注册，
-        // 测试挂载默认补齐，组件模板里的 v-tooltip 才不告警。
+        // v-tooltip：宿主 app 全局注册，测试挂载默认补齐，组件模板里的 v-tooltip 才不告警。
         tooltip: vTooltip,
         ...((userGlobal.directives as Record<string, unknown>) ?? {}),
       },
@@ -78,7 +91,18 @@ export function mountSurveysComponent(
         ...((userGlobal.provide as Record<string, unknown>) ?? {}),
         [SurveysHostKey as symbol]: host,
       },
-      plugins: ([[PrimeVue], i18n, ...userPlugins] as never[]).flat() as never,
+      plugins: (
+        [
+          {
+            install(app: App) {
+              provideConfirm(app);
+              provideNotify(app);
+            },
+          },
+          i18n,
+          ...userPlugins,
+        ] as never[]
+      ).flat() as never,
     },
   });
 }

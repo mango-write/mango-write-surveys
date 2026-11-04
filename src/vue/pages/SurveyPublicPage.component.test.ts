@@ -104,7 +104,7 @@ describe("public survey browser lifecycle", () => {
   });
   it("requires consent and valid answers, then persists the confirmed receipt", async () => {
     const w = await render();
-    await w.find('input[type="checkbox"]').setValue(true);
+    await w.find('[role="checkbox"]').trigger("click");
     await w
       .findAll("button")
       .find((b) => b.text() === "开始填写")!
@@ -159,7 +159,7 @@ describe("public survey browser lifecycle", () => {
   });
   it("finished sessions reopen to the receipt with a clear re-entry exit (shared-computer scenario)", async () => {
     const w = await render();
-    await w.find('input[type="checkbox"]').setValue(true);
+    await w.find('[role="checkbox"]').trigger("click");
     await w
       .findAll("button")
       .find((b) => b.text() === "开始填写")!
@@ -202,7 +202,7 @@ describe("public survey browser lifecycle", () => {
   it("unchecked consent explains why start is unavailable, and the hint clears once checked", async () => {
     const w = await render();
     expect(w.text()).toContain("勾选同意后才能开始填写。");
-    await w.find('input[type="checkbox"]').setValue(true);
+    await w.find('[role="checkbox"]').trigger("click");
     await flushPromises();
     expect(w.text()).not.toContain("勾选同意后才能开始填写。");
     w.unmount();
@@ -238,7 +238,7 @@ describe("public survey browser lifecycle", () => {
       expiresAt: "2030-01-01T00:00:00.000Z",
     });
     const w = await render();
-    await w.find('input[type="checkbox"]').setValue(true);
+    await w.find('[role="checkbox"]').trigger("click");
     await w
       .findAll("button")
       .find((b) => b.text() === "开始填写")!
@@ -281,7 +281,7 @@ it("persists a typed zero before InputNumber loses focus", async () => {
     expiresAt: "2030-01-01T00:00:00Z",
   });
   const w = await render();
-  await w.find('input[type="checkbox"]').setValue(true);
+  await w.find('[role="checkbox"]').trigger("click");
   await w
     .findAll("button")
     .find((button) => button.text() === "开始填写")!
@@ -338,7 +338,7 @@ it("renders statement bodies as markdown on the answer page", async () => {
     expiresAt: "2030-01-01T00:00:00Z",
   });
   const w = await render();
-  await w.find('input[type="checkbox"]').setValue(true);
+  await w.find('[role="checkbox"]').trigger("click");
   await w
     .findAll("button")
     .find((button) => button.text() === "开始填写")!
@@ -368,7 +368,7 @@ it("renders the published page order instead of the question storage order", asy
     expiresAt: "2030-01-01T00:00:00Z",
   });
   const w = await render();
-  await w.find('input[type="checkbox"]').setValue(true);
+  await w.find('[role="checkbox"]').trigger("click");
   await w
     .findAll("button")
     .find((button) => button.text() === "开始填写")!
@@ -482,7 +482,7 @@ it("requires an explicit fresh start after expiry and clears old local answers o
     new SurveysApiError(409, "session_expired", null),
   );
   const w = await render();
-  await w.find('input[type="checkbox"]').setValue(true);
+  await w.find('[role="checkbox"]').trigger("click");
   await w
     .findAll("button")
     .find((button) => button.text() === "开始填写")!
@@ -557,7 +557,7 @@ it("next-page interception names the first unanswered required question and stay
     expiresAt: "2030-01-01T00:00:00Z",
   });
   const w = await render();
-  await w.find('input[type="checkbox"]').setValue(true);
+  await w.find('[role="checkbox"]').trigger("click");
   await w
     .findAll("button")
     .find((button) => button.text() === "开始填写")!
@@ -621,7 +621,7 @@ it("matrix interception names the unanswered row and marks its row card", async 
     expiresAt: "2030-01-01T00:00:00Z",
   });
   const w = await render();
-  await w.find('input[type="checkbox"]').setValue(true);
+  await w.find('[role="checkbox"]').trigger("click");
   await w
     .findAll("button")
     .find((button) => button.text() === "开始填写")!

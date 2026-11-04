@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import Button from "primevue/button";
+import Button from "@mango-write/ui/components/Button";
 import type { SurveyStageNavigation } from "../workspace-navigation.js";
 
 defineProps<{ model: SurveyStageNavigation }>();

@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import Select from "primevue/select";
-import SelectButton from "primevue/selectbutton";
-import Menu from "primevue/menu";
-import Message from "primevue/message";
+import Button from "@mango-write/ui/components/Button";
+import Select from "@mango-write/ui/components/Select";
+import SelectButton from "@mango-write/ui/components/SelectButton";
+import Menu from "@mango-write/ui/components/Menu";
+import Message from "@mango-write/ui/components/Message";
 import { AsyncSlot } from "@mango-write/ui";
 import type { SurveyDetail } from "../../contracts/index.js";
 import { useSurveysApi } from "../api.js";
@@ -385,7 +385,7 @@ watch(navigation, (value) => {
   .data-context__actions {
     flex: none;
   }
-  .data-context__actions :deep(.p-button) {
+  .data-context__actions :deep(.mw-btn) {
     padding-right: 8px;
     padding-left: 8px;
   }

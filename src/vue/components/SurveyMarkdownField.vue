@@ -9,7 +9,7 @@ import { computed, onBeforeUnmount, ref, watch, type Ref } from "vue";
 import { EditorContent, useEditor, type Editor } from "@tiptap/vue-3";
 
 import StarterKit from "@tiptap/starter-kit";
-import Textarea from "primevue/textarea";
+import Textarea from "@mango-write/ui/components/Textarea";
 import { useSurveysHost } from "../host.js";
 
 const props = defineProps<{

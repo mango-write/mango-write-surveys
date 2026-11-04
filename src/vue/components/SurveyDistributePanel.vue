@@ -4,11 +4,11 @@
 // 进自动保存（与 definition 同一 PATCH、同一乐观锁），这里不另开写路径。
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import InputText from "primevue/inputtext";
-import InputNumber from "primevue/inputnumber";
-import ProgressBar from "primevue/progressbar";
-import Tag from "primevue/tag";
+import Button from "@mango-write/ui/components/Button";
+import InputText from "@mango-write/ui/components/InputText";
+import InputNumber from "@mango-write/ui/components/InputNumber";
+import ProgressBar from "@mango-write/ui/components/ProgressBar";
+import Tag from "@mango-write/ui/components/Tag";
 
 import type { SurveyStatus } from "../../contracts/index.js";
 

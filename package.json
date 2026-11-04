@@ -50,7 +50,6 @@
     "@tiptap/starter-kit": "^3.29.2",
     "@tiptap/vue-3": "^3.29.2",
     "lucide-vue-next": "^1.0.0",
-    "primevue": "^4.2.5",
     "vue": "^3.5.34",
     "vue-i18n": "^11.4.7",
     "vue-router": "^4.4.5"
@@ -65,7 +64,6 @@
     "@vue/test-utils": "^2.4.11",
     "happy-dom": "^20.11.1",
     "lucide-vue-next": "^1.0.0",
-    "primevue": "^4.2.5",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
     "vite": "^8.3.5",
     "vitest": "^4.1.12",

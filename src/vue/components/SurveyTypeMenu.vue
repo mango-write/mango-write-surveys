@@ -2,7 +2,7 @@
 // 题型菜单（issue #217）：分组展示，图标 + 名称 + 一句话说明。加题入口与卡片
 // 换题型共用；单份 markup，手机档 CSS 换形为底部弹层（不 v-if 双实例），弹层
 // 加高可滚动（15 种题型一屏放不下）。
-// 浮层由宿主容器自绘（isolation 内 1–99 层），不与 PrimeVue 浮层抢 z-index。
+// 浮层由宿主容器自绘（isolation 内 1–99 层），不与全局浮层抢 z-index。
 // 悬挂菜单是误触根源：打开期间监听全局 pointerdown（锚点外）/Esc/滚动（捕获，
 // 画布内滚动也算）即关；手机档底部弹层带 scrim，点 scrim 关闭。
 import { nextTick, onBeforeUnmount, ref, watch } from "vue";
@@ -131,10 +131,13 @@ function onMenuKeydown(event: KeyboardEvent) {
 }
 
 // 点外关闭的区域是整个 .menu-anchor（含触发按钮）：按钮上的 pointerdown 交给
-// 宿主的 toggle，不在这里抢先关闭。PrimeVue 浮层（确认弹窗等）里的 pointerdown
+// 宿主的 toggle，不在这里抢先关闭。确认弹窗等浮层里的 pointerdown
 // 不参与关闭判定：弹窗盖在菜单上方，关掉弹窗应回到原菜单。
 function onDocPointerDown(event: PointerEvent) {
-  if (event.target instanceof Element && event.target.closest(".p-dialog-mask,.p-overlay-mask"))
+  if (
+    event.target instanceof Element &&
+    event.target.closest(".mw-confirm-overlay,.mw-confirm,.mw-dialog__overlay,.mw-dialog")
+  )
     return;
   const region = rootRef.value?.closest(".menu-anchor") ?? rootRef.value;
   if (region && !region.contains(event.target as Node)) emit("close");

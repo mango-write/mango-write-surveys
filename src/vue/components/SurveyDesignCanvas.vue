@@ -8,14 +8,14 @@
 // sessionStorage（按 surveyId 隔离）：切回原题型即恢复，破坏性切换先经确认。
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useConfirm } from "primevue/useconfirm";
-import Button from "primevue/button";
-import Checkbox from "primevue/checkbox";
-import InputNumber from "primevue/inputnumber";
-import InputText from "primevue/inputtext";
-import Message from "primevue/message";
-import Select from "primevue/select";
-import Textarea from "primevue/textarea";
+import { useConfirm } from "@mango-write/ui/lib/confirm";
+import Button from "@mango-write/ui/components/Button";
+import Checkbox from "@mango-write/ui/components/Checkbox";
+import InputNumber from "@mango-write/ui/components/InputNumber";
+import InputText from "@mango-write/ui/components/InputText";
+import Message from "@mango-write/ui/components/Message";
+import Select from "@mango-write/ui/components/Select";
+import Textarea from "@mango-write/ui/components/Textarea";
 import {
   AlertTriangle,
   Ellipsis,
@@ -237,13 +237,16 @@ function pageTitlePlaceholder(index: number) {
 }
 
 // 页「⋯」菜单同样不许悬挂：打开期间监听 Esc 与锚点外 pointerdown（菜单内含
-// Select 下拉，滚动是其正常交互，不做滚动关闭）。PrimeVue 浮层（确认弹窗等）
+// Select 下拉，滚动是其正常交互，不做滚动关闭）。确认弹窗等浮层
 // 里的 pointerdown 不关菜单：弹窗盖在菜单上，关了弹窗应回到原菜单。
-function insidePrimeOverlay(target: EventTarget | null): boolean {
-  return !!(target instanceof Element && target.closest(".p-dialog-mask,.p-overlay-mask"));
+function insideModalOverlay(target: EventTarget | null): boolean {
+  return !!(
+    target instanceof Element &&
+    target.closest(".mw-confirm-overlay,.mw-confirm,.mw-dialog__overlay,.mw-dialog")
+  );
 }
 function onPageMenuPointerDown(event: PointerEvent) {
-  if (insidePrimeOverlay(event.target)) return;
+  if (insideModalOverlay(event.target)) return;
   const anchor = document.querySelector(
     `[data-page-menu-anchor="${CSS.escape(pageMenuFor.value)}"]`,
   );
@@ -959,7 +962,7 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
   top: 16px;
   right: 20px;
 }
-.canvas-title.p-textarea {
+.canvas-title.mw-textarea {
   padding-inline: 0;
   border-color: transparent;
   background: transparent;
@@ -968,7 +971,7 @@ defineExpose({ locateIssue, locateQuestion, locateCover });
   font-weight: 600;
   line-height: 1.4;
 }
-.canvas-title.p-textarea:focus {
+.canvas-title.mw-textarea:focus {
   border-color: var(--color-brand-400);
 }
 .head-field {

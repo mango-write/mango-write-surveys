@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
-import { useConfirm } from "primevue/useconfirm";
-import Button from "primevue/button";
+import { useConfirm } from "@mango-write/ui/lib/confirm";
+import Button from "@mango-write/ui/components/Button";
 import { Pause, Play, Square } from "lucide-vue-next";
 
 import type { SurveyStatus } from "../../contracts/index.js";
@@ -130,6 +130,6 @@ function confirmClose() {
     grid-template-columns: 40px minmax(0, 1fr);
     gap: 12px;
   }
-  .management-row > .p-button { grid-column: 2; justify-self: start; }
+  .management-row > .mw-btn { grid-column: 2; justify-self: start; }
 }
 </style>

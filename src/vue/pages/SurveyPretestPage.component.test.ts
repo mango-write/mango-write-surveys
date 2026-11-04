@@ -22,7 +22,7 @@ describe("独立试填页面", () => {
     expect(wrapper.text()).toContain("自愿作答");
     const start = wrapper.findAll("button").find((button) => button.text() === "开始填写")!;
     expect(start.attributes("disabled")).toBeDefined();
-    await wrapper.find('input[type="checkbox"]').setValue(true);
+    await wrapper.find('[role="checkbox"]').trigger("click");
     await start.trigger("click");
     await wrapper.findAll("button").find((button) => button.text() === "提交答卷")!.trigger("click");
     expect(request).toHaveBeenCalledTimes(1);
@@ -53,7 +53,7 @@ describe("独立试填页面", () => {
     const revokeUrl = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
     const wrapper = mountSurveysComponent(SurveyPretestPage, { props: { token } }, createTestHost({ transport: { request: request as never } }));
     await flushPromises();
-    await wrapper.find('input[type="checkbox"]').setValue(true);
+    await wrapper.find('[role="checkbox"]').trigger("click");
     await wrapper.findAll("button").find((button) => button.text() === "开始填写")!.trigger("click");
     await flushPromises();
     expect(wrapper.text()).toContain("部分选项图片加载失败");

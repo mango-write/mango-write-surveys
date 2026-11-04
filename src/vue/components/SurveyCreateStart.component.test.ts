@@ -122,7 +122,7 @@ describe("SurveyCreateStart（issue #224 M3）", () => {
         .findAll("button")
         .find((b) => b.text() === t("surveys.createStart.submit"))!;
     await submit().trigger("click");
-    expect(submit().classes()).toContain("p-button-loading");
+    expect(submit().classes()).toContain("mw-btn--loading");
     await submit().trigger("click");
     expect(sendPrompt).toHaveBeenCalledTimes(1);
 

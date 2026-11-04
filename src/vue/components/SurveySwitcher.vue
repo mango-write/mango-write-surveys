@@ -8,10 +8,10 @@
 // api 返回里时只显示工作台标题，不虚构状态/计数；选中后立即收起面板。
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import InputText from "primevue/inputtext";
-import Message from "primevue/message";
-import Popover from "primevue/popover";
+import Button from "@mango-write/ui/components/Button";
+import InputText from "@mango-write/ui/components/InputText";
+import Message from "@mango-write/ui/components/Message";
+import Popover from "@mango-write/ui/components/Popover";
 import type { SurveySummary } from "../../contracts/index.js";
 import { useSurveysApi } from "../api.js";
 import { useSurveysHost } from "../host.js";
@@ -133,9 +133,9 @@ function select(id: string) {
 .switcher-current { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .switcher-caret { font-size: 12px; color: var(--color-text-tertiary); }
 .switcher-panel { display: flex; flex-direction: column; gap: .5rem; width: 17rem; max-width: calc(100vw - 2.5rem); }
-.switcher-panel :deep(.p-inputtext) { font-size: .85rem; padding-block: .35rem; }
+.switcher-panel :deep(.mw-input-text) { font-size: .85rem; padding-block: .35rem; }
 .switcher-links { display: flex; flex-direction: column; }
-.switcher-links > :deep(.p-button) { flex: none; min-height: 44px; justify-content: flex-start; padding: .5rem .6rem; text-align: start; white-space: normal; }
+.switcher-links > :deep(.mw-btn) { flex: none; min-height: 44px; justify-content: flex-start; padding: .5rem .6rem; text-align: start; white-space: normal; }
 .switcher-item { display: flex; flex-direction: column; gap: .25rem; min-width: 0; }
 .switcher-title { overflow-wrap: anywhere; line-height: 1.5; }
 .switcher-meta { color: var(--color-text-tertiary); font-size: 12px; }

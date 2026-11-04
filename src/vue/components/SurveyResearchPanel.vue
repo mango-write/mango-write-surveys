@@ -6,12 +6,12 @@
 // 的 research 子面；权威契约见 ../contracts（SurveyResearchRecipe 判别联合）。
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import InputNumber from "primevue/inputnumber";
-import Message from "primevue/message";
-import MultiSelect from "primevue/multiselect";
-import Select from "primevue/select";
-import Tag from "primevue/tag";
+import Button from "@mango-write/ui/components/Button";
+import InputNumber from "@mango-write/ui/components/InputNumber";
+import Message from "@mango-write/ui/components/Message";
+import MultiSelect from "@mango-write/ui/components/MultiSelect";
+import Select from "@mango-write/ui/components/Select";
+import Tag from "@mango-write/ui/components/Tag";
 import type {
   ResearchDatasetDetail,
   ResearchDatasetSummary,
@@ -863,7 +863,7 @@ const activeDataset = computed(
   overflow-x: auto;
   padding-bottom: 4px;
 }
-.run-history :deep(.p-button) {
+.run-history :deep(.mw-btn) {
   flex: none;
   text-align: left;
 }

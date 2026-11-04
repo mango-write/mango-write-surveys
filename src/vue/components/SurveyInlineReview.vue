@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import Message from "primevue/message";
-import Popover from "primevue/popover";
+import Button from "@mango-write/ui/components/Button";
+import Message from "@mango-write/ui/components/Message";
+import Popover from "@mango-write/ui/components/Popover";
 import { Sparkles } from "lucide-vue-next";
 import { buildSurveyReviewPlan, type SurveyDefinition } from "../../core/index.js";
 import type { SurveyReviewFinding, ToolSurveyDelivery } from "../../contracts/index.js";
@@ -139,7 +139,7 @@ const heading = computed(() => {
 <style scoped>
 .inline-review { display: inline-flex; }
 .inline-review__trigger { white-space: nowrap; }
-:global(.survey-inline-review-popover.p-popover-flipped) { margin-top: 0; }
+:global(.survey-inline-review-popover) { max-width: none; }
 .review-popover {
   display: grid;
   gap: 16px;

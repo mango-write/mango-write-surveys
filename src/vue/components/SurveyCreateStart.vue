@@ -6,9 +6,9 @@
 // 保证；发送失败提示并保留输入；不伪造生成进度——pending 文案只陈述「已发送」。
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import Message from "primevue/message";
-import Textarea from "primevue/textarea";
+import Button from "@mango-write/ui/components/Button";
+import Message from "@mango-write/ui/components/Message";
+import Textarea from "@mango-write/ui/components/Textarea";
 import { Sparkles } from "lucide-vue-next";
 import { useSurveysHost } from "../host.js";
 
@@ -172,13 +172,13 @@ async function submit() {
 .is-hero .create-start-alt {
   justify-content: center;
 }
-.create-start-alt :deep(.p-button) {
+.create-start-alt :deep(.mw-btn) {
   font-size: 0.8rem;
   font-weight: 400;
   padding: 0.1rem 0.35rem;
   min-height: 0;
 }
-.create-start-alt :deep(.p-button .p-button-label) {
+.create-start-alt :deep(.mw-btn .mw-btn__label) {
   color: var(--color-text-secondary);
 }
 .create-start-note {

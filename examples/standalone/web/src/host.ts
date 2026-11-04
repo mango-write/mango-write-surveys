@@ -1,13 +1,13 @@
 // 独立站 SurveysWebHost 实现：把包前端契约接到本站基建——transport = 同源
 // fetch（管理面带会话 cookie；公开面 omit + no-store，与主站口径一致）；
-// notify = PrimeVue Toast（实例由 App.vue 在 setup 内取，经工厂注入）；
+// notify = @mango-write/ui NotifyStore（实例由 App.vue 在 setup 内取，经工厂注入）；
 // navigate = 本站路由三元映射；markdown = 本站唯一安全渲染口径（html:false、
 // linkify 关、http(s)/mailto 白名单），不与主站共享代码。layoutPrefs 走包内
 // 本地回落；copilot = 最小 AI 建卷桥（App 级浮动面板，交付帧经包页注册的
 // 处理链）；htmlToMarkdown / beacon 不注入（说明字段按包契约降级 textarea
 // 直编，pagehide 兜底落盘禁用）。
 import MarkdownIt from "markdown-it";
-import type { ToastServiceMethods } from "primevue/toastservice";
+import type { NotifyStore } from "@mango-write/ui/lib/notify";
 import type { Router } from "vue-router";
 
 import {
@@ -51,7 +51,7 @@ function navigate(router: Router, to: SurveysRouteTarget): void {
 
 export function createWebHost(
   router: Router,
-  toast: ToastServiceMethods,
+  toast: NotifyStore,
   copilot?: SurveysCopilotHost,
 ): SurveysWebHost {
   const notify: SurveysNotify = {

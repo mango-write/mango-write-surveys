@@ -5,12 +5,12 @@
 // 「重新预览」都从头开始（consent / 第一页，答案清空）。
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import Checkbox from "primevue/checkbox";
-import Dialog from "primevue/dialog";
-import Message from "primevue/message";
-import ProgressBar from "primevue/progressbar";
-import SelectButton from "primevue/selectbutton";
+import Button from "@mango-write/ui/components/Button";
+import Checkbox from "@mango-write/ui/components/Checkbox";
+import Dialog from "@mango-write/ui/components/Dialog";
+import Message from "@mango-write/ui/components/Message";
+import ProgressBar from "@mango-write/ui/components/ProgressBar";
+import SelectButton from "@mango-write/ui/components/SelectButton";
 import { Monitor, Smartphone } from "lucide-vue-next";
 
 import type {

@@ -4,10 +4,10 @@
 // 行为（viewport-fit=cover、touch-action、44px 命中区）原样保留。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import Checkbox from "primevue/checkbox";
-import Message from "primevue/message";
-import ProgressBar from "primevue/progressbar";
+import Button from "@mango-write/ui/components/Button";
+import Checkbox from "@mango-write/ui/components/Checkbox";
+import Message from "@mango-write/ui/components/Message";
+import ProgressBar from "@mango-write/ui/components/ProgressBar";
 import type {
   PublicSurvey,
   SurveySession,
@@ -534,7 +534,7 @@ watch(slug, () => {
 .public-paper :deep(.scale-choice),
 .public-paper :deep(.consent),
 .public-paper :deep(.nps-cell),
-.public-paper :deep(.p-datepicker) {
+.public-paper :deep(.mw-datepicker) {
   min-height: 2.75rem;
   -webkit-tap-highlight-color: transparent;
 }
@@ -558,17 +558,16 @@ watch(slug, () => {
   inset: -8px;
 }
 /* 输入控件在作答面统一 44px 高（多行文本不设，保持 auto-resize）。 */
-.public-paper :deep(input.p-inputtext),
-.public-paper :deep(.p-select) {
+.public-paper :deep(input.mw-input-text),
+.public-paper :deep(.mw-select) {
   min-height: 2.75rem;
 }
-/* 主操作按钮：PrimeVue 标准 40px，作答页提到 44px（Message 关闭钮不是
-   .p-button，不受影响）。 */
-.public-paper :deep(.p-button) {
+/* 主操作按钮：作答页提到 44px（Message 关闭钮不是 .mw-btn，不受影响）。 */
+.public-paper :deep(.mw-btn) {
   min-height: 2.75rem;
 }
 /* 禁用主按钮明确置灰：主题的禁用态在部分主题色下看不出不可点（走查 P1-9）。 */
-.public-paper :deep(.p-button:disabled) {
+.public-paper :deep(.mw-btn:disabled) {
   opacity: 0.45;
   cursor: not-allowed;
 }

@@ -59,12 +59,12 @@ describe("SurveyQuestionField 新题型", () => {
       ],
     };
     const wrapper = await renderField(question);
-    expect(wrapper.find(".p-select").exists()).toBe(true);
-    await wrapper.find(".p-select").trigger("click");
+    expect(wrapper.find(".mw-select").exists()).toBe(true);
+    await wrapper.find(".mw-select").trigger("click");
     await flushPromises();
-    // Select 的浮层挂在 body（PrimeVue 默认 appendTo），且选项在 mousedown 选中。
-    const option = [...document.querySelectorAll(".p-select-option")].at(1)!;
-    option.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    // Select 的浮层挂在 body（默认 appendTo），选项在 click 时选中。
+    const option = [...document.querySelectorAll(".mw-select__option")].at(1)!;
+    option.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     await flushPromises();
     expect(lastEmit(wrapper)).toBe("b");
   });
@@ -204,18 +204,18 @@ describe("SurveyQuestionField 新题型", () => {
     };
     const wrapper = await renderField(question);
     const checkboxAt = (index: number) =>
-      wrapper.findAll(".mx-cell")[index]!.find("input");
-    await checkboxAt(0).setValue(true);
+      wrapper.findAll(".mx-cell")[index]!.find('[role="checkbox"]');
+    await checkboxAt(0).trigger("click");
     expect(lastEmit(wrapper)).toEqual({ r1: ["m1"] });
     // 控件从 props 读已选集合：把上一发 emit 值回灌 props 再继续点。
     await wrapper.setProps({ modelValue: { r1: ["m1"] } });
-    await checkboxAt(1).setValue(true);
+    await checkboxAt(1).trigger("click");
     expect(lastEmit(wrapper)).toEqual({ r1: ["m1", "m2"] });
     await wrapper.setProps({ modelValue: { r1: ["m1", "m2"] } });
-    await checkboxAt(0).setValue(false);
+    await checkboxAt(0).trigger("click");
     expect(lastEmit(wrapper)).toEqual({ r1: ["m2"] });
     await wrapper.setProps({ modelValue: { r1: ["m2"] } });
-    await checkboxAt(1).setValue(false);
+    await checkboxAt(1).trigger("click");
     expect(lastEmit(wrapper)).toBeUndefined();
   });
 
@@ -231,7 +231,7 @@ describe("SurveyQuestionField 新题型", () => {
       ],
     };
     const wrapper = await renderField(question);
-    const inputs = wrapper.findAll("input.p-inputtext");
+    const inputs = wrapper.findAll("input.mw-input-text");
     expect(inputs).toHaveLength(2);
     await inputs[0]!.setValue("a@x.test");
     expect(lastEmit(wrapper)).toEqual({ i1: "a@x.test" });
@@ -255,7 +255,7 @@ describe("SurveyQuestionField 新题型", () => {
       ],
     };
     const wrapper = await renderField(question);
-    const inputs = wrapper.findAll("input.p-inputtext");
+    const inputs = wrapper.findAll("input.mw-input-text");
     expect(inputs).toHaveLength(2);
     await inputs[0]!.setValue("快");
     expect(lastEmit(wrapper)).toEqual({ r1: "快" });

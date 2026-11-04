@@ -4,10 +4,10 @@
 import { defineComponent, h } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises } from "@vue/test-utils";
-import InputNumber from "primevue/inputnumber";
-import Select from "primevue/select";
-import SelectButton from "primevue/selectbutton";
-import Textarea from "primevue/textarea";
+import InputNumber from "@mango-write/ui/components/InputNumber";
+import Select from "@mango-write/ui/components/Select";
+import SelectButton from "@mango-write/ui/components/SelectButton";
+import Textarea from "@mango-write/ui/components/Textarea";
 
 import { mountSurveysComponent, createTestHost } from "../test-mount.js";
 import { makeDefinition } from "../../core/test-fixtures.js";

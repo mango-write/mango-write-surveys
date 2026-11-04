@@ -1,16 +1,16 @@
 <script setup lang="ts">
-// 应用壳：挂 PrimeVue 的 Toast / ConfirmDialog 单例，并在 setup 内装配
-// SurveysWebHost（useToast 需要组件上下文）后 provide 给包页面。AI 建卷
+// 应用壳：挂 @mango-write/ui 的 ToastHost / ConfirmHost 单例，并在 setup 内装配
+// SurveysWebHost（useNotify 需要组件上下文）后 provide 给包页面。AI 建卷
 // 面板挂 App 级（列表页与工作台都用得到），交付帧经 copilot 桥交给当前页。
 import { provide, watch } from "vue";
 import { surveysBrandLogo } from "../../../../src/brand.js";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
+import Button from "@mango-write/ui/components/Button";
+import ConfirmHost from "@mango-write/ui/components/ConfirmHost";
+import ToastHost from "@mango-write/ui/components/ToastHost";
+import { useNotify } from "@mango-write/ui/lib/notify";
 import { useThemePreference } from "@mango-write/ui";
 import { useRoute } from "vue-router";
-import Toast from "primevue/toast";
-import ConfirmDialog from "primevue/confirmdialog";
-import { useToast } from "primevue/usetoast";
 import {
   SurveysHostKey,
   SurveysResearchPanelKey,
@@ -23,7 +23,7 @@ import StandaloneAiPanel from "./ai/StandaloneAiPanel.vue";
 import { createStandaloneCopilot } from "./ai/standalone-copilot";
 
 const copilot = createStandaloneCopilot();
-provide(SurveysHostKey, createWebHost(router, useToast(), copilot.host));
+provide(SurveysHostKey, createWebHost(router, useNotify(), copilot.host));
 // 研究分析面板（数据来源 → 研究计划 → 固定运行结果）由本站注入工作台数据段。
 provide(SurveysResearchPanelKey, SurveyResearchPanel);
 const route = useRoute();
@@ -38,8 +38,8 @@ const sourceUrl = import.meta.env.VITE_SURVEYS_SOURCE_URL ||
 </script>
 
 <template>
-  <Toast position="top-center" />
-  <ConfirmDialog />
+  <ToastHost position="top-center" />
+  <ConfirmHost />
   <div class="standalone-app">
     <div class="standalone-preferences">
       <Button :icon="resolved === 'dark' ? 'pi pi-sun' : 'pi pi-moon'" :aria-label="t(resolved === 'dark' ? 'standalone.light' : 'standalone.dark')" :title="t(resolved === 'dark' ? 'standalone.light' : 'standalone.dark')" text severity="secondary" @click="setTheme(resolved === 'dark' ? 'light' : 'dark')" />

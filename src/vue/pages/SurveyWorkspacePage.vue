@@ -11,11 +11,11 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationNormalized } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { useConfirm } from "primevue/useconfirm";
-import Button from "primevue/button";
-import Dialog from "primevue/dialog";
-import Message from "primevue/message";
-import Tag from "primevue/tag";
+import { useConfirm } from "@mango-write/ui/lib/confirm";
+import Button from "@mango-write/ui/components/Button";
+import Dialog from "@mango-write/ui/components/Dialog";
+import Message from "@mango-write/ui/components/Message";
+import Tag from "@mango-write/ui/components/Tag";
 import { Eye, History, List, Redo2, Undo2 } from "lucide-vue-next";
 import type {
   SurveyDetail,
@@ -1447,7 +1447,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
   display: inline-flex;
 }
 /* 禁用按钮吞指针事件会让 tooltip 失效：跳过按钮，让外层 span 收到 hover。 */
-.history-action :deep(.p-button:disabled) {
+.history-action :deep(.mw-btn:disabled) {
   pointer-events: none;
 }
 .save-state {
@@ -1482,7 +1482,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
     gap: 0.25rem;
   }
   .topbar-actions > * { flex-shrink: 0; }
-  .topbar-actions :deep(.p-button-label) { white-space: nowrap; }
+  .topbar-actions :deep(.mw-btn__label) { white-space: nowrap; }
   .stage-body {
     padding: var(--layout-card-padding);
   }

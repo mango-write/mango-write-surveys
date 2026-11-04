@@ -401,10 +401,10 @@ it("falls back to manual role selection when no structured models exist", async 
   // 无结构化模型：一键仍在（信度/EFA 可跑），但提示缺调节中介并给出角色选择。
   expect(wrapper.text()).toContain("当前计划未包含调节中介");
   expect(wrapper.text()).toContain("手动指定调节中介变量");
-  // aria-label 由 PrimeVue 落到内部元素而非组件根，按模板顺序取角色下拉。
+  // 按模板顺序取角色下拉。
   const roleSelects = wrapper
     .find(".manual-plan .role-grid")
-    .findAllComponents({ name: "Select" });
+    .findAllComponents({ name: "MwSelect" });
   expect(roleSelects).toHaveLength(4);
   const roles = ["construct:c1", "variable:q2", "construct:c2", "variable:q3"];
   for (const [index, value] of roles.entries()) {
@@ -432,14 +432,14 @@ describe("dataset import dialog", () => {
   async function fillSourceFields(
     wrapper: Awaited<ReturnType<typeof render>>["wrapper"],
   ) {
-    // PrimeVue Select 内部也渲染 .p-inputtext，只取不在下拉里的字段输入框；
+    // 只取不在下拉里的字段输入框；
     // 顺序 = 数据集名称、标题、引用、链接、许可、说明（名称已有文件名缺省）。
     const fields = wrapper
       .findAll(
-        ".dialog-stub input.p-inputtext, .dialog-stub textarea.p-textarea",
+        ".dialog-stub input.mw-input-text, .dialog-stub textarea.mw-textarea",
       )
       .filter(
-        (input) => !(input.element as HTMLInputElement).closest(".p-select"),
+        (input) => !(input.element as HTMLInputElement).closest(".mw-select"),
       );
     expect(fields).toHaveLength(6);
     const values = [

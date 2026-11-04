@@ -4,15 +4,14 @@
 // 只挡明显失败（超 5MiB、表头问题），保证用户提交前就知道哪里对不上。
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "primevue/button";
-import Dialog from "primevue/dialog";
-import FileUpload, { type FileUploadSelectEvent } from "primevue/fileupload";
-import InputText from "primevue/inputtext";
-import Textarea from "primevue/textarea";
-import Message from "primevue/message";
-import Select from "primevue/select";
-import SelectButton from "primevue/selectbutton";
-import Tag from "primevue/tag";
+import Button from "@mango-write/ui/components/Button";
+import Dialog from "@mango-write/ui/components/Dialog";
+import InputText from "@mango-write/ui/components/InputText";
+import Textarea from "@mango-write/ui/components/Textarea";
+import Message from "@mango-write/ui/components/Message";
+import Select from "@mango-write/ui/components/Select";
+import SelectButton from "@mango-write/ui/components/SelectButton";
+import Tag from "@mango-write/ui/components/Tag";
 import type { SurveyCodebook } from "../../contracts/index.js";
 import { useSurveysApi } from "../api.js";
 import { useSurveysNotify } from "../notify.js";
@@ -41,6 +40,7 @@ const api = useSurveysApi();
 const notify = useSurveysNotify();
 
 const csvText = ref<string | null>(null);
+const fileInputRef = ref<HTMLInputElement | null>(null);
 const parsed = ref<ParsedCsvHead | null>(null);
 const fileName = ref("");
 const parseError = ref<ResearchCsvError["code"] | "too_large" | null>(null);
@@ -73,6 +73,7 @@ function reset() {
   sourceLicense.value = "";
   sourceNote.value = "";
   mapping.value = new Map();
+  if (fileInputRef.value) fileInputRef.value.value = "";
 }
 
 watch(
@@ -82,8 +83,9 @@ watch(
   },
 );
 
-async function readFile(event: FileUploadSelectEvent) {
-  const file = event.files[0];
+async function onFileChange(event: Event) {
+  const input = event.target as HTMLInputElement | null;
+  const file = input?.files?.[0];
   parseError.value = null;
   parsed.value = null;
   csvText.value = null;
@@ -211,17 +213,21 @@ async function submit() {
     <div class="import-body">
       <label
         >{{ t("surveys.research.pickFile") }}
-        <FileUpload
-          mode="basic"
-          class="import-file"
+        <input
+          ref="fileInputRef"
+          type="file"
           accept=".csv,text/csv"
-          :max-file-size="RESEARCH_CSV_MAX_BYTES"
-          :choose-label="t('surveys.research.pickFile')"
-          choose-icon="pi pi-upload"
-          :custom-upload="true"
-          :auto="false"
+          class="tw:hidden"
           :disabled="!canWrite"
-          @select="readFile"
+          @change="onFileChange"
+        />
+        <Button
+          class="import-file"
+          :label="t('surveys.research.pickFile')"
+          icon="pi pi-upload"
+          fluid
+          :disabled="!canWrite"
+          @click="fileInputRef?.click()"
         />
         <small v-if="parsed" class="tw:text-muted">{{
           t("surveys.research.fileParsed", {
@@ -356,8 +362,7 @@ label {
   width: 100%;
   min-width: 0;
 }
-.import-file,
-.import-file :deep(.p-fileupload-choose-button) {
+.import-file {
   width: 100%;
 }
 .import-error {
