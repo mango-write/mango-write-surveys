@@ -14,7 +14,7 @@ import InputIcon from "@mango-write/ui/components/InputIcon";
 import InputText from "@mango-write/ui/components/InputText";
 import Tag from "@mango-write/ui/components/Tag";
 import Message from "@mango-write/ui/components/Message";
-import { ClipboardList } from "lucide-vue-next";
+import { ChevronRight, ClipboardList, Search } from "lucide-vue-next";
 import type { SurveyStatus, SurveySummary } from "../../contracts/index.js";
 
 import { AsyncSlot, PageHeader as SurveyPageHeader } from "@mango-write/ui";
@@ -167,7 +167,7 @@ onMounted(load);
       />
       <div class="mw-toolbar tw:flex tw:flex-wrap tw:items-center tw:gap-1.5">
         <IconField class="tw:w-60">
-          <InputIcon class="pi pi-search" />
+          <InputIcon><Search /></InputIcon>
           <InputText
             v-model="search"
             :placeholder="t('surveys.searchPlaceholder')"
@@ -249,7 +249,7 @@ onMounted(load);
               :value="t(`surveys.status.${item.status}`)"
               :severity="severity(item.status)"
             />
-            <i class="pi pi-angle-right tw:text-faint" />
+            <ChevronRight class="tw:text-faint" />
           </button>
         </div>
       </AsyncSlot>

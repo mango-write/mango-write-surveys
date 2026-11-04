@@ -4,6 +4,7 @@
 // 进自动保存（与 definition 同一 PATCH、同一乐观锁），这里不另开写路径。
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { Copy } from "lucide-vue-next";
 import Button from "@mango-write/ui/components/Button";
 import InputText from "@mango-write/ui/components/InputText";
 import InputNumber from "@mango-write/ui/components/InputNumber";
@@ -82,7 +83,7 @@ function onLimitChange(value: number | null) {
         </header>
         <div class="share-row">
           <InputText :model-value="shareUrl" readonly fluid :aria-label="t('surveys.publicLink')" />
-          <Button :label="t('surveys.copyLink')" icon="pi pi-copy" @click="copyLink" />
+          <Button :label="t('surveys.copyLink')" :icon="Copy" @click="copyLink" />
         </div>
       </div>
       <img v-if="qr" class="share-qr" :src="qr" :alt="t('surveys.qr')" />

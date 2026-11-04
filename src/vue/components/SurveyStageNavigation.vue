@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { Plus } from "lucide-vue-next";
 import Button from "@mango-write/ui/components/Button";
 import type { SurveyStageNavigation } from "../workspace-navigation.js";
 
@@ -12,7 +13,7 @@ const emit = defineEmits<{ select: [id: string] }>();
       <strong>{{ model.title }}</strong>
       <Button
         v-if="model.actionId && model.actionLabel"
-        icon="pi pi-plus"
+        :icon="Plus"
         text
         :aria-label="model.actionLabel"
         v-tooltip.bottom="model.actionLabel"

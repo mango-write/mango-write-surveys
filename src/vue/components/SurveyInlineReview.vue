@@ -4,7 +4,7 @@ import { useI18n } from "vue-i18n";
 import Button from "@mango-write/ui/components/Button";
 import Message from "@mango-write/ui/components/Message";
 import Popover from "@mango-write/ui/components/Popover";
-import { Sparkles } from "lucide-vue-next";
+import { Check, Sparkles } from "lucide-vue-next";
 import { buildSurveyReviewPlan, type SurveyDefinition } from "../../core/index.js";
 import type { SurveyReviewFinding, ToolSurveyDelivery } from "../../contracts/index.js";
 import { SOURCES, STANDARDS_CHECKS } from "../../standards/index.js";
@@ -127,7 +127,7 @@ const heading = computed(() => {
             <Button :label="t('surveys.inlineReview.dismiss')" text severity="secondary"
               :disabled="applying" @click="emit('dismiss', finding.id)" />
             <Button v-if="finding.suggestedOps?.length" :label="t('surveys.inlineReview.apply')"
-              icon="pi pi-check" severity="warn" :loading="applying"
+              :icon="Check" severity="warn" :loading="applying"
               :disabled="disabled || stale || applying || plans.get(finding.id)?.status !== 'ready'"
               @click="emit('apply', finding.id)" />
           </div>

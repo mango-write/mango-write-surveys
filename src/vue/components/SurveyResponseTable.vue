@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { FilterX, Search, Undo2 } from "lucide-vue-next";
 import Button from "@mango-write/ui/components/Button";
 import Column from "@mango-write/ui/components/Column";
 import DataTable from "@mango-write/ui/components/DataTable";
@@ -98,7 +99,7 @@ defineExpose({ locateResponse });
   <section class="response-table-view">
     <div class="response-toolbar mw-toolbar">
       <label class="response-search">
-        <i class="pi pi-search" aria-hidden="true" />
+        <Search aria-hidden="true" />
         <InputText
           v-model="search"
           :placeholder="t('surveys.searchData')"
@@ -111,7 +112,7 @@ defineExpose({ locateResponse });
       <span>{{ t("surveys.selectedCount", { n: selectedRows.length }) }}</span>
       <Button
         :label="t('surveys.excludeSelected', { n: selectedRows.length })"
-        icon="pi pi-filter-slash"
+        :icon="FilterX"
         severity="secondary"
         :disabled="!canWrite"
         @click="excludeOpen = true"
@@ -164,7 +165,7 @@ defineExpose({ locateResponse });
       <div v-for="item in exclusions" :key="item.responseId" class="exclusion-row">
         <span>{{ item.reason }}</span>
         <Button
-          icon="pi pi-undo"
+          :icon="Undo2"
           text
           :aria-label="t('surveys.restoreSample')"
           @click="restore(item.responseId)"

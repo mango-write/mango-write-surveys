@@ -4,6 +4,7 @@
 // 只挡明显失败（超 5MiB、表头问题），保证用户提交前就知道哪里对不上。
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { Upload } from "lucide-vue-next";
 import Button from "@mango-write/ui/components/Button";
 import Dialog from "@mango-write/ui/components/Dialog";
 import InputText from "@mango-write/ui/components/InputText";
@@ -224,7 +225,7 @@ async function submit() {
         <Button
           class="import-file"
           :label="t('surveys.research.pickFile')"
-          icon="pi pi-upload"
+          :icon="Upload"
           fluid
           :disabled="!canWrite"
           @click="fileInputRef?.click()"

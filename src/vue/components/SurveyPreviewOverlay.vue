@@ -11,7 +11,7 @@ import Dialog from "@mango-write/ui/components/Dialog";
 import Message from "@mango-write/ui/components/Message";
 import ProgressBar from "@mango-write/ui/components/ProgressBar";
 import SelectButton from "@mango-write/ui/components/SelectButton";
-import { Monitor, Smartphone } from "lucide-vue-next";
+import { Monitor, RefreshCw, Smartphone } from "lucide-vue-next";
 
 import type {
   SurveyAnswers,
@@ -184,7 +184,7 @@ function previous() {
           severity="secondary"
           variant="text"
           :label="t('surveys.previewRestart')"
-          icon="pi pi-refresh"
+          :icon="RefreshCw"
           :aria-label="t('surveys.previewRestart')"
           @click="reset"
         />

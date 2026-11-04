@@ -6,6 +6,7 @@
 // 的 research 子面；权威契约见 ../contracts（SurveyResearchRecipe 判别联合）。
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { Play, Upload } from "lucide-vue-next";
 import Button from "@mango-write/ui/components/Button";
 import InputNumber from "@mango-write/ui/components/InputNumber";
 import Message from "@mango-write/ui/components/Message";
@@ -427,7 +428,7 @@ const activeDataset = computed(
                 </div>
                 <Button
                   :label="t('surveys.research.importDataset')"
-                  icon="pi pi-upload"
+                  :icon="Upload"
                   severity="secondary"
                   :disabled="!context.canWrite"
                   @click="importOpen = true"
@@ -516,7 +517,7 @@ const activeDataset = computed(
                 </p>
                 <Button
                   :label="t('surveys.research.importDataset')"
-                  icon="pi pi-upload"
+                  :icon="Upload"
                   :disabled="!context.canWrite"
                   @click="importOpen = true"
                 />
@@ -550,7 +551,7 @@ const activeDataset = computed(
                 <div v-if="plan.length > 0" class="plan-run">
                   <Button
                     :label="t('surveys.research.runPlan')"
-                    icon="pi pi-play"
+                    :icon="Play"
                     :disabled="planBusy || !context.canWrite"
                     :loading="planBusy"
                     @click="runPlan"
@@ -662,7 +663,7 @@ const activeDataset = computed(
                   <div class="plan-run">
                     <Button
                       :label="t('surveys.research.runMediation')"
-                      icon="pi pi-play"
+                      :icon="Play"
                       severity="secondary"
                       :disabled="
                         planBusy || manualRolesIncomplete || !context.canWrite

@@ -11,7 +11,7 @@ import InputText from "@mango-write/ui/components/InputText";
 import Select from "@mango-write/ui/components/Select";
 import SelectButton from "@mango-write/ui/components/SelectButton";
 import Textarea from "@mango-write/ui/components/Textarea";
-import { Trash2 } from "lucide-vue-next";
+import { Check, Copy, Trash2 } from "lucide-vue-next";
 import {
   PRETEST_ASPECTS,
   buildCognitiveInterviewGuide,
@@ -267,7 +267,7 @@ function save() {
         <p class="pretest-hint">{{ guideIntro }}</p>
         <Button
           :label="t('surveys.pretestPanel.copyGuide')"
-          icon="pi pi-copy"
+          :icon="Copy"
           severity="secondary"
           :disabled="!askableQuestions.length || busy"
           @click="copyGuide"
@@ -323,7 +323,7 @@ function save() {
         <small v-if="manualOpen && !canSave && !busy" class="save-hint">{{ t("surveys.pretestPanel.saveHint") }}</small>
         <div class="footer-buttons">
           <Button :label="t('surveys.cancel')" text severity="secondary" :disabled="busy" @click="requestClose" />
-          <Button v-show="manualOpen" class="pretest-save" :label="t('surveys.pretestPanel.save')" icon="pi pi-check" :disabled="!canSave" @click="save" />
+          <Button v-show="manualOpen" class="pretest-save" :label="t('surveys.pretestPanel.save')" :icon="Check" :disabled="!canSave" @click="save" />
         </div>
       </div>
     </template>

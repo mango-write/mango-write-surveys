@@ -8,6 +8,7 @@
 // api 返回里时只显示工作台标题，不虚构状态/计数；选中后立即收起面板。
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { ArrowLeft, ChevronDown } from "lucide-vue-next";
 import Button from "@mango-write/ui/components/Button";
 import InputText from "@mango-write/ui/components/InputText";
 import Message from "@mango-write/ui/components/Message";
@@ -83,13 +84,13 @@ function select(id: string) {
 </script>
 <template>
   <span class="survey-switcher">
-    <Button icon="pi pi-arrow-left" text severity="secondary" class="switcher-back"
+    <Button :icon="ArrowLeft" text severity="secondary" class="switcher-back"
       :aria-label="t('surveys.switcher.back')" @click="host.navigate({ name: 'surveys.list' })" />
     <h1 class="switcher-heading">
       <button type="button" class="switcher-trigger" :title="currentTitle" :aria-expanded="opened"
         :aria-haspopup="true" @click="toggle">
         <span class="switcher-current">{{ currentTitle }}</span>
-        <i class="pi pi-chevron-down switcher-caret" aria-hidden="true"></i>
+        <ChevronDown class="switcher-caret" aria-hidden="true" />
       </button>
     </h1>
     <Popover ref="panel" :aria-label="t('surveys.switcher.open')" @show="opened = true; void load();" @hide="opened = false">

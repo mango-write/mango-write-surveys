@@ -77,7 +77,7 @@ async function submit() {
     <div class="create-start-actions">
       <Button
         :label="t('surveys.createStart.submit')"
-        icon="pi pi-sparkles"
+        :icon="Sparkles"
         :loading="busy"
         :disabled="!idea.trim() || !hasCopilot || alreadySent"
         @click="submit"

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { BookOpen, Download, RefreshCw } from "lucide-vue-next";
 import Button from "@mango-write/ui/components/Button";
 import Select from "@mango-write/ui/components/Select";
 import SelectButton from "@mango-write/ui/components/SelectButton";
@@ -66,12 +67,12 @@ const dataViewOptions = computed(() => [
 const exportItems = computed(() => [
   {
     label: t("surveys.exportData"),
-    icon: "pi pi-download",
+    icon: Download,
     command: () => void exportCsv(),
   },
   {
     label: t("surveys.codebook"),
-    icon: "pi pi-book",
+    icon: BookOpen,
     command: () => void exportCodebook(),
   },
 ]);
@@ -254,7 +255,7 @@ watch(navigation, (value) => {
       </div>
       <div class="data-context__actions">
         <Button
-          icon="pi pi-refresh"
+          :icon="RefreshCw"
           text
           :aria-label="t('surveys.refresh')"
           v-tooltip.bottom="t('surveys.refresh')"
@@ -265,7 +266,7 @@ watch(navigation, (value) => {
         <Button
           v-if="mode === 'data'"
           :label="t('surveys.export')"
-          icon="pi pi-download"
+          :icon="Download"
           severity="secondary"
           :disabled="!revisionId"
           @click="exportMenu?.toggle($event)"

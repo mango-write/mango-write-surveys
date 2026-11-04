@@ -16,7 +16,7 @@ import Button from "@mango-write/ui/components/Button";
 import Dialog from "@mango-write/ui/components/Dialog";
 import Message from "@mango-write/ui/components/Message";
 import Tag from "@mango-write/ui/components/Tag";
-import { Eye, History, List, Redo2, Undo2 } from "lucide-vue-next";
+import { Check, ChevronUp, Eye, History, List, Menu as MenuIcon, Redo2, Send, TriangleAlert, Undo2 } from "lucide-vue-next";
 import type {
   SurveyDetail,
   SurveyPretestItemFeedback,
@@ -983,7 +983,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
   <div class="survey-workbench">
     <SurveyWorkbenchShell :tabs="leftTabs">
       <template #left="{ activeTab }">
-        <Button v-if="!host.workbenchShell" class="mobile-survey-toggle" :label="t('surveys.leftPanel')" :icon="mobileNavigationOpen ? 'pi pi-chevron-up' : 'pi pi-bars'" :aria-expanded="mobileNavigationOpen" text severity="secondary" @click="mobileNavigationOpen = !mobileNavigationOpen" />
+        <Button v-if="!host.workbenchShell" class="mobile-survey-toggle" :label="t('surveys.leftPanel')" :icon="mobileNavigationOpen ? ChevronUp : MenuIcon" :aria-expanded="mobileNavigationOpen" text severity="secondary" @click="mobileNavigationOpen = !mobileNavigationOpen" />
         <div class="survey-left-content" :class="{ 'is-open': !!host.workbenchShell || mobileNavigationOpen, 'is-standalone': !host.workbenchShell }">
         <SurveyStageNavigation
           v-if="stageNavigation && (stage === 'data' || stage === 'analysis')"
@@ -1114,7 +1114,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
               />
               <Button
                 :label="t('surveys.publish')"
-                icon="pi pi-send"
+                :icon="Send"
                 :loading="busy"
                 :disabled="
                   !survey.canWrite ||
@@ -1315,12 +1315,12 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
         <div class="publish-reminders" role="list">
           <p class="publish-reminders-title">{{ t("surveys.publishCheck.remindersTitle") }}</p>
           <div v-if="!publishDesignUsable" role="listitem" class="publish-reminder">
-            <i class="pi pi-exclamation-triangle" aria-hidden="true" />
+            <TriangleAlert aria-hidden="true" />
             <span>{{ t("surveys.publishCheck.noDesign") }}</span>
           </div>
           <template v-else>
             <div v-if="publishDesign?.pendingDecisions.length" role="listitem" class="publish-reminder">
-              <i class="pi pi-exclamation-triangle" aria-hidden="true" />
+              <TriangleAlert aria-hidden="true" />
               <span>
                 {{ t("surveys.publishCheck.pendingDecisions", { n: publishDesign.pendingDecisions.length }) }}
                 <span class="publish-reminder-detail">
@@ -1329,18 +1329,18 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
               </span>
             </div>
             <div v-else role="listitem" class="publish-reminder is-ok">
-              <i class="pi pi-check" aria-hidden="true" />
+              <Check aria-hidden="true" />
               <span>{{ t("surveys.publishCheck.noPending") }}</span>
             </div>
           </template>
           <div role="listitem" class="publish-reminder">
-            <i class="pi pi-exclamation-triangle" aria-hidden="true" />
+            <TriangleAlert aria-hidden="true" />
             <span>
               {{ publishPretestLine }}
             </span>
           </div>
           <div v-if="pendingReview" role="listitem" class="publish-reminder" :class="{ 'is-stale': pendingReview.stale }">
-            <i class="pi pi-exclamation-triangle" aria-hidden="true" />
+            <TriangleAlert aria-hidden="true" />
             <span>
               {{ pendingReview.stale
                 ? t("surveys.publishCheck.staleReview", { n: pendingReview.findings })
@@ -1381,7 +1381,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
         />
         <Button
           :label="t('surveys.publish')"
-          icon="pi pi-send"
+          :icon="Send"
           :loading="busy"
           @click="confirmPublish"
         />

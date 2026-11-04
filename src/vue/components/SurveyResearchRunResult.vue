@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
+import { Download, ExternalLink } from "lucide-vue-next";
 import Button from "@mango-write/ui/components/Button";
 import DataTable from "@mango-write/ui/components/DataTable";
 import Column from "@mango-write/ui/components/Column";
@@ -141,18 +142,18 @@ function tableRows(table: SurveyResearchTable) {
       <div class="result-actions">
         <Button
           :label="t('surveys.research.openReport')"
-          icon="pi pi-external-link"
+          :icon="ExternalLink"
           severity="secondary"
           @click="openReport"
         /><Button
           :label="t('surveys.research.downloadJson')"
-          icon="pi pi-download"
+          :icon="Download"
           text
           severity="secondary"
           @click="download('result.json')"
         /><Button
           :label="t('surveys.research.downloadCsv')"
-          icon="pi pi-download"
+          :icon="Download"
           text
           severity="secondary"
           @click="download('result.csv')"

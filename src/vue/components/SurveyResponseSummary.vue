@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
+import { BarChart3 } from "lucide-vue-next";
 import Button from "@mango-write/ui/components/Button";
 import type { SurveyDataset } from "../lib/dataset.js";
 import {
@@ -109,7 +110,7 @@ function truncate(text: string): string {
 <template>
   <section class="response-summary">
     <div v-if="!dataset.responseCount" class="summary-empty tw:text-muted">
-      <i class="pi pi-chart-bar" aria-hidden="true" />
+      <BarChart3 aria-hidden="true" />
       <p>{{ t("surveys.summary.empty") }}</p>
       <p class="tw:text-sm">{{ t("surveys.summary.emptyHint") }}</p>
     </div>
