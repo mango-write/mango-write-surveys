@@ -35,15 +35,16 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#63c126ddcdf62ea5e37e8717ec1981ce1fc965c2",
-    "dompurify": "^3.4.17",
     "@echarts-x/custom-word-cloud": "1.0.1",
+    "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#a2f503c2e17df705e6c3cdf06cfca5f5d3637f07",
+    "dompurify": "^3.4.17",
     "echarts": "^6.1.0",
     "hono": "^4.13.13",
     "jsdom": "^30.0.1",
     "ml-matrix": "6.15.1",
     "postgres": "^3.4.5",
     "qrcode": "^1.5.4",
+    "reka-ui": "^2.11.0",
     "zod": "^4.4.3"
   },
   "peerDependencies": {
@@ -74,7 +75,7 @@
   },
   "pnpm": {
     "overrides": {
-      "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#63c126ddcdf62ea5e37e8717ec1981ce1fc965c2"
+      "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#a2f503c2e17df705e6c3cdf06cfca5f5d3637f07"
     }
   },
   "sideEffects": false,
