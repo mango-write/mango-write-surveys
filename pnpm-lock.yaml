@@ -5,7 +5,7 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
-  '@mango-write/ui': git+https://github.com/mango-write/mango-write-ui.git#a2f503c2e17df705e6c3cdf06cfca5f5d3637f07
+  '@mango-write/ui': git+https://github.com/mango-write/mango-write-ui.git#832688b8bfdf210aa02ff3b714ab3e2130c3a6d5
 
 importers:
 
@@ -15,8 +15,8 @@ importers:
         specifier: 1.0.1
         version: 1.0.1(echarts@6.1.0)
       '@mango-write/ui':
-        specifier: git+https://github.com/mango-write/mango-write-ui.git#a2f503c2e17df705e6c3cdf06cfca5f5d3637f07
-        version: https://codeload.github.com/mango-write/mango-write-ui/tar.gz/a2f503c2e17df705e6c3cdf06cfca5f5d3637f07(lucide-vue-next@1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue-i18n@11.4.16(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue@3.5.44(@typescript/typescript6@6.0.2))
+        specifier: git+https://github.com/mango-write/mango-write-ui.git#832688b8bfdf210aa02ff3b714ab3e2130c3a6d5
+        version: https://codeload.github.com/mango-write/mango-write-ui/tar.gz/832688b8bfdf210aa02ff3b714ab3e2130c3a6d5(lucide-vue-next@1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue-i18n@11.4.16(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue@3.5.44(@typescript/typescript6@6.0.2))
       dompurify:
         specifier: ^3.4.17
         version: 3.4.17
@@ -103,8 +103,8 @@ importers:
         specifier: workspace:*
         version: link:../..
       '@mango-write/ui':
-        specifier: git+https://github.com/mango-write/mango-write-ui.git#a2f503c2e17df705e6c3cdf06cfca5f5d3637f07
-        version: https://codeload.github.com/mango-write/mango-write-ui/tar.gz/a2f503c2e17df705e6c3cdf06cfca5f5d3637f07(lucide-vue-next@1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue-i18n@11.4.16(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue@3.5.44(@typescript/typescript6@6.0.2))
+        specifier: git+https://github.com/mango-write/mango-write-ui.git#832688b8bfdf210aa02ff3b714ab3e2130c3a6d5
+        version: https://codeload.github.com/mango-write/mango-write-ui/tar.gz/832688b8bfdf210aa02ff3b714ab3e2130c3a6d5(lucide-vue-next@1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue-i18n@11.4.16(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue@3.5.44(@typescript/typescript6@6.0.2))
       dotenv:
         specifier: ^17.2.0
         version: 17.4.2
@@ -456,8 +456,8 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@mango-write/ui@https://codeload.github.com/mango-write/mango-write-ui/tar.gz/a2f503c2e17df705e6c3cdf06cfca5f5d3637f07':
-    resolution: {tarball: https://codeload.github.com/mango-write/mango-write-ui/tar.gz/a2f503c2e17df705e6c3cdf06cfca5f5d3637f07}
+  '@mango-write/ui@https://codeload.github.com/mango-write/mango-write-ui/tar.gz/832688b8bfdf210aa02ff3b714ab3e2130c3a6d5':
+    resolution: {tarball: https://codeload.github.com/mango-write/mango-write-ui/tar.gz/832688b8bfdf210aa02ff3b714ab3e2130c3a6d5}
     version: 0.1.0
     peerDependencies:
       lucide-vue-next: ^1.0.0
@@ -2033,7 +2033,7 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
-  '@mango-write/ui@https://codeload.github.com/mango-write/mango-write-ui/tar.gz/a2f503c2e17df705e6c3cdf06cfca5f5d3637f07(lucide-vue-next@1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue-i18n@11.4.16(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue@3.5.44(@typescript/typescript6@6.0.2))':
+  '@mango-write/ui@https://codeload.github.com/mango-write/mango-write-ui/tar.gz/832688b8bfdf210aa02ff3b714ab3e2130c3a6d5(lucide-vue-next@1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue-i18n@11.4.16(vue@3.5.44(@typescript/typescript6@6.0.2)))(vue@3.5.44(@typescript/typescript6@6.0.2))':
     dependencies:
       lucide-vue-next: 1.0.0(vue@3.5.44(@typescript/typescript6@6.0.2))
       reka-ui: 2.11.0(vue@3.5.44(@typescript/typescript6@6.0.2))

@@ -5,6 +5,7 @@
 // 提交失败保留 operationId：网络重试复用同一操作身份，服务端不会重复建卷。
 import { useI18n } from "vue-i18n";
 import Button from "@mango-write/ui/components/Button";
+import { X } from "lucide-vue-next";
 import InputText from "@mango-write/ui/components/InputText";
 import Textarea from "@mango-write/ui/components/Textarea";
 
@@ -80,7 +81,7 @@ async function generate() {
     <header class="ai-panel__head">
       <span>{{ t("standalone.aiTitle") }}</span>
       <Button
-        icon="pi pi-times"
+        :icon="X"
         text
         severity="secondary"
         :aria-label="t('standalone.close')"

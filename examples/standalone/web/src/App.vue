@@ -6,6 +6,7 @@ import { provide, watch } from "vue";
 import { surveysBrandLogo } from "../../../../src/brand.js";
 import { useI18n } from "vue-i18n";
 import Button from "@mango-write/ui/components/Button";
+import { Moon, Sun } from "lucide-vue-next";
 import ConfirmHost from "@mango-write/ui/components/ConfirmHost";
 import ToastHost from "@mango-write/ui/components/ToastHost";
 import { useNotify } from "@mango-write/ui/lib/notify";
@@ -42,7 +43,7 @@ const sourceUrl = import.meta.env.VITE_SURVEYS_SOURCE_URL ||
   <ConfirmHost />
   <div class="standalone-app">
     <div class="standalone-preferences">
-      <Button :icon="resolved === 'dark' ? 'pi pi-sun' : 'pi pi-moon'" :aria-label="t(resolved === 'dark' ? 'standalone.light' : 'standalone.dark')" :title="t(resolved === 'dark' ? 'standalone.light' : 'standalone.dark')" text severity="secondary" @click="setTheme(resolved === 'dark' ? 'light' : 'dark')" />
+      <Button :icon="resolved === 'dark' ? Sun : Moon" :aria-label="t(resolved === 'dark' ? 'standalone.light' : 'standalone.dark')" :title="t(resolved === 'dark' ? 'standalone.light' : 'standalone.dark')" text severity="secondary" @click="setTheme(resolved === 'dark' ? 'light' : 'dark')" />
       <Button :label="locale === 'zh-CN' ? 'EN' : '中文'" :aria-label="t('standalone.language')" text severity="secondary" @click="locale = locale === 'zh-CN' ? 'en-US' : 'zh-CN'" />
     </div>
     <div class="standalone-route"><RouterView /></div>
