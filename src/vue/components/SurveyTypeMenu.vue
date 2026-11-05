@@ -5,8 +5,9 @@
 // 浮层由宿主容器自绘（isolation 内 1–99 层），不与全局浮层抢 z-index。
 // 悬挂菜单是误触根源：打开期间监听全局 pointerdown（锚点外）/Esc/滚动（捕获，
 // 画布内滚动也算）即关；手机档底部弹层带 scrim，点 scrim 关闭。
-import { nextTick, onBeforeUnmount, ref, watch } from "vue";
+import { onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
+import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
 import {
   AlignLeft,
   CalendarDays,
@@ -94,17 +95,6 @@ const GROUPS: Array<{ labelKey: string; items: TypeItem[] }> = [
 
 const rootRef = ref<HTMLElement | null>(null);
 
-// max-height 内部滚动无可视提示（PM 审判）：按 scrollTop 挂上/下渐隐，滚动
-// 到底后撤掉，用户看得出清单还能滚。
-const fadeTop = ref(false);
-const fadeBottom = ref(false);
-function updateFades() {
-  const el = rootRef.value;
-  if (!el) return;
-  fadeTop.value = el.scrollTop > 1;
-  fadeBottom.value = el.scrollTop + el.clientHeight < el.scrollHeight - 1;
-}
-
 // role=menu 的键盘义务：方向键在 menuitem 间移动焦点，Home/End 跳首尾
 // （Enter/Space 是原生按钮行为，不接管）。焦点已在菜单内才响应，不抢焦点。
 function onMenuKeydown(event: KeyboardEvent) {
@@ -126,8 +116,6 @@ function onMenuKeydown(event: KeyboardEvent) {
   else return;
   event.preventDefault();
   items[next]!.focus();
-  // 焦点滚动后更新渐隐。
-  requestAnimationFrame(updateFades);
 }
 
 // 点外关闭的区域是整个 .menu-anchor（含触发按钮）：按钮上的 pointerdown 交给
@@ -168,11 +156,6 @@ watch(
   () => props.open,
   (open) => {
     listen(open);
-    if (open) void nextTick(updateFades);
-    else {
-      fadeTop.value = false;
-      fadeBottom.value = false;
-    }
   },
   { immediate: true },
 );
@@ -185,37 +168,28 @@ onBeforeUnmount(() => listen(false));
       ref="rootRef"
       class="survey-type-menu"
       role="menu"
-      @scroll.passive="updateFades"
       @keydown="onMenuKeydown"
     >
-      <span
-        v-if="fadeTop"
-        class="type-menu-fade type-menu-fade--top"
-        aria-hidden="true"
-      />
-      <span
-        v-if="fadeBottom"
-        class="type-menu-fade type-menu-fade--bottom"
-        aria-hidden="true"
-      />
-      <div v-for="group in GROUPS" :key="group.labelKey" class="type-group">
-        <span class="type-group__label" role="presentation">{{
-          t(group.labelKey)
-        }}</span>
-        <button
-          v-for="item in group.items"
-          :key="item.value"
-          type="button"
-          role="menuitem"
-          class="type-item"
-          @click="emit('select', item.value)"
-        >
-          <component :is="item.icon" :size="16" class="type-icon" />
-          <span class="type-text"
-            ><strong>{{ t(item.key) }}</strong>
-            <small>{{ t(item.hintKey) }}</small
-          ></span>
-        </button>
+      <div v-scroll-fade.sm class="survey-type-menu__scroll">
+        <div v-for="group in GROUPS" :key="group.labelKey" class="type-group">
+          <span class="type-group__label" role="presentation">{{
+            t(group.labelKey)
+          }}</span>
+          <button
+            v-for="item in group.items"
+            :key="item.value"
+            type="button"
+            role="menuitem"
+            class="type-item"
+            @click="emit('select', item.value)"
+          >
+            <component :is="item.icon" :size="16" class="type-icon" />
+            <span class="type-text"
+              ><strong>{{ t(item.key) }}</strong>
+              <small>{{ t(item.hintKey) }}</small
+            ></span>
+          </button>
+        </div>
       </div>
     </div>
   </template>
@@ -231,42 +205,22 @@ onBeforeUnmount(() => listen(false));
   z-index: 20;
   display: flex;
   flex-direction: column;
-  gap: 1px;
   min-width: 250px;
   max-height: min(70vh, 560px);
-  overflow-y: auto;
-  padding: 5px;
   border: 1px solid var(--color-border-subtle);
   border-radius: var(--radius-md, 10px);
   background: var(--color-surface-overlay, var(--color-surface-base));
   box-shadow: var(--shadow-md);
+  overflow: hidden;
 }
-/* 滚动渐隐：钉在菜单可视区上下缘，提示清单还没滚到底（内部滚动的可视提示）。 */
-.type-menu-fade {
-  position: sticky;
-  flex: none;
-  display: block;
-  height: 14px;
-  pointer-events: none;
-  z-index: 1;
-}
-.type-menu-fade--top {
-  top: 0;
-  margin-bottom: -14px;
-  background: linear-gradient(
-    to bottom,
-    var(--color-surface-overlay, var(--color-surface-base)),
-    transparent
-  );
-}
-.type-menu-fade--bottom {
-  bottom: 0;
-  margin-top: -14px;
-  background: linear-gradient(
-    to top,
-    var(--color-surface-overlay, var(--color-surface-base)),
-    transparent
-  );
+.survey-type-menu__scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+  padding: 5px;
 }
 .type-group {
   display: flex;
@@ -343,6 +297,8 @@ onBeforeUnmount(() => listen(false));
     min-width: 0;
     max-height: min(72vh, 620px);
     border-radius: var(--radius-lg, 14px) var(--radius-lg, 14px) 0 0;
+  }
+  .survey-type-menu__scroll {
     padding-bottom: max(5px, env(safe-area-inset-bottom));
   }
 }

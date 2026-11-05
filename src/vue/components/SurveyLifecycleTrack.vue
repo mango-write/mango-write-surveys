@@ -6,6 +6,7 @@
 // 视觉层级：段名是主文字，状态/计数是段内次级小徽标（更小字号、弱色）。
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
+import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
 
 import type { SurveyStatus } from "../../contracts/index.js";
 
@@ -36,72 +37,60 @@ const statusText = computed(() => t(`surveys.status.${props.status}`));
 </script>
 <template>
   <nav class="lifecycle-track" :aria-label="t('surveys.trackLabel')">
-    <template v-for="(segment, index) in segments" :key="segment.id">
-      <span v-if="index > 0" class="track-connector" aria-hidden="true" />
-      <button
-        type="button"
-        class="track-segment"
-        :class="[
-          stage === segment.id && 'track-segment--active',
-          hasRevision === false && segment.id !== 'design' && 'track-segment--locked',
-        ]"
-        :disabled="hasRevision === false && segment.id !== 'design'"
-        :aria-current="stage === segment.id ? 'step' : undefined"
-        v-tooltip.top="
-          hasRevision === false && segment.id !== 'design'
-            ? t('surveys.publishFirst')
-            : null
-        "
-        @click="activate(segment.id)"
-        @keydown.enter.prevent="activate(segment.id)"
-        @keydown.space.prevent="activate(segment.id)"
-      >
-        <span class="segment-label">{{ t(segment.key) }}</span>
-        <span
-          v-if="segment.id === 'design' && dirty"
-          class="segment-badge segment-badge--dirty"
-          v-tooltip.top="t('surveys.dirtyBadge')"
-        >{{ t("surveys.dirtyBadge") }}</span>
-        <span
-          v-else-if="segment.id === 'distribute' && hasRevision"
-          class="segment-badge"
-        >{{ statusText }}</span>
-        <span
-          v-else-if="segment.id === 'data' && hasRevision"
-          class="segment-badge segment-badge--count"
-        >{{ completedCount }}</span>
-      </button>
-    </template>
+    <div v-scroll-fade.sm class="lifecycle-track__scroll">
+      <template v-for="(segment, index) in segments" :key="segment.id">
+        <span v-if="index > 0" class="track-connector" aria-hidden="true" />
+        <button
+          type="button"
+          class="track-segment"
+          :class="[
+            stage === segment.id && 'track-segment--active',
+            hasRevision === false && segment.id !== 'design' && 'track-segment--locked',
+          ]"
+          :disabled="hasRevision === false && segment.id !== 'design'"
+          :aria-current="stage === segment.id ? 'step' : undefined"
+          v-tooltip.top="
+            hasRevision === false && segment.id !== 'design'
+              ? t('surveys.publishFirst')
+              : null
+          "
+          @click="activate(segment.id)"
+          @keydown.enter.prevent="activate(segment.id)"
+          @keydown.space.prevent="activate(segment.id)"
+        >
+          <span class="segment-label">{{ t(segment.key) }}</span>
+          <span
+            v-if="segment.id === 'design' && dirty"
+            class="segment-badge segment-badge--dirty"
+            v-tooltip.top="t('surveys.dirtyBadge')"
+          >{{ t("surveys.dirtyBadge") }}</span>
+          <span
+            v-else-if="segment.id === 'distribute' && hasRevision"
+            class="segment-badge"
+          >{{ statusText }}</span>
+          <span
+            v-else-if="segment.id === 'data' && hasRevision"
+            class="segment-badge segment-badge--count"
+          >{{ completedCount }}</span>
+        </button>
+      </template>
+    </div>
   </nav>
 </template>
 <style scoped>
 .lifecycle-track {
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-pill, 999px);
+  background: var(--color-bg-soft);
+  overflow: hidden;
+}
+.lifecycle-track__scroll {
   display: flex;
   align-items: center;
   gap: 4px;
   min-width: 0;
   overflow-x: auto;
   padding: 2px;
-  border: 1px solid var(--color-border-subtle);
-  border-radius: var(--radius-pill, 999px);
-  background: var(--color-bg-soft);
-}
-@media (max-width: 480px) {
-  /* 390px 下四段溢出为横向滚动：右缘渐隐提示还有可滚动内容（纯 CSS，静态）。 */
-  .lifecycle-track {
-    position: relative;
-  }
-  .lifecycle-track::after {
-    content: "";
-    position: absolute;
-    top: 1px;
-    bottom: 1px;
-    right: 1px;
-    width: 20px;
-    border-radius: 0 var(--radius-pill, 999px) var(--radius-pill, 999px) 0;
-    background: linear-gradient(to right, transparent, var(--color-bg-soft));
-    pointer-events: none;
-  }
 }
 .track-connector {
   flex-shrink: 0;

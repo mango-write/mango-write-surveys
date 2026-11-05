@@ -9,6 +9,7 @@
 // 草稿上重放 ops（与手工编辑同一历史栈，撤销同源），survey_create 帧导航。
 // 导航出口一律 host.navigate；vue-router 只用于读路由参数与离开守卫。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationNormalized } from "vue-router";
 import { useI18n } from "vue-i18n";
 import { useConfirm } from "@mango-write/ui/lib/confirm";
@@ -984,7 +985,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
     <SurveyWorkbenchShell :tabs="leftTabs">
       <template #left="{ activeTab }">
         <Button v-if="!host.workbenchShell" class="mobile-survey-toggle" :label="t('surveys.leftPanel')" :icon="mobileNavigationOpen ? ChevronUp : MenuIcon" :aria-expanded="mobileNavigationOpen" text severity="secondary" @click="mobileNavigationOpen = !mobileNavigationOpen" />
-        <div class="survey-left-content" :class="{ 'is-open': !!host.workbenchShell || mobileNavigationOpen, 'is-standalone': !host.workbenchShell }">
+        <div v-scroll-fade class="survey-left-content" :class="{ 'is-open': !!host.workbenchShell || mobileNavigationOpen, 'is-standalone': !host.workbenchShell }">
         <SurveyStageNavigation
           v-if="stageNavigation && (stage === 'data' || stage === 'analysis')"
           :model="stageNavigation"
@@ -1174,6 +1175,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
             >{{ error }}<Button :label="t('surveys.reload')" text @click="load"
           /></Message>
           <AsyncSlot
+            v-scroll-fade
             class="stage-body"
             :status="
               loading ? 'loading' : error && !survey ? 'error' : 'ready'

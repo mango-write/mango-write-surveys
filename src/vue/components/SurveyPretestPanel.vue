@@ -5,6 +5,7 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import Button from "@mango-write/ui/components/Button";
+import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
 import Dialog from "@mango-write/ui/components/Dialog";
 import InputNumber from "@mango-write/ui/components/InputNumber";
 import InputText from "@mango-write/ui/components/InputText";
@@ -233,14 +234,14 @@ function save() {
           <details v-if="invitation.answerSummary.availableAnswers">
             <summary>{{ t("surveys.pretestPanel.answerSummary") }}</summary>
             <p class="pretest-hint">{{ t("surveys.pretestPanel.answerSummaryHint", { count: invitation.answerSummary.availableAnswers }) }}</p>
-            <ul class="pretest-entry-list">
+            <ul v-scroll-fade.sm class="pretest-entry-list">
               <li v-for="item in invitation.answerSummary.questions" :key="item.questionId" class="pretest-entry">
                 <span>{{ invitation.questions.find((question) => question.id === item.questionId)?.title ?? t("surveys.pretestPanel.previousQuestion") }}</span>
                 <span class="pretest-entry-meta">{{ t("surveys.pretestPanel.answerCounts", { displayed: item.displayed, unanswered: item.unanswered }) }}</span>
               </li>
             </ul>
           </details>
-          <ul class="pretest-entry-list">
+          <ul v-scroll-fade.sm class="pretest-entry-list">
             <li v-for="submission in invitation.submissions.filter((item) => item.feedback.length)" :key="submission.id" class="pretest-entry">
               <div v-for="(feedback, index) in submission.feedback" :key="index" class="pretest-entry-main">
                 <span class="pretest-entry-meta">{{ invitation.questions.find((question) => question.id === feedback.questionId)?.title ?? t("surveys.pretestPanel.previousQuestion") }}</span>

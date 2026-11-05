@@ -12,6 +12,7 @@ import Message from "@mango-write/ui/components/Message";
 import ProgressBar from "@mango-write/ui/components/ProgressBar";
 import SelectButton from "@mango-write/ui/components/SelectButton";
 import { Monitor, RefreshCw, Smartphone } from "lucide-vue-next";
+import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
 
 import type {
   SurveyAnswers,
@@ -191,89 +192,91 @@ function previous() {
       </div>
     </div>
     <div class="preview-stage" :class="`preview-stage--${device}`">
-      <div class="preview-device" :class="{ 'preview-device--phone': device === 'mobile' }">
-        <div v-if="device === 'mobile'" class="preview-device__statusbar" aria-hidden="true">
-          <span class="preview-device__time">9:41</span>
-          <span class="preview-device__notch" />
-          <span class="preview-device__battery" />
-        </div>
-        <div class="preview-paper" :class="{ 'preview-paper--phone': device === 'mobile' }">
-        <template v-if="finished">
-          <Message severity="success" :closable="false">{{ t("surveys.received") }}</Message>
-          <p class="tw:text-muted">{{ t("surveys.receivedHint") }}</p>
-        </template>
-        <template v-else-if="!started">
-          <h1>{{ definition.title }}</h1>
-          <div
-            v-if="definition.description"
-            class="mw-md preview-md"
-            v-html="renderMarkdown(definition.description)"
-          />
-          <div
-            v-if="definition.consent"
-            class="mw-md preview-md"
-            v-html="renderMarkdown(definition.consent)"
-          />
-          <label class="consent-row"
-            ><Checkbox v-model="consent" binary /><span>{{
-              t("surveys.consent")
-            }}</span></label
-          >
-          <Button
-            :label="t('surveys.start')"
-            :disabled="!consent"
-            @click="started = true"
-          />
-        </template>
-        <template v-else>
-          <div class="preview-progress">
-            <span class="tw:text-muted">{{
-              t("surveys.pageProgress", {
-                current: pageIndex + 1,
-                total: pages.length,
-              })
-            }}</span>
-            <ProgressBar
-              :value="pages.length ? ((pageIndex + 1) / pages.length) * 100 : 0"
-              :show-value="false"
-            />
+      <div v-scroll-fade class="preview-stage__scroll">
+        <div class="preview-device" :class="{ 'preview-device--phone': device === 'mobile' }">
+          <div v-if="device === 'mobile'" class="preview-device__statusbar" aria-hidden="true">
+            <span class="preview-device__time">9:41</span>
+            <span class="preview-device__notch" />
+            <span class="preview-device__battery" />
           </div>
-          <h2 v-if="page?.title">{{ page.title }}</h2>
-          <div
-            v-if="page?.description"
-            class="mw-md preview-md"
-            v-html="renderMarkdown(page.description)"
-          />
-          <div class="preview-questions">
-            <SurveyQuestionField
-              v-for="q in questions"
-              :key="q.id"
-              :question="q"
-              :model-value="answers[q.id]"
-              :media-url-base="mediaUrlBase"
-              @update:model-value="updateAnswer(q.id, $event)"
+          <div class="preview-paper" :class="{ 'preview-paper--phone': device === 'mobile' }">
+          <template v-if="finished">
+            <Message severity="success" :closable="false">{{ t("surveys.received") }}</Message>
+            <p class="tw:text-muted">{{ t("surveys.receivedHint") }}</p>
+          </template>
+          <template v-else-if="!started">
+            <h1>{{ definition.title }}</h1>
+            <div
+              v-if="definition.description"
+              class="mw-md preview-md"
+              v-html="renderMarkdown(definition.description)"
             />
+            <div
+              v-if="definition.consent"
+              class="mw-md preview-md"
+              v-html="renderMarkdown(definition.consent)"
+            />
+            <label class="consent-row"
+              ><Checkbox v-model="consent" binary /><span>{{
+                t("surveys.consent")
+              }}</span></label
+            >
+            <Button
+              :label="t('surveys.start')"
+              :disabled="!consent"
+              @click="started = true"
+            />
+          </template>
+          <template v-else>
+            <div class="preview-progress">
+              <span class="tw:text-muted">{{
+                t("surveys.pageProgress", {
+                  current: pageIndex + 1,
+                  total: pages.length,
+                })
+              }}</span>
+              <ProgressBar
+                :value="pages.length ? ((pageIndex + 1) / pages.length) * 100 : 0"
+                :show-value="false"
+              />
+            </div>
+            <h2 v-if="page?.title">{{ page.title }}</h2>
+            <div
+              v-if="page?.description"
+              class="mw-md preview-md"
+              v-html="renderMarkdown(page.description)"
+            />
+            <div class="preview-questions">
+              <SurveyQuestionField
+                v-for="q in questions"
+                :key="q.id"
+                :question="q"
+                :model-value="answers[q.id]"
+                :media-url-base="mediaUrlBase"
+                @update:model-value="updateAnswer(q.id, $event)"
+              />
+            </div>
+            <Message v-if="invalidText" severity="warn" :closable="false">{{ invalidText }}</Message>
+            <div class="preview-actions">
+              <Button
+                v-if="pageIndex > 0"
+                :label="t('surveys.previous')"
+                severity="secondary"
+                @click="previous"
+              />
+              <Button
+                v-if="pageIndex < pages.length - 1"
+                :label="t('surveys.next')"
+                @click="next"
+              />
+              <Button
+                v-else
+                :label="t('surveys.submit')"
+                @click="if (next()) finished = true;"
+              />
+            </div>
+          </template>
           </div>
-          <Message v-if="invalidText" severity="warn" :closable="false">{{ invalidText }}</Message>
-          <div class="preview-actions">
-            <Button
-              v-if="pageIndex > 0"
-              :label="t('surveys.previous')"
-              severity="secondary"
-              @click="previous"
-            />
-            <Button
-              v-if="pageIndex < pages.length - 1"
-              :label="t('surveys.next')"
-              @click="next"
-            />
-            <Button
-              v-else
-              :label="t('surveys.submit')"
-              @click="if (next()) finished = true;"
-            />
-          </div>
-        </template>
         </div>
       </div>
     </div>
@@ -298,11 +301,18 @@ function previous() {
   font-size: 13px;
 }
 .preview-stage {
+  display: flex;
+  flex-direction: column;
+  background: var(--color-bg-soft);
+  border-radius: var(--radius-md, 10px);
+  overflow: hidden;
+}
+.preview-stage__scroll {
+  flex: 1;
+  min-height: 0;
   overflow: auto;
   display: flex;
   justify-content: center;
-  background: var(--color-bg-soft);
-  border-radius: var(--radius-md, 10px);
   padding: 1rem;
 }
 .preview-device {
@@ -403,7 +413,7 @@ function previous() {
   gap: 0.75rem;
 }
 @media (max-width: 767.98px) {
-  .preview-stage {
+  .preview-stage__scroll {
     padding: 0.5rem;
   }
   .preview-paper {

@@ -5,7 +5,7 @@ import { mount } from "@vue/test-utils";
 import type { App, Component } from "vue";
 import { createI18n, type I18nOptions } from "vue-i18n";
 
-import { uiMessages, vTooltip } from "@mango-write/ui";
+import { uiMessages, vScrollFade, vTooltip } from "@mango-write/ui";
 import { provideConfirm } from "@mango-write/ui/lib/confirm";
 import { provideNotify } from "@mango-write/ui/lib/notify";
 
@@ -83,8 +83,9 @@ export function mountSurveysComponent(
       ...userGlobal,
       ...(normalizedStubs !== undefined ? { stubs: normalizedStubs as never } : {}),
       directives: {
-        // v-tooltip：宿主 app 全局注册，测试挂载默认补齐，组件模板里的 v-tooltip 才不告警。
+        // v-tooltip / v-scroll-fade：宿主 app 全局注册，测试挂载默认补齐，组件模板里的指令才不告警。
         tooltip: vTooltip,
+        "scroll-fade": vScrollFade,
         ...((userGlobal.directives as Record<string, unknown>) ?? {}),
       },
       provide: {

@@ -35,7 +35,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#2c162401a572a87b4a37bfdbd2e069b44d0f38bc",
+    "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#3c7c82270536269c960cedaf6709b1775980dae5",
     "dompurify": "^3.4.17",
     "@echarts-x/custom-word-cloud": "1.0.1",
     "echarts": "^6.1.0",
@@ -74,7 +74,7 @@
   },
   "pnpm": {
     "overrides": {
-      "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#2c162401a572a87b4a37bfdbd2e069b44d0f38bc"
+      "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#3c7c82270536269c960cedaf6709b1775980dae5"
     }
   },
   "sideEffects": false,

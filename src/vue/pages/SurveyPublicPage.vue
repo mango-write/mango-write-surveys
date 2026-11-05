@@ -3,6 +3,7 @@
 // （transport 认证/baseUrl、renderMarkdown 安全口径）。移动端触控与 safe-area
 // 行为（viewport-fit=cover、touch-action、44px 命中区）原样保留。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
 import { useI18n } from "vue-i18n";
 import Button from "@mango-write/ui/components/Button";
 import Checkbox from "@mango-write/ui/components/Checkbox";
@@ -313,7 +314,7 @@ watch(slug, () => {
 });
 </script>
 <template>
-  <main class="survey-public tw:bg-canvas">
+  <main v-scroll-fade class="survey-public tw:bg-canvas">
     <div class="public-paper tw:bg-surface tw:text-default">
       <div class="tw:text-muted tw:text-sm">
         MangoWrite · {{ t("surveys.researchSurvey") }}

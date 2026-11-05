@@ -5,6 +5,7 @@
 // 宿主实现了持久化就交给宿主，缺省包内本地单例。
 import { computed, watch } from "vue";
 import type { Component } from "vue";
+import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
 
 import { useSurveysHost, useSurveysLayoutPrefs } from "../host.js";
 
@@ -69,7 +70,7 @@ const leftWidthStyle = computed(() => ({ width: `${prefs.leftRailWidth.value}px`
           <span class="shell-tab__label">{{ tab.label }}</span>
         </button>
       </nav>
-      <div class="shell-left__panel">
+      <div v-scroll-fade class="shell-left__panel">
         <slot name="left" :active-tab="activeTab" />
       </div>
     </aside>

@@ -8,6 +8,7 @@ import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Play, Upload } from "lucide-vue-next";
 import Button from "@mango-write/ui/components/Button";
+import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
 import InputNumber from "@mango-write/ui/components/InputNumber";
 import Message from "@mango-write/ui/components/Message";
 import MultiSelect from "@mango-write/ui/components/MultiSelect";
@@ -354,6 +355,7 @@ const activeDataset = computed(
             </div>
           </header>
           <nav
+            v-scroll-fade.sm
             class="run-history"
             :aria-label="t('surveys.research.runsTitle')"
           >

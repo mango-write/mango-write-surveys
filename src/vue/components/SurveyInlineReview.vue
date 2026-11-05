@@ -5,6 +5,7 @@ import Button from "@mango-write/ui/components/Button";
 import Message from "@mango-write/ui/components/Message";
 import Popover from "@mango-write/ui/components/Popover";
 import { Check, Sparkles } from "lucide-vue-next";
+import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
 import { buildSurveyReviewPlan, type SurveyDefinition } from "../../core/index.js";
 import type { SurveyReviewFinding, ToolSurveyDelivery } from "../../contracts/index.js";
 import { SOURCES, STANDARDS_CHECKS } from "../../standards/index.js";
@@ -82,7 +83,7 @@ const heading = computed(() => {
     </Button>
     <Popover ref="panel" class="survey-inline-review-popover" :aria-label="t('surveys.inlineReview.title')"
       @show="opened = true" @hide="opened = false">
-      <div class="review-popover">
+      <div v-scroll-fade.sm class="review-popover">
         <Message v-if="stale" severity="warn" :closable="false">{{ t("surveys.assistant.stale") }}</Message>
         <article v-for="finding in findings" :key="finding.id" class="review-finding">
           <header class="review-finding__heading">
