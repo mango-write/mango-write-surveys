@@ -45,7 +45,7 @@ defineExpose({ locateVariable });
 .variable-dictionary {
   min-width: 0;
 }
-.variable-dictionary :deep(.p-datatable-table-container) {
+.variable-dictionary :deep(.mw-datatable__table-container) {
   overflow-x: auto;
 }
 code {

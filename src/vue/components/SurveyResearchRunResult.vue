@@ -361,7 +361,7 @@ function tableRows(table: SurveyResearchTable) {
 .result-other .result-table + .result-table {
   margin-top: 16px;
 }
-.run-result :deep(.p-datatable-table-container) {
+.run-result :deep(.mw-datatable__table-container) {
   overflow-x: auto;
 }
 .limitations ul {

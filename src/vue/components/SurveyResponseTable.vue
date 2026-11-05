@@ -263,7 +263,7 @@ defineExpose({ locateResponse });
   display: grid;
   gap: 8px;
 }
-.response-table-view :deep(.p-datatable-table-container) {
+.response-table-view :deep(.mw-datatable__table-container) {
   overflow-x: auto;
 }
 @media (max-width: 767.98px) {
