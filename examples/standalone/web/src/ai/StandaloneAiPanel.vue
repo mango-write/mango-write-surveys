@@ -4,10 +4,10 @@
 // survey_create 交付帧交给当前页面处理（导航进工作区，与主站同一条链）。
 // 提交失败保留 operationId：网络重试复用同一操作身份，服务端不会重复建卷。
 import { useI18n } from "vue-i18n";
-import Button from "@mango-write/ui/components/Button";
+import Button from "@mango-write/ui-vue/components/Button";
 import { X } from "lucide-vue-next";
-import InputText from "@mango-write/ui/components/InputText";
-import Textarea from "@mango-write/ui/components/Textarea";
+import InputText from "@mango-write/ui-vue/components/InputText";
+import Textarea from "@mango-write/ui-vue/components/Textarea";
 
 import type { ToolSurveyDelivery } from "@mango-write/surveys/vue";
 

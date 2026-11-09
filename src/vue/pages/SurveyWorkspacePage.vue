@@ -9,14 +9,14 @@
 // 草稿上重放 ops（与手工编辑同一历史栈，撤销同源），survey_create 帧导航。
 // 导航出口一律 host.navigate；vue-router 只用于读路由参数与离开守卫。
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
+import { vScrollFade } from "@mango-write/ui-vue/lib/scroll-fade";
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationNormalized } from "vue-router";
 import { useI18n } from "vue-i18n";
-import { useConfirm } from "@mango-write/ui/lib/confirm";
-import Button from "@mango-write/ui/components/Button";
-import Dialog from "@mango-write/ui/components/Dialog";
-import Message from "@mango-write/ui/components/Message";
-import Tag from "@mango-write/ui/components/Tag";
+import { useConfirm } from "@mango-write/ui-vue/lib/confirm";
+import Button from "@mango-write/ui-vue/components/Button";
+import Dialog from "@mango-write/ui-vue/components/Dialog";
+import Message from "@mango-write/ui-vue/components/Message";
+import Tag from "@mango-write/ui-vue/components/Tag";
 import { Check, ChevronUp, Eye, History, List, Menu as MenuIcon, Redo2, Send, TriangleAlert, Undo2 } from "lucide-vue-next";
 import type {
   SurveyDetail,
@@ -34,7 +34,7 @@ import {
   validateSurveyDefinition,
 } from "../../core/index.js";
 
-import { AsyncSlot } from "@mango-write/ui";
+import { AsyncSlot } from "@mango-write/ui-vue";
 import SurveyWorkbenchShell, {
   type SurveyShellTab,
 } from "../components/SurveyWorkbenchShell.vue";

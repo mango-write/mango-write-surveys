@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "@mango-write/ui/components/Button";
-import Checkbox from "@mango-write/ui/components/Checkbox";
-import DatePicker from "@mango-write/ui/components/DatePicker";
-import Dialog from "@mango-write/ui/components/Dialog";
-import InputNumber from "@mango-write/ui/components/InputNumber";
-import InputText from "@mango-write/ui/components/InputText";
-import Select from "@mango-write/ui/components/Select";
+import Button from "@mango-write/ui-vue/components/Button";
+import Checkbox from "@mango-write/ui-vue/components/Checkbox";
+import DatePicker from "@mango-write/ui-vue/components/DatePicker";
+import Dialog from "@mango-write/ui-vue/components/Dialog";
+import InputNumber from "@mango-write/ui-vue/components/InputNumber";
+import InputText from "@mango-write/ui-vue/components/InputText";
+import Select from "@mango-write/ui-vue/components/Select";
 
 import type { SurveyCondition, SurveyQuestion } from "../../contracts/index.js";
 

@@ -5,7 +5,7 @@
 // 宿主实现了持久化就交给宿主，缺省包内本地单例。
 import { computed, watch } from "vue";
 import type { Component } from "vue";
-import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
+import { vScrollFade } from "@mango-write/ui-vue/lib/scroll-fade";
 
 import { useSurveysHost, useSurveysLayoutPrefs } from "../host.js";
 

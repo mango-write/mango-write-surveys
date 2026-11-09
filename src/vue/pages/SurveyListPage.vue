@@ -7,17 +7,17 @@
 // 本页不感知 copilot-island 内部。
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "@mango-write/ui/components/Button";
-import Dialog from "@mango-write/ui/components/Dialog";
-import IconField from "@mango-write/ui/components/IconField";
-import InputIcon from "@mango-write/ui/components/InputIcon";
-import InputText from "@mango-write/ui/components/InputText";
-import Tag from "@mango-write/ui/components/Tag";
-import Message from "@mango-write/ui/components/Message";
+import Button from "@mango-write/ui-vue/components/Button";
+import Dialog from "@mango-write/ui-vue/components/Dialog";
+import IconField from "@mango-write/ui-vue/components/IconField";
+import InputIcon from "@mango-write/ui-vue/components/InputIcon";
+import InputText from "@mango-write/ui-vue/components/InputText";
+import Tag from "@mango-write/ui-vue/components/Tag";
+import Message from "@mango-write/ui-vue/components/Message";
 import { ChevronRight, ClipboardList, Search } from "lucide-vue-next";
 import type { SurveyStatus, SurveySummary } from "../../contracts/index.js";
 
-import { AsyncSlot, PageHeader as SurveyPageHeader } from "@mango-write/ui";
+import { AsyncSlot, PageHeader as SurveyPageHeader } from "@mango-write/ui-vue";
 import { useSurveysHost, type SurveysCopilotHandlers } from "../host.js";
 import { useSurveysNotify } from "../notify.js";
 import { useSurveysApi } from "../api.js";

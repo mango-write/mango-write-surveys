@@ -36,7 +36,8 @@
   },
   "dependencies": {
     "@echarts-x/custom-word-cloud": "1.0.1",
-    "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#e326bdf3246beb2d131f34f6a72735b9bacb1a7c",
+    "@mango-write/ui-core": "git+https://github.com/mango-write/mango-write-ui.git#720625ad0a29b9b9444990cbb9512bd4148c31bc&path:packages/core",
+    "@mango-write/ui-vue": "git+https://github.com/mango-write/mango-write-ui.git#720625ad0a29b9b9444990cbb9512bd4148c31bc&path:packages/vue",
     "dompurify": "^3.4.17",
     "echarts": "^6.1.0",
     "hono": "^4.13.13",
@@ -75,7 +76,8 @@
   },
   "pnpm": {
     "overrides": {
-      "@mango-write/ui": "git+https://github.com/mango-write/mango-write-ui.git#e326bdf3246beb2d131f34f6a72735b9bacb1a7c"
+      "@mango-write/ui-core": "git+https://github.com/mango-write/mango-write-ui.git#720625ad0a29b9b9444990cbb9512bd4148c31bc&path:packages/core",
+      "@mango-write/ui-vue": "git+https://github.com/mango-write/mango-write-ui.git#720625ad0a29b9b9444990cbb9512bd4148c31bc&path:packages/vue"
     }
   },
   "sideEffects": false,

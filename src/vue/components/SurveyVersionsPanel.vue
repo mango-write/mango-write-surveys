@@ -4,8 +4,8 @@
 // 显式人工，这里只提供入口，请求与刷新归宿主页。
 import { useI18n } from "vue-i18n";
 import { Trash2 } from "lucide-vue-next";
-import Button from "@mango-write/ui/components/Button";
-import Tag from "@mango-write/ui/components/Tag";
+import Button from "@mango-write/ui-vue/components/Button";
+import Tag from "@mango-write/ui-vue/components/Tag";
 
 import type { SurveyRevisionSummary, SurveyStatus } from "../../contracts/index.js";
 

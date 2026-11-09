@@ -11,7 +11,7 @@ export default defineConfig({
   envDir: fileURLToPath(new URL(".", import.meta.url)),
   plugins: [vue(), tailwindcss()],
   resolve: {
-    // 包页面（@mango-write/surveys、@mango-write/ui）与本 app 必须共享同一个
+    // 包页面（@mango-write/surveys、@mango-write/ui-vue）与本 app 必须共享同一个
     // vue / vue-i18n 运行时实例，provide/inject 与通知上下文才成立。
     dedupe: ["vue", "vue-router", "vue-i18n"],
   },

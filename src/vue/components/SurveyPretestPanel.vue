@@ -4,14 +4,14 @@
 // 自报，文案不宣称「已验证」。
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "@mango-write/ui/components/Button";
-import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
-import Dialog from "@mango-write/ui/components/Dialog";
-import InputNumber from "@mango-write/ui/components/InputNumber";
-import InputText from "@mango-write/ui/components/InputText";
-import Select from "@mango-write/ui/components/Select";
-import SelectButton from "@mango-write/ui/components/SelectButton";
-import Textarea from "@mango-write/ui/components/Textarea";
+import Button from "@mango-write/ui-vue/components/Button";
+import { vScrollFade } from "@mango-write/ui-vue/lib/scroll-fade";
+import Dialog from "@mango-write/ui-vue/components/Dialog";
+import InputNumber from "@mango-write/ui-vue/components/InputNumber";
+import InputText from "@mango-write/ui-vue/components/InputText";
+import Select from "@mango-write/ui-vue/components/Select";
+import SelectButton from "@mango-write/ui-vue/components/SelectButton";
+import Textarea from "@mango-write/ui-vue/components/Textarea";
 import { Check, Copy, Trash2 } from "lucide-vue-next";
 import {
   PRETEST_ASPECTS,

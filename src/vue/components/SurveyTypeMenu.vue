@@ -7,7 +7,7 @@
 // 画布内滚动也算）即关；手机档底部弹层带 scrim，点 scrim 关闭。
 import { onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
+import { vScrollFade } from "@mango-write/ui-vue/lib/scroll-fade";
 import {
   AlignLeft,
   CalendarDays,

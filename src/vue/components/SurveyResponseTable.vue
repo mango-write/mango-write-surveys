@@ -2,12 +2,12 @@
 import { computed, nextTick, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { FilterX, Search, Undo2 } from "lucide-vue-next";
-import Button from "@mango-write/ui/components/Button";
-import Column from "@mango-write/ui/components/Column";
-import DataTable from "@mango-write/ui/components/DataTable";
-import Dialog from "@mango-write/ui/components/Dialog";
-import InputText from "@mango-write/ui/components/InputText";
-import Textarea from "@mango-write/ui/components/Textarea";
+import Button from "@mango-write/ui-vue/components/Button";
+import Column from "@mango-write/ui-vue/components/Column";
+import DataTable from "@mango-write/ui-vue/components/DataTable";
+import Dialog from "@mango-write/ui-vue/components/Dialog";
+import InputText from "@mango-write/ui-vue/components/InputText";
+import Textarea from "@mango-write/ui-vue/components/Textarea";
 import type {
   SurveyDataset,
   SurveyDatasetRow,

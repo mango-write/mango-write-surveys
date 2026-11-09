@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 加题插入带（issue #217）：分隔线 +「+」+ 题型菜单锚点，卡间与页尾共用单份
 // markup。插入位置由画布裁决：toggle/select/dragover/drop 全部上抛事件。
-import Button from "@mango-write/ui/components/Button";
+import Button from "@mango-write/ui-vue/components/Button";
 import { useI18n } from "vue-i18n";
 import { Plus } from "lucide-vue-next";
 

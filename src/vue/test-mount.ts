@@ -5,9 +5,9 @@ import { mount } from "@vue/test-utils";
 import type { App, Component } from "vue";
 import { createI18n, type I18nOptions } from "vue-i18n";
 
-import { uiMessages, vScrollFade, vTooltip } from "@mango-write/ui";
-import { provideConfirm } from "@mango-write/ui/lib/confirm";
-import { provideNotify } from "@mango-write/ui/lib/notify";
+import { uiMessages, vScrollFade, vTooltip } from "@mango-write/ui-vue";
+import { provideConfirm } from "@mango-write/ui-vue/lib/confirm";
+import { provideNotify } from "@mango-write/ui-vue/lib/notify";
 
 import { surveysMessages } from "./locale/index.js";
 import {

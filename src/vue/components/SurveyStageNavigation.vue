@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { Plus } from "lucide-vue-next";
-import Button from "@mango-write/ui/components/Button";
+import Button from "@mango-write/ui-vue/components/Button";
 import type { SurveyStageNavigation } from "../workspace-navigation.js";
 
 defineProps<{ model: SurveyStageNavigation }>();

@@ -1,16 +1,16 @@
 <script setup lang="ts">
-// 应用壳：挂 @mango-write/ui 的 ToastHost / ConfirmHost 单例，并在 setup 内装配
+// 应用壳：挂 @mango-write/ui-vue 的 ToastHost / ConfirmHost 单例，并在 setup 内装配
 // SurveysWebHost（useNotify 需要组件上下文）后 provide 给包页面。AI 建卷
 // 面板挂 App 级（列表页与工作台都用得到），交付帧经 copilot 桥交给当前页。
 import { provide, watch } from "vue";
 import { surveysBrandLogo } from "../../../../src/brand.js";
 import { useI18n } from "vue-i18n";
-import Button from "@mango-write/ui/components/Button";
+import Button from "@mango-write/ui-vue/components/Button";
 import { Moon, Sun } from "lucide-vue-next";
-import ConfirmHost from "@mango-write/ui/components/ConfirmHost";
-import ToastHost from "@mango-write/ui/components/ToastHost";
-import { useNotify } from "@mango-write/ui/lib/notify";
-import { useThemePreference } from "@mango-write/ui";
+import ConfirmHost from "@mango-write/ui-vue/components/ConfirmHost";
+import ToastHost from "@mango-write/ui-vue/components/ToastHost";
+import { useNotify } from "@mango-write/ui-vue/lib/notify";
+import { useThemePreference } from "@mango-write/ui-vue";
 import { useRoute } from "vue-router";
 import {
   SurveysHostKey,

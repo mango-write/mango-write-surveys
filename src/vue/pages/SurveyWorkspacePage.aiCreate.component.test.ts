@@ -29,8 +29,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 // confirm 全 mock：本用例不弹确认，require 只需存在（与主工作区测试同一做法）。
-vi.mock("@mango-write/ui/lib/confirm", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@mango-write/ui/lib/confirm")>();
+vi.mock("@mango-write/ui-vue/lib/confirm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@mango-write/ui-vue/lib/confirm")>();
   return {
     ...actual,
     useConfirm: () => ({ require: () => {} }),

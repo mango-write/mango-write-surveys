@@ -15,7 +15,7 @@
   "dependencies": {
     "@hono/node-server": "^2.1.5",
     "@mango-write/surveys": "workspace:*",
-    "@mango-write/ui": "0.1.0",
+    "@mango-write/ui-vue": "0.1.0",
     "dotenv": "^17.2.0",
     "hono": "^4.13.13",
     "lucide-vue-next": "^1.0.0",

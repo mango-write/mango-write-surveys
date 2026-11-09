@@ -5,9 +5,9 @@ import { useI18n } from "vue-i18n";
 import { ref } from "vue";
 import { surveysBrandLogo } from "../../../../../src/brand.js";
 import { useRoute, useRouter } from "vue-router";
-import Button from "@mango-write/ui/components/Button";
-import InputText from "@mango-write/ui/components/InputText";
-import Message from "@mango-write/ui/components/Message";
+import Button from "@mango-write/ui-vue/components/Button";
+import InputText from "@mango-write/ui-vue/components/InputText";
+import Message from "@mango-write/ui-vue/components/Message";
 
 import { markSignedIn } from "../session";
 

@@ -3,8 +3,8 @@
 // 走既有 create + save 通道建卷进工作台。大纲是题目文字列表，不做完整渲染。
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "@mango-write/ui/components/Button";
-import Dialog from "@mango-write/ui/components/Dialog";
+import Button from "@mango-write/ui-vue/components/Button";
+import Dialog from "@mango-write/ui-vue/components/Dialog";
 import { surveyTemplates, type SurveyTemplate } from "../lib/templates.js";
 
 const props = defineProps<{

@@ -2,12 +2,12 @@
 import { computed, nextTick, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { BookOpen, Download, RefreshCw } from "lucide-vue-next";
-import Button from "@mango-write/ui/components/Button";
-import Select from "@mango-write/ui/components/Select";
-import SelectButton from "@mango-write/ui/components/SelectButton";
-import Menu from "@mango-write/ui/components/Menu";
-import Message from "@mango-write/ui/components/Message";
-import { AsyncSlot } from "@mango-write/ui";
+import Button from "@mango-write/ui-vue/components/Button";
+import Select from "@mango-write/ui-vue/components/Select";
+import SelectButton from "@mango-write/ui-vue/components/SelectButton";
+import Menu from "@mango-write/ui-vue/components/Menu";
+import Message from "@mango-write/ui-vue/components/Message";
+import { AsyncSlot } from "@mango-write/ui-vue";
 import type { SurveyDetail } from "../../contracts/index.js";
 import { useSurveysApi } from "../api.js";
 import type { SurveyDataset, SurveySampleExclusion } from "../lib/dataset.js";

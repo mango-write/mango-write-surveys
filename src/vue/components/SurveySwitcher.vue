@@ -9,10 +9,10 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { ArrowLeft, ChevronDown } from "lucide-vue-next";
-import Button from "@mango-write/ui/components/Button";
-import InputText from "@mango-write/ui/components/InputText";
-import Message from "@mango-write/ui/components/Message";
-import Popover from "@mango-write/ui/components/Popover";
+import Button from "@mango-write/ui-vue/components/Button";
+import InputText from "@mango-write/ui-vue/components/InputText";
+import Message from "@mango-write/ui-vue/components/Message";
+import Popover from "@mango-write/ui-vue/components/Popover";
 import type { SurveySummary } from "../../contracts/index.js";
 import { useSurveysApi } from "../api.js";
 import { useSurveysHost } from "../host.js";

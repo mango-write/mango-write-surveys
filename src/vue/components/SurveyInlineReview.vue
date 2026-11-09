@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "@mango-write/ui/components/Button";
-import Message from "@mango-write/ui/components/Message";
-import Popover from "@mango-write/ui/components/Popover";
+import Button from "@mango-write/ui-vue/components/Button";
+import Message from "@mango-write/ui-vue/components/Message";
+import Popover from "@mango-write/ui-vue/components/Popover";
 import { Check, Sparkles } from "lucide-vue-next";
-import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
+import { vScrollFade } from "@mango-write/ui-vue/lib/scroll-fade";
 import { buildSurveyReviewPlan, type SurveyDefinition } from "../../core/index.js";
 import type { SurveyReviewFinding, ToolSurveyDelivery } from "../../contracts/index.js";
 import { SOURCES, STANDARDS_CHECKS } from "../../standards/index.js";

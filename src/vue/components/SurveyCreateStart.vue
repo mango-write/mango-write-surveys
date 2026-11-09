@@ -6,9 +6,9 @@
 // 保证；发送失败提示并保留输入；不伪造生成进度——pending 文案只陈述「已发送」。
 import { computed, ref } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "@mango-write/ui/components/Button";
-import Message from "@mango-write/ui/components/Message";
-import Textarea from "@mango-write/ui/components/Textarea";
+import Button from "@mango-write/ui-vue/components/Button";
+import Message from "@mango-write/ui-vue/components/Message";
+import Textarea from "@mango-write/ui-vue/components/Textarea";
 import { Sparkles } from "lucide-vue-next";
 import { useSurveysHost } from "../host.js";
 

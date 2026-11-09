@@ -29,7 +29,7 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-      # @mango-write/ui 经 git+https 解析：公开仓直接可克隆；pnpm 安装 git 依赖
+      # @mango-write/ui-vue 经 git+https 解析：公开仓直接可克隆；pnpm 安装 git 依赖
       # 时跑其 prepare 自动产出 dist（publishConfig 在 pack 时生效）。
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck

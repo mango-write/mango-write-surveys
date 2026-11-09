@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import type { SurveyAnswers, SurveyOption, SurveyQuestion } from "../../contracts/index.js";
-import InputText from "@mango-write/ui/components/InputText";
-import Textarea from "@mango-write/ui/components/Textarea";
-import InputNumber from "@mango-write/ui/components/InputNumber";
-import DatePicker from "@mango-write/ui/components/DatePicker";
-import RadioButton from "@mango-write/ui/components/RadioButton";
-import Checkbox from "@mango-write/ui/components/Checkbox";
-import Select from "@mango-write/ui/components/Select";
+import InputText from "@mango-write/ui-vue/components/InputText";
+import Textarea from "@mango-write/ui-vue/components/Textarea";
+import InputNumber from "@mango-write/ui-vue/components/InputNumber";
+import DatePicker from "@mango-write/ui-vue/components/DatePicker";
+import RadioButton from "@mango-write/ui-vue/components/RadioButton";
+import Checkbox from "@mango-write/ui-vue/components/Checkbox";
+import Select from "@mango-write/ui-vue/components/Select";
 import { Image as ImageIcon, Star } from "lucide-vue-next";
 import { useI18n } from "vue-i18n";
 import { useSurveysHost } from "../host.js";

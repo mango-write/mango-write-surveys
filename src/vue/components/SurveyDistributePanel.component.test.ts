@@ -4,8 +4,8 @@ import { createTestHost, mountSurveysComponent } from "../test-mount.js";
 import SurveyDistributePanel from "./SurveyDistributePanel.vue";
 
 const confirmMocks = vi.hoisted(() => ({ require: vi.fn() }));
-vi.mock("@mango-write/ui/lib/confirm", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@mango-write/ui/lib/confirm")>();
+vi.mock("@mango-write/ui-vue/lib/confirm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@mango-write/ui-vue/lib/confirm")>();
   return {
     ...actual,
     useConfirm: () => ({ require: confirmMocks.require }),

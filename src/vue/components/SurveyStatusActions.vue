@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n";
-import { useConfirm } from "@mango-write/ui/lib/confirm";
-import Button from "@mango-write/ui/components/Button";
+import { useConfirm } from "@mango-write/ui-vue/lib/confirm";
+import Button from "@mango-write/ui-vue/components/Button";
 import { Pause, Play, Square } from "lucide-vue-next";
 
 import type { SurveyStatus } from "../../contracts/index.js";

@@ -5,11 +5,11 @@
 // 换题型只上报目标类型：载荷暂存/恢复与破坏性确认由画布统一裁决。
 import { computed, nextTick, ref, watch, type ComponentPublicInstance } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "@mango-write/ui/components/Button";
-import Checkbox from "@mango-write/ui/components/Checkbox";
-import InputText from "@mango-write/ui/components/InputText";
-import RadioButton from "@mango-write/ui/components/RadioButton";
-import Textarea from "@mango-write/ui/components/Textarea";
+import Button from "@mango-write/ui-vue/components/Button";
+import Checkbox from "@mango-write/ui-vue/components/Checkbox";
+import InputText from "@mango-write/ui-vue/components/InputText";
+import RadioButton from "@mango-write/ui-vue/components/RadioButton";
+import Textarea from "@mango-write/ui-vue/components/Textarea";
 import {
   AlignLeft,
   AlertTriangle,

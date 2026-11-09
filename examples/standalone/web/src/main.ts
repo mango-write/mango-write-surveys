@@ -1,11 +1,11 @@
-// 独立站前端装配：createApp + @mango-write/ui（confirm/notify/theme）+ vue-router + vue-i18n。
+// 独立站前端装配：createApp + @mango-write/ui-vue（confirm/notify/theme）+ vue-router + vue-i18n。
 // 页面全部来自 @mango-write/surveys/vue，宿主契约的 provide 在 App.vue 完成。
 import { createApp } from "vue";
 import { createI18n } from "vue-i18n";
 
-import { initTheme, mergeUiMessages, vTooltip } from "@mango-write/ui";
-import { provideConfirm } from "@mango-write/ui/lib/confirm";
-import { provideNotify } from "@mango-write/ui/lib/notify";
+import { initTheme, mergeUiMessages, vTooltip } from "@mango-write/ui-vue";
+import { provideConfirm } from "@mango-write/ui-vue/lib/confirm";
+import { provideNotify } from "@mango-write/ui-vue/lib/notify";
 import { surveysMessages } from "@mango-write/surveys/vue";
 
 import { standaloneMessages } from "./locale";

@@ -4,8 +4,8 @@
 // 交互实现抽到这里是因为矩阵题同时要两个编辑器（行+列），状态必须各自独立。
 import { nextTick, ref, type ComponentPublicInstance } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "@mango-write/ui/components/Button";
-import InputText from "@mango-write/ui/components/InputText";
+import Button from "@mango-write/ui-vue/components/Button";
+import InputText from "@mango-write/ui-vue/components/InputText";
 import { Trash2 } from "lucide-vue-next";
 
 import type { SurveyLabeledNode } from "../../contracts/index.js";

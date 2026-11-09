@@ -8,8 +8,8 @@ import { defineComponent, h, ref, type Ref } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import type { SurveyDefinition, SurveyQuestion } from "../../contracts/index.js";
-import ConfirmHost from "@mango-write/ui/components/ConfirmHost";
-import { createConfirmStore, type ConfirmOptions } from "@mango-write/ui/lib/confirm";
+import ConfirmHost from "@mango-write/ui-vue/components/ConfirmHost";
+import { createConfirmStore, type ConfirmOptions } from "@mango-write/ui-vue/lib/confirm";
 
 import { createSurveysTestI18n, createTestHost, mountSurveysComponent } from "../test-mount.js";
 import SurveyDesignCanvas from "./SurveyDesignCanvas.vue";
@@ -17,8 +17,8 @@ import SurveyDesignCanvas from "./SurveyDesignCanvas.vue";
 const i18n = createSurveysTestI18n();
 
 const confirmMocks = vi.hoisted(() => ({ require: vi.fn() }));
-vi.mock("@mango-write/ui/lib/confirm", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@mango-write/ui/lib/confirm")>();
+vi.mock("@mango-write/ui-vue/lib/confirm", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@mango-write/ui-vue/lib/confirm")>();
   return {
     ...actual,
     useConfirm: () => ({ require: confirmMocks.require }),

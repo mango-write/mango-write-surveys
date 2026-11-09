@@ -3,12 +3,12 @@
 // （transport 认证/baseUrl、renderMarkdown 安全口径）。移动端触控与 safe-area
 // 行为（viewport-fit=cover、touch-action、44px 命中区）原样保留。
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
-import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
+import { vScrollFade } from "@mango-write/ui-vue/lib/scroll-fade";
 import { useI18n } from "vue-i18n";
-import Button from "@mango-write/ui/components/Button";
-import Checkbox from "@mango-write/ui/components/Checkbox";
-import Message from "@mango-write/ui/components/Message";
-import ProgressBar from "@mango-write/ui/components/ProgressBar";
+import Button from "@mango-write/ui-vue/components/Button";
+import Checkbox from "@mango-write/ui-vue/components/Checkbox";
+import Message from "@mango-write/ui-vue/components/Message";
+import ProgressBar from "@mango-write/ui-vue/components/ProgressBar";
 import type {
   PublicSurvey,
   SurveySession,
@@ -23,7 +23,7 @@ import {
   validateSurveyAnswers,
 } from "../../core/index.js";
 import { SurveysApiError, useSurveysHost } from "../host.js";
-import { AsyncSlot } from "@mango-write/ui";
+import { AsyncSlot } from "@mango-write/ui-vue";
 import SurveyQuestionField from "../components/SurveyQuestionField.vue";
 import { usePublicSurveysApi } from "../api.js";
 const props = defineProps<{ slug: string }>();

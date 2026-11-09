@@ -7,13 +7,13 @@
 import { computed, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
 import { Play, Upload } from "lucide-vue-next";
-import Button from "@mango-write/ui/components/Button";
-import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
-import InputNumber from "@mango-write/ui/components/InputNumber";
-import Message from "@mango-write/ui/components/Message";
-import MultiSelect from "@mango-write/ui/components/MultiSelect";
-import Select from "@mango-write/ui/components/Select";
-import Tag from "@mango-write/ui/components/Tag";
+import Button from "@mango-write/ui-vue/components/Button";
+import { vScrollFade } from "@mango-write/ui-vue/lib/scroll-fade";
+import InputNumber from "@mango-write/ui-vue/components/InputNumber";
+import Message from "@mango-write/ui-vue/components/Message";
+import MultiSelect from "@mango-write/ui-vue/components/MultiSelect";
+import Select from "@mango-write/ui-vue/components/Select";
+import Tag from "@mango-write/ui-vue/components/Tag";
 import type {
   ResearchDatasetDetail,
   ResearchDatasetSummary,
@@ -22,7 +22,7 @@ import type {
   ResearchRunSummary,
   SurveyCodebook,
 } from "../../contracts/index.js";
-import { AsyncSlot } from "@mango-write/ui";
+import { AsyncSlot } from "@mango-write/ui-vue";
 import { useSurveysApi } from "../api.js";
 import { useSurveysNotify } from "../notify.js";
 import {

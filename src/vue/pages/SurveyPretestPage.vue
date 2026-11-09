@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import Button from "@mango-write/ui/components/Button";
-import Checkbox from "@mango-write/ui/components/Checkbox";
-import Message from "@mango-write/ui/components/Message";
-import Textarea from "@mango-write/ui/components/Textarea";
-import { AsyncSlot } from "@mango-write/ui";
+import Button from "@mango-write/ui-vue/components/Button";
+import Checkbox from "@mango-write/ui-vue/components/Checkbox";
+import Message from "@mango-write/ui-vue/components/Message";
+import Textarea from "@mango-write/ui-vue/components/Textarea";
+import { AsyncSlot } from "@mango-write/ui-vue";
 import { evaluateSurveyPath, pruneSurveyAnswers, validateSurveyAnswers, type SurveyAnswers, type SurveyDefinition } from "../../core/index.js";
 import SurveyQuestionField from "../components/SurveyQuestionField.vue";
 import { usePublicSurveysApi } from "../api.js";

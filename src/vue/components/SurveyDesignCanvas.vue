@@ -8,14 +8,14 @@
 // sessionStorage（按 surveyId 隔离）：切回原题型即恢复，破坏性切换先经确认。
 import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 import { useI18n } from "vue-i18n";
-import { useConfirm } from "@mango-write/ui/lib/confirm";
-import Button from "@mango-write/ui/components/Button";
-import Checkbox from "@mango-write/ui/components/Checkbox";
-import InputNumber from "@mango-write/ui/components/InputNumber";
-import InputText from "@mango-write/ui/components/InputText";
-import Message from "@mango-write/ui/components/Message";
-import Select from "@mango-write/ui/components/Select";
-import Textarea from "@mango-write/ui/components/Textarea";
+import { useConfirm } from "@mango-write/ui-vue/lib/confirm";
+import Button from "@mango-write/ui-vue/components/Button";
+import Checkbox from "@mango-write/ui-vue/components/Checkbox";
+import InputNumber from "@mango-write/ui-vue/components/InputNumber";
+import InputText from "@mango-write/ui-vue/components/InputText";
+import Message from "@mango-write/ui-vue/components/Message";
+import Select from "@mango-write/ui-vue/components/Select";
+import Textarea from "@mango-write/ui-vue/components/Textarea";
 import {
   AlertTriangle,
   Ellipsis,

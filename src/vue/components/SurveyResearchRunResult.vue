@@ -2,11 +2,11 @@
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
 import { Download, ExternalLink } from "lucide-vue-next";
-import Button from "@mango-write/ui/components/Button";
-import DataTable from "@mango-write/ui/components/DataTable";
-import Column from "@mango-write/ui/components/Column";
-import Message from "@mango-write/ui/components/Message";
-import Tag from "@mango-write/ui/components/Tag";
+import Button from "@mango-write/ui-vue/components/Button";
+import DataTable from "@mango-write/ui-vue/components/DataTable";
+import Column from "@mango-write/ui-vue/components/Column";
+import Message from "@mango-write/ui-vue/components/Message";
+import Tag from "@mango-write/ui-vue/components/Tag";
 import type { ResearchRunDetail, SurveyResearchTable } from "../../contracts/index.js";
 import {
   buildResearchChartSpecs,

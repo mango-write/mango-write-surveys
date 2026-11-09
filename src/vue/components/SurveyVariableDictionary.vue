@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { nextTick } from "vue";
 import { useI18n } from "vue-i18n";
-import Column from "@mango-write/ui/components/Column";
-import DataTable from "@mango-write/ui/components/DataTable";
+import Column from "@mango-write/ui-vue/components/Column";
+import DataTable from "@mango-write/ui-vue/components/DataTable";
 import type { SurveyDataset } from "../lib/dataset.js";
 
 const props = defineProps<{ dataset: SurveyDataset }>();

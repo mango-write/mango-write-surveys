@@ -6,7 +6,7 @@
 // 视觉层级：段名是主文字，状态/计数是段内次级小徽标（更小字号、弱色）。
 import { computed } from "vue";
 import { useI18n } from "vue-i18n";
-import { vScrollFade } from "@mango-write/ui/lib/scroll-fade";
+import { vScrollFade } from "@mango-write/ui-vue/lib/scroll-fade";
 
 import type { SurveyStatus } from "../../contracts/index.js";
 
