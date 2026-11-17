@@ -314,8 +314,10 @@ export default {
   createStart: {
     question: "你想研究什么？",
     hint: "用一两句话描述你的研究想法，AI 生成问卷初稿与研究设计依据；也可以从模板或空白开始。",
+    unifiedHint: "在工作台唯一对话框描述你的研究问题，AI 将生成问卷初稿与研究设计依据；也可以从模板或空白开始。",
     placeholder: "例如：我想了解研究生的科研工具使用情况与遇到的困难",
     submit: "生成问卷",
+    unifiedAction: "在对话框用 AI 生成问卷",
     altPrefix: "或者：",
     altTemplate: "从模板开始",
     altBlank: "从空白开始",

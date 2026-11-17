@@ -24,12 +24,19 @@ const busy = ref(false);
 const failed = ref(false);
 const awaiting = ref(false);
 const hasCopilot = computed(() => !!host.copilot);
+const unifiedEntry = computed(() => Boolean(host.copilot?.unifiedEntry));
 // sendPrompt 成功返回后的「已发送」态：同文案禁止再点，防误触双发；修改输入
 // 即解锁，失败态不进入（输入保留可直接重试）。交付帧到达会导航离开本页。
 const sentIdea = ref("");
 const alreadySent = computed(
   () => !failed.value && !!sentIdea.value && idea.value.trim() === sentIdea.value,
 );
+
+function openUnifiedComposer() {
+  if (!host.copilot) return;
+  host.copilot.fillComposer(t("surveys.copilot.generateTemplate"));
+  host.copilot.focusComposer();
+}
 
 // sendPrompt 正常返回但页面仍在（未收到 survey_create 帧）：如实说明，不假设
 // 失败也不假设成功；输入保留，改描述后可重试。
@@ -62,8 +69,11 @@ async function submit() {
       <Sparkles :size="hero ? 20 : 15" class="create-start-icon" aria-hidden="true" />
       <span>{{ t("surveys.createStart.question") }}</span>
     </h2>
-    <p v-if="hero" class="create-start-hint">{{ t("surveys.createStart.hint") }}</p>
+    <p v-if="hero" class="create-start-hint">
+      {{ unifiedEntry ? t("surveys.createStart.unifiedHint") : t("surveys.createStart.hint") }}
+    </p>
     <Textarea
+      v-if="!unifiedEntry"
       v-model="idea"
       :rows="hero ? 3 : 2"
       :disabled="!hasCopilot"
@@ -76,6 +86,14 @@ async function submit() {
     />
     <div class="create-start-actions">
       <Button
+        v-if="unifiedEntry"
+        :label="t('surveys.createStart.unifiedAction')"
+        :icon="Sparkles"
+        :disabled="!hasCopilot"
+        @click="openUnifiedComposer"
+      />
+      <Button
+        v-else
         :label="t('surveys.createStart.submit')"
         :icon="Sparkles"
         :loading="busy"

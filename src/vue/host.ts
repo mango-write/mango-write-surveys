@@ -104,6 +104,9 @@ export interface SurveysCopilotHost {
   /** 右栏岛组件（宿主持有单实例与 scope 切换）；缺省 = 该宿主没有 Copilot，
    *  包工作台不出右栏、AI 入口按钮 no-op。 */
   island?: Component;
+  /** 宿主提供全工作台唯一 AI 对话框（插件嵌入态）：列表页不渲染第二套 AI 文本框，
+   *  主动作直接唤起并预填宿主统一对话框；独立运行（缺省/false）保留页内简易输入。 */
+  unifiedEntry?: boolean;
   /** 登记交付帧处理，返回注销函数（页面 onUnmounted 调用）。 */
   registerHandlers(
     handlers: SurveysCopilotHandlers,

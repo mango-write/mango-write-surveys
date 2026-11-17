@@ -24,6 +24,7 @@ interface CopilotSpies {
 
 function makeHost(copilot?: {
   sendPrompt?: ReturnType<typeof vi.fn<(text: string) => Promise<void>>>;
+  unifiedEntry?: boolean;
 }): {
   host: SurveysWebHost;
   spies: CopilotSpies;
@@ -37,6 +38,7 @@ function makeHost(copilot?: {
     ...(copilot
       ? {
           copilot: {
+            ...(copilot.unifiedEntry !== undefined ? { unifiedEntry: copilot.unifiedEntry } : {}),
             registerHandlers: () => () => {},
             setContextRefs: () => {},
             fillComposer: spies.fillComposer,
@@ -221,5 +223,29 @@ describe("SurveyCreateStart（issue #224 M3）", () => {
       .find((b) => b.text() === t("surveys.createStart.submit"))!;
     expect(submit.attributes("disabled")).toBeDefined();
     wrapper.unmount();
+  });
+
+  it("unifiedEntry 插件嵌入态：不渲染页内第二套 Textarea，主动作直接唤起并预填宿主统一对话框", async () => {
+    const { host, spies } = makeHost({
+      unifiedEntry: true,
+      sendPrompt: vi.fn<(text: string) => Promise<void>>(async () => {}),
+    });
+    for (const variant of ["hero", "compact"] as const) {
+      const wrapper = mountWithVariant(host, variant);
+      expect(wrapper.find("textarea").exists()).toBe(false);
+      if (variant === "hero") {
+        expect(wrapper.text()).toContain(t("surveys.createStart.unifiedHint"));
+      }
+      const actionBtn = wrapper
+        .findAll(".create-start-actions button")
+        .find((b) => b.text() === t("surveys.createStart.unifiedAction"));
+      expect(actionBtn).toBeDefined();
+      await actionBtn!.trigger("click");
+      wrapper.unmount();
+    }
+    expect(spies.fillComposer).toHaveBeenCalledTimes(2);
+    expect(spies.fillComposer).toHaveBeenCalledWith(t("surveys.copilot.generateTemplate"));
+    expect(spies.focusComposer).toHaveBeenCalledTimes(2);
+    expect(spies.sendPrompt).not.toHaveBeenCalled();
   });
 });

@@ -342,9 +342,12 @@ export default {
   createStart: {
     question: "What do you want to study?",
     hint: "Describe your research idea in a sentence or two and AI drafts the survey with its research design. Templates and a blank start are also here.",
+    unifiedHint:
+      "Describe your research question in the unified workbench dialog and AI drafts the survey with its research design. Templates and a blank start are also here.",
     placeholder:
       "e.g. I want to learn how graduate students use research tools and where they struggle",
     submit: "Generate survey",
+    unifiedAction: "Draft survey with AI in chat",
     altPrefix: "Or ",
     altTemplate: "start from a template",
     altBlank: "start blank",
