@@ -7,7 +7,7 @@
 import { KeepAlive, defineComponent, h, ref, useSlots } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises } from "@vue/test-utils";
-import { createMemoryHistory, createRouter } from "vue-router";
+import { RouterView, createMemoryHistory, createRouter, useRoute } from "vue-router";
 
 import { createSurveysTestI18n, createTestHost, mountSurveysComponent } from "../test-mount.js";
 import type { SurveysCopilotHandlers, SurveysWebHost } from "../host.js";
@@ -270,6 +270,246 @@ describe("SurveyWorkspacePage 活流 survey_create 帧（issue #217）", () => {
     activeView.value = "survey";
     await flushPromises();
     expect(copilot).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it("失活期间服务端已原子落盘新版本：KeepAlive 重新激活时自动对账拉取最新题干且不发冗余 PATCH，支持撤销回退", async () => {
+    const surveyA = { ...detail(), id: "s-1", draftVersion: 2 };
+    let remoteState: SurveyDetail = surveyA;
+    mocks.get.mockImplementation(async () => structuredClone(remoteState));
+
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: "/u/surveys/:surveyId", name: "u.surveys.detail", component: { template: "<div/>" } },
+      ],
+    });
+    await router.push("/u/surveys/s-1");
+    const patchCalls: Array<{ expectedVersion: number; definition: SurveyDefinition }> = [];
+    const host: SurveysWebHost = createTestHost({
+      transport: {
+        request: (async (path: string, init?: { method?: string; body?: unknown }) => {
+          if (init?.method === "PATCH") {
+            const body = init.body as { expectedVersion: number; definition: SurveyDefinition };
+            patchCalls.push(body);
+            remoteState = {
+              ...remoteState,
+              draftVersion: body.expectedVersion + 1,
+              definition: body.definition,
+            };
+            return structuredClone(remoteState);
+          }
+          return mocks.get(path);
+        }) as never,
+      },
+      navigate: vi.fn() as never,
+      copilot: {
+        registerHandlers: () => () => {},
+        setContextRefs: () => {},
+        fillComposer: () => {},
+        focusComposer: () => {},
+        releasePageState: () => {},
+      },
+    });
+
+    const activeTab = ref<"a" | "b">("a");
+    const TabBStub = defineComponent({ render: () => h("div", "survey-b") });
+    const Harness = defineComponent({
+      setup() {
+        return () =>
+          h(KeepAlive, null, [
+            activeTab.value === "a"
+              ? h(SurveyWorkspacePage, { key: "survey-a" })
+              : h(TabBStub, { key: "survey-b" }),
+          ]);
+      },
+    });
+
+    const wrapper = mountSurveysComponent(
+      Harness,
+      { global: { plugins: [router], stubs: { SurveyWorkbenchShell: ShellStub, SurveyDesignCanvas: CanvasStub } } },
+      host,
+    );
+    await router.isReady();
+    await flushPromises();
+    expect(wrapper.findComponent(CanvasStub).props("modelValue").questions[0].title).toBe("备注");
+
+    // 1) A 发起改卷后立即切到 B 标签（A 进入 KeepAlive 失活态）
+    activeTab.value = "b";
+    await flushPromises();
+
+    // 2) A 失活期间，服务端 survey_edit 完成原子落库（draftVersion 2 → 3，题干更新）
+    remoteState = {
+      ...surveyA,
+      draftVersion: 3,
+      title: "问卷",
+      definition: {
+        ...definition(),
+        questions: [{ id: "q1", type: "text", title: "失活期间服务端已更新的新题干", required: false }],
+      },
+    };
+
+    // 3) 切回 A 标签 → onActivated 自动对账拉取远端 v3，画布无需整页刷新即展示新题干，且不发多余 PATCH
+    vi.useFakeTimers();
+    activeTab.value = "a";
+    await flushPromises();
+    expect(wrapper.findComponent(CanvasStub).props("modelValue").questions[0].title).toBe(
+      "失活期间服务端已更新的新题干",
+    );
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(patchCalls).toHaveLength(0);
+
+    // 4) 用户点击撤销可回退到修改前的「备注」，并以 expectedVersion=3 落盘
+    const undoBtn = wrapper.findAll("button").find((b) => b.attributes("aria-label") === t("surveys.undo"))!;
+    expect(undoBtn.attributes("disabled")).toBeUndefined();
+    await undoBtn.trigger("click");
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(patchCalls).toHaveLength(1);
+    expect(patchCalls[0]!.expectedVersion).toBe(3);
+    expect(patchCalls[0]!.definition.questions[0]!.title).toBe("备注");
+    vi.useRealTimers();
+    wrapper.unmount();
+  });
+
+  it("真实 RouterView + KeepAlive 多问卷路由参数切换（A -> B -> /u/write -> A）：失活实例冻结绑定 surveyId 不触发全量 load，切回走 reconcileOnActivated 且撤销按钮可用", async () => {
+    const stateById: Record<string, SurveyDetail> = {
+      "s-a": {
+        ...detail(),
+        id: "s-a",
+        title: "问卷 A",
+        draftVersion: 2,
+        definition: {
+          ...definition(),
+          title: "问卷 A",
+          questions: [{ id: "q1", type: "text", title: "A 初始题干", required: false }],
+        },
+      },
+      "s-b": {
+        ...detail(),
+        id: "s-b",
+        title: "问卷 B",
+        draftVersion: 5,
+        definition: {
+          ...definition(),
+          title: "问卷 B",
+          questions: [{ id: "q1", type: "text", title: "B 初始题干", required: false }],
+        },
+      },
+    };
+    const getCalls: string[] = [];
+    const patchCalls: Array<{ id: string; expectedVersion: number; definition: SurveyDefinition }> = [];
+
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: "/u/surveys/:surveyId", name: "u.surveys.detail", component: SurveyWorkspacePage },
+        { path: "/u/write/:draftId", name: "u.writer", component: defineComponent({ render: () => h("div", "writer-page") }) },
+      ],
+    });
+    await router.push("/u/surveys/s-a");
+    await router.isReady();
+
+    const host: SurveysWebHost = createTestHost({
+      workbenchShell: defineComponent({ render: () => h("div") }),
+      transport: {
+        request: (async (path: string, init?: { method?: string; body?: unknown }) => {
+          const id = path.split("/").filter(Boolean).at(-1)!;
+          if (init?.method === "PATCH") {
+            const body = init.body as { expectedVersion: number; definition: SurveyDefinition };
+            patchCalls.push({ id, ...body });
+            stateById[id] = {
+              ...stateById[id]!,
+              draftVersion: body.expectedVersion + 1,
+              definition: body.definition,
+            };
+            return structuredClone(stateById[id]!);
+          }
+          getCalls.push(id);
+          return structuredClone(stateById[id]!);
+        }) as never,
+      },
+      navigate: vi.fn() as never,
+      copilot: {
+        registerHandlers: () => () => {},
+        setContextRefs: () => {},
+        fillComposer: () => {},
+        focusComposer: () => {},
+        releasePageState: () => {},
+      },
+    });
+
+    // 完整复刻 WorkspaceShell 的 RouterView + KeepAlive(:key="scopedPageKey") 拓扑
+    const KeepAliveRouterShell = defineComponent({
+      setup() {
+        const route = useRoute();
+        return () =>
+          h(RouterView, null, {
+            default: ({ Component }: { Component?: ReturnType<typeof defineComponent> }) =>
+              h(KeepAlive, { max: 8 }, [
+                Component
+                  ? h(Component, {
+                      key:
+                        route.name === "u.surveys.detail"
+                          ? `surveys:${String(route.params.surveyId)}`
+                          : `route:${String(route.fullPath)}`,
+                    })
+                  : null,
+              ]),
+          });
+      },
+    });
+
+    const wrapper = mountSurveysComponent(
+      KeepAliveRouterShell,
+      { global: { plugins: [router], stubs: { SurveyWorkbenchShell: ShellStub, SurveyDesignCanvas: CanvasStub } } },
+      host,
+    );
+    await flushPromises();
+    expect(getCalls).toEqual(["s-a"]);
+    expect(wrapper.findComponent(CanvasStub).props("modelValue").questions[0].title).toBe("A 初始题干");
+
+    // 1) 从问卷 A 切到问卷 B：A 失活冻结自身 surveyId，绝不对 s-b 发重复 GET 或重置历史栈
+    await router.push("/u/surveys/s-b");
+    await flushPromises();
+    expect(getCalls).toEqual(["s-a", "s-b"]);
+    expect(wrapper.findComponent(CanvasStub).props("modelValue").questions[0].title).toBe("B 初始题干");
+
+    // 再切到跨模块路由 /u/write/d-1（此时 route.params.surveyId 为 undefined）
+    await router.push("/u/write/d-1");
+    await flushPromises();
+    expect(getCalls).toEqual(["s-a", "s-b"]);
+
+    // 2) 后台服务端完成对问卷 A 的修改（draftVersion 2 -> 3）
+    stateById["s-a"] = {
+      ...stateById["s-a"]!,
+      draftVersion: 3,
+      definition: {
+        ...stateById["s-a"]!.definition,
+        questions: [{ id: "q1", type: "text", title: "A 服务端已落盘新题干", required: false }],
+      },
+    };
+
+    // 3) 切回问卷 A：走 reconcileOnActivated 推入 assistant 历史，不触发 load() 重置历史，顶栏撤销按钮必须可用！
+    vi.useFakeTimers();
+    await router.push("/u/surveys/s-a");
+    await flushPromises();
+    expect(getCalls).toEqual(["s-a", "s-b", "s-a"]);
+    expect(wrapper.findComponent(CanvasStub).props("modelValue").questions[0].title).toBe("A 服务端已落盘新题干");
+
+    const undoBtn = wrapper.findAll("button").find((b) => b.attributes("aria-label") === t("surveys.undo"))!;
+    expect(undoBtn.attributes("disabled")).toBeUndefined();
+
+    // 4) 点撤销回退到「A 初始题干」并以 expectedVersion=3 写回服务端；问卷 B 完全未受影响
+    await undoBtn.trigger("click");
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(patchCalls).toHaveLength(1);
+    expect(patchCalls[0]).toMatchObject({
+      id: "s-a",
+      expectedVersion: 3,
+    });
+    expect(patchCalls[0]!.definition.questions[0]!.title).toBe("A 初始题干");
+    expect(stateById["s-b"]!.definition.questions[0]!.title).toBe("B 初始题干");
+    vi.useRealTimers();
     wrapper.unmount();
   });
 });

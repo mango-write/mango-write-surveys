@@ -7,7 +7,6 @@ import type {
   SurveysStoragePort,
 } from "../ports.js";
 import type { SurveyDefinition } from "../core/index.js";
-import { applySurveyOps } from "../core/index.js";
 import { createSurveysService } from "../server/service.js";
 import { createSurveyAiTools } from "./tools.js";
 import { surveyDeliveryFromResult } from "./delivery.js";
@@ -242,8 +241,8 @@ describe("研究设计与诊断 — 真实 service facade 往返", () => {
     expect(rows.get(String(retried.surveyId))!.draftVersion).toBe(2);
   });
 
-  it("set_meta 清除后落库：设计中不再有 researchDesign，定义仍可读", async () => {
-    const { tools, service, actor, rows } = setup();
+  it("set_meta 清除后服务端原子落库：设计中不再有 researchDesign，定义立即可读", async () => {
+    const { tools, actor, rows } = setup();
     const created = await tools.surveyCreate.run(
       { title: definitionWithDesign.title, definition: definitionWithDesign },
       { actor, scopeSurveyId: null, operationId: "op-create-2" },
@@ -255,13 +254,7 @@ describe("研究设计与诊断 — 真实 service facade 往返", () => {
       { actor, scopeSurveyId: surveyId, operationId: "op-edit-1" },
     );
     expect(edit.ok).toBe(true);
-    // host-applied：工具本身不写库，画布把 appliedOps 应用到本地草稿后保存。
-    expect(rows.get(surveyId)!.draftVersion).toBe(2);
-    const appliedOps = (edit.appliedOps as Parameters<typeof applySurveyOps>[1]);
-    const cleared = applySurveyOps(definitionWithDesign, appliedOps).definition;
-    expect(cleared).not.toHaveProperty("researchDesign");
-
-    await service.updateSurvey("author", surveyId, { expectedVersion: 2, definition: cleared });
+    expect(edit.draftVersion).toBe(3);
     expect(rows.get(surveyId)!.draftVersion).toBe(3);
     expect((rows.get(surveyId)!.draftJson as { researchDesign?: unknown }).researchDesign).toBeUndefined();
 

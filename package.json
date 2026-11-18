@@ -25,6 +25,12 @@
     },
     "./ai": "./src/ai/index.ts",
     "./vue": "./src/vue/index.ts",
+    "./mount": "./src/vue/mount.ts",
+    "./dsh": {
+      "mango-source": "./src/dsh/index.ts",
+      "types": "./dist/dsh/index.d.ts",
+      "default": "./dist/dsh/index.js"
+    },
     "./adapters": "./src/adapters/index.ts",
     "./ports": "./src/ports.ts"
   },
