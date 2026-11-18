@@ -4,7 +4,7 @@
 // 的陈旧页面会在 load() 里把单槽交接先取走；这条用例需要无残留的注册表，
 // 全部实例即挂即卸。包页面不感知 copilot-island 内部：帧经测试自己的
 // host.copilot 实现直接派发给页面登记的 handler。
-import { defineComponent, h, useSlots } from "vue";
+import { KeepAlive, defineComponent, h, ref, useSlots } from "vue";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises } from "@vue/test-utils";
 import { createMemoryHistory, createRouter } from "vue-router";
@@ -115,7 +115,10 @@ async function mountWorkspace() {
     copilot: {
       registerHandlers: (handlers) => {
         copilot.push(handlers);
-        return () => {};
+        return () => {
+          const idx = copilot.indexOf(handlers);
+          if (idx >= 0) copilot.splice(idx, 1);
+        };
       },
       setContextRefs: () => {},
       fillComposer: () => {},
@@ -174,6 +177,99 @@ describe("SurveyWorkspacePage 活流 survey_create 帧（issue #217）", () => {
     });
     await flushPromises();
     expect(navigate).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("KeepAlive 失活时注销 handler 并屏蔽迟到 survey_edit / survey_review 帧，重新激活后恢复接收", async () => {
+    const surveyS1 = { ...detail(), id: "s-1" };
+    mocks.get.mockResolvedValue(surveyS1);
+    const router = createRouter({
+      history: createMemoryHistory(),
+      routes: [
+        { path: "/u/surveys/:surveyId", name: "u.surveys.detail", component: { template: "<div/>" } },
+      ],
+    });
+    await router.push("/u/surveys/s-1");
+    const copilot: SurveysCopilotHandlers[] = [];
+    const patchCalls: unknown[] = [];
+    const release = vi.fn();
+    const host: SurveysWebHost = createTestHost({
+      transport: {
+        request: (async (path: string, init?: { method?: string; body?: unknown }) => {
+          if (init?.method === "PATCH") {
+            patchCalls.push(init.body);
+            return { ...surveyS1, draftVersion: 3 };
+          }
+          return mocks.get(path);
+        }) as never,
+      },
+      navigate: vi.fn() as never,
+      copilot: {
+        registerHandlers: (handlers) => {
+          copilot.push(handlers);
+          return () => {
+            const idx = copilot.indexOf(handlers);
+            if (idx >= 0) copilot.splice(idx, 1);
+          };
+        },
+        setContextRefs: () => {},
+        fillComposer: () => {},
+        focusComposer: () => {},
+        releasePageState: release,
+      },
+    });
+    const activeView = ref<"survey" | "other">("survey");
+    const OtherStub = defineComponent({ render: () => h("div", "other-plugin") });
+    const Harness = defineComponent({
+      setup() {
+        return () =>
+          h(KeepAlive, null, [
+            activeView.value === "survey"
+              ? h(SurveyWorkspacePage, { key: "survey-s1" })
+              : h(OtherStub, { key: "other" }),
+          ]);
+      },
+    });
+    const wrapper = mountSurveysComponent(
+      Harness,
+      { global: { plugins: [router], stubs: { SurveyWorkbenchShell: ShellStub, SurveyDesignCanvas: CanvasStub } } },
+      host,
+    );
+    await router.isReady();
+    await flushPromises();
+    expect(copilot).toHaveLength(1);
+
+    // 切到其他插件标签 → 失活注销 handler 并带 owner 令牌清理桥面状态
+    activeView.value = "other";
+    await flushPromises();
+    expect(copilot).toHaveLength(0);
+    expect(release).toHaveBeenCalledTimes(1);
+    expect(typeof release.mock.calls[0]![0]).toBe("symbol");
+
+    // 失活期间派发迟到的 survey_edit 与 survey_review 帧，不应触发保存或修改
+    emitSurveyFrame(copilot, {
+      type: "survey_edit",
+      surveyId: "s-1",
+      operationId: "op-late-edit",
+      baseDraftVersion: 2,
+      summary: "迟到改题",
+      appliedOps: [{ op: "update_question", questionId: "q1", patch: { title: "被后台篡改" } }],
+    });
+    emitSurveyFrame(copilot, {
+      type: "survey_review",
+      surveyId: "s-1",
+      operationId: "op-late-review",
+      baseDraftVersion: 2,
+      summary: "迟到审阅",
+      findings: [],
+    });
+    await flushPromises();
+    expect(patchCalls).toHaveLength(0);
+
+    // 重新切回问卷标签 → 恢复注册 handler
+    activeView.value = "survey";
+    await flushPromises();
+    expect(copilot).toHaveLength(1);
     wrapper.unmount();
   });
 });

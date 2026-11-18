@@ -8,7 +8,7 @@
 // 宿主按路由 scope（survey:{surveyId}）常驻：survey_edit 交付帧在本地当前
 // 草稿上重放 ops（与手工编辑同一历史栈，撤销同源），survey_create 帧导航。
 // 导航出口一律 host.navigate；vue-router 只用于读路由参数与离开守卫。
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from "vue";
 import { vScrollFade } from "@mango-write/ui-vue/lib/scroll-fade";
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationNormalized } from "vue-router";
 import { useI18n } from "vue-i18n";
@@ -320,7 +320,9 @@ function applyEditDelivery(delivery: SurveyEditDelivery) {
 }
 
 async function applySurveyDelivery(delivery: ToolSurveyDelivery) {
+  if (!pageActive.value) return;
   if (delivery.type === "survey_review") {
+    if (delivery.surveyId && delivery.surveyId !== surveyId.value) return;
     receiveReview(delivery);
     return;
   }
@@ -350,12 +352,20 @@ function confirmStaleDelivery() {
   if (delivery) applyEditDelivery(delivery);
 }
 
+const pageActive = ref(true);
+const copilotOwner = Symbol("survey-workspace");
+
 const copilotSurface = (): SurveysCopilotSurface | null =>
   surveyId.value ? { kind: "survey", id: surveyId.value } : null;
-const unregisterCopilotHandlers = host.copilot?.registerHandlers(
-  { onSurveyDeliveryFrame: (delivery) => void applySurveyDelivery(delivery) },
-  { surface: copilotSurface },
-);
+let unregisterCopilotHandlers: (() => void) | undefined;
+function mountCopilotHandlers() {
+  unregisterCopilotHandlers?.();
+  unregisterCopilotHandlers = host.copilot?.registerHandlers(
+    { onSurveyDeliveryFrame: (delivery) => void applySurveyDelivery(delivery) },
+    { surface: copilotSurface },
+  );
+}
+mountCopilotHandlers();
 
 // 上下文引用：当前选中题目（id + 题干摘要）与所在页——「把这道题改成多选」
 // 的可解析锚点。ambient refs（非选区形态），随每轮消息注入 ephemeral 上下文。
@@ -389,7 +399,8 @@ const copilotContextRefs = computed(() => {
 watch(
   copilotContextRefs,
   (refs) => {
-    host.copilot?.setContextRefs(refs);
+    if (!pageActive.value) return;
+    host.copilot?.setContextRefs(refs, copilotOwner);
   },
   { immediate: true },
 );
@@ -433,7 +444,8 @@ const copilotPresentation = computed<SurveysCopilotSurfacePresentation | null>((
 watch(
   copilotPresentation,
   (value) => {
-    host.copilot?.setSurfacePresentation?.(value ?? undefined);
+    if (!pageActive.value) return;
+    host.copilot?.setSurfacePresentation?.(value ?? undefined, copilotOwner);
   },
   { immediate: true },
 );
@@ -449,6 +461,7 @@ const canRedo = computed(
 // 自身撤销）生效，不劫持。
 function onKeydown(event: KeyboardEvent) {
   if (
+    !pageActive.value ||
     !(event.metaKey || event.ctrlKey) ||
     event.key.toLowerCase() !== "z" ||
     stage.value !== "design" ||
@@ -917,12 +930,29 @@ onMounted(() => {
   window.addEventListener("beforeunload", onBeforeUnload);
   window.addEventListener("pagehide", onPageHide);
 });
+onActivated(() => {
+  pageActive.value = true;
+  mountCopilotHandlers();
+  window.addEventListener("keydown", onKeydown);
+  host.copilot?.setContextRefs(copilotContextRefs.value, copilotOwner);
+  host.copilot?.setSurfacePresentation?.(copilotPresentation.value ?? undefined, copilotOwner);
+});
+onDeactivated(() => {
+  pageActive.value = false;
+  window.removeEventListener("keydown", onKeydown);
+  unregisterCopilotHandlers?.();
+  unregisterCopilotHandlers = undefined;
+  void autosave.flush();
+  host.copilot?.releasePageState(copilotOwner);
+});
 onBeforeUnmount(() => {
+  pageActive.value = false;
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("beforeunload", onBeforeUnload);
   window.removeEventListener("pagehide", onPageHide);
   unregisterCopilotHandlers?.();
-  host.copilot?.releasePageState();
+  unregisterCopilotHandlers = undefined;
+  host.copilot?.releasePageState(copilotOwner);
 });
 // pagehide 覆盖 beforeunload 管不到的卸载路径（bfcache、移动端切走）：
 // keepalive 发出即返回，不等响应。

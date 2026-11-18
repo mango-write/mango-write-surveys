@@ -112,19 +112,20 @@ export interface SurveysCopilotHost {
     handlers: SurveysCopilotHandlers,
     opts?: { surface?: () => SurveysCopilotSurface | null },
   ): () => void;
-  /** 选中题/页等上下文锚点（ambient，随每轮消息注入）。 */
-  setContextRefs(refs: SurveysCopilotContextRef[]): void;
+  /** 选中题/页等上下文锚点（ambient，随每轮消息注入）。owner 令牌隔离 KeepAlive 多实例竞态。 */
+  setContextRefs(refs: SurveysCopilotContextRef[], owner?: symbol): void;
   /** 预填对话输入框并聚焦（列表页「AI 生成」入口）。 */
   fillComposer(text: string): void;
   focusComposer(): void;
   sendPrompt?(text: string, toolNames?: string[], options?: { skillId?: string }): Promise<void>;
   /** 页面按 scope 注册面板呈现（空态文案/场景动作/composer 占位）；undefined =
-   *  清除。换 scope/换页由页面重新注册；页面卸载后的清理归 releasePageState。
-   *  缺省 = 该宿主不消费 surface 呈现（页面照常工作）。 */
-  setSurfacePresentation?(presentation: SurveysCopilotSurfacePresentation | undefined): void;
-  /** 页面卸载时清掉它写进桥的状态（含 surface 呈现）——桥是宿主单例，不清会
-   *  把上一页的空态/动作漏给下一页。 */
-  releasePageState(): void;
+   *  清除。换 scope/换页由页面重新注册；页面失活/卸载后的清理归 releasePageState。 */
+  setSurfacePresentation?(
+    presentation: SurveysCopilotSurfacePresentation | undefined,
+    owner?: symbol,
+  ): void;
+  /** 页面失活/卸载时清掉它写进桥的状态（带 owner 令牌防误清已切入的新页面）。 */
+  releasePageState(owner?: symbol): void;
 }
 
 export interface SurveysLayoutDefaults {
