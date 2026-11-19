@@ -10,6 +10,9 @@ const baseExclude = ["**/node_modules/**", "**/dist/**", "examples/**"];
 
 export default defineConfig({
   plugins: [vue()],
+  resolve: {
+    conditions: ["mango-source"],
+  },
   test: {
     projects: [
       {

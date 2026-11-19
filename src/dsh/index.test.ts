@@ -1,3 +1,9 @@
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
+
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { SurveyError } from "../server/errors.js";
@@ -40,6 +46,42 @@ const baseDefinition = {
   },
 };
 
+const PACKAGE_ROOT = fileURLToPath(new URL("../..", import.meta.url));
+const DSH_PACKAGE_JSON = createRequire(import.meta.url).resolve("@deepseek-ai/dsh/package.json");
+
+interface DshAppBootRuntime {
+  loadProfileDirectory(
+    binName: string,
+    dir: string,
+    installAnchor: string,
+  ): {
+    layers: Array<{ packageName: string; patchPaths: readonly string[]; patches: unknown[] }>;
+    skippedBundles: Array<{ packageName: string; reason: string }>;
+  };
+  composeEntries(
+    layers: readonly unknown[][],
+    warn?: (message: string) => void,
+  ): Array<Record<string, unknown>>;
+}
+
+interface DshToolsRuntime {
+  assertSupportedJsonSchema(schema: unknown): void;
+  validateJsonSchemaValue(schema: unknown, value: unknown): string[];
+}
+
+async function lockedDshAppBoot(): Promise<DshAppBootRuntime> {
+  const requireDsh = createRequire(DSH_PACKAGE_JSON);
+  const modulePath = requireDsh.resolve("@deepseek-ai/dsh-app-boot");
+  return import(pathToFileURL(modulePath).href) as Promise<DshAppBootRuntime>;
+}
+
+async function lockedDshTools(): Promise<DshToolsRuntime> {
+  const requireDsh = createRequire(DSH_PACKAGE_JSON);
+  const basePackageJson = requireDsh.resolve("@deepseek-ai/dsh-base/package.json");
+  const modulePath = createRequire(basePackageJson).resolve("@deepseek-ai/dsh-tools");
+  return import(pathToFileURL(modulePath).href) as Promise<DshToolsRuntime>;
+}
+
 describe("@mango-write/surveys/dsh 兼容适配层", () => {
   let service: SurveysService & {
     requireSurveyAccess: ReturnType<typeof vi.fn>;
@@ -67,16 +109,94 @@ describe("@mango-write/surveys/dsh 兼容适配层", () => {
     } as never;
   });
 
-  it("SURVEYS_DSH_MANIFEST 对齐 DshPackageManifest v1 结构且零外部运行时依赖", () => {
-    expect(SURVEYS_DSH_MANIFEST).toMatchObject({
-      name: "@mango-write/surveys",
-      engines: { dsh: expect.stringContaining("0.2.2") },
-      dsh: {
-        manifestVersion: 1,
-        bundle: { patch: "cordis.patch.yml" },
-        client: { platform: "web", external: ["@mango-write/surveys/mount"] },
-      },
+  async function executeSuccessfulReceipts() {
+    const tools = toDshSurveyTools(service);
+    const byName = (name: string) => tools.find((tool) => tool.name === name)!;
+    service.createSurvey.mockResolvedValue({ id: SURVEY_ID, draftVersion: 1 });
+    const context = { actor: ACTOR, scopeSurveyId: SURVEY_ID, callId: "dsh-contract-1" };
+    const receipts = {
+      survey_read: await byName("survey_read").execute({}, context),
+      survey_edit: await byName("survey_edit").execute({
+        baseDraftVersion: 3,
+        ops: [{ op: "update_question", questionId: "q1", patch: { title: "dsh 更新题干" } }],
+        summary: "修改题干",
+      }, context),
+      survey_create: await byName("survey_create").execute(
+        { title: "测试问卷", definition: baseDefinition },
+        { ...context, scopeSurveyId: null },
+      ),
+      survey_review: await byName("survey_review").execute(
+        { baseDraftVersion: 3, summary: "诊断已登记", findings: [] },
+        context,
+      ),
+    };
+    return { tools, receipts };
+  }
+
+  it("SURVEYS_DSH_MANIFEST 与真实包根 DshPackageManifest v1 完全一致", () => {
+    const manifest = JSON.parse(readFileSync(join(PACKAGE_ROOT, "package.json"), "utf8"));
+    expect(SURVEYS_DSH_MANIFEST).toEqual({
+      name: manifest.name,
+      version: manifest.version,
+      description: manifest.description,
+      private: manifest.private,
+      engines: manifest.engines,
+      dsh: manifest.dsh,
     });
+    expect(SURVEYS_DSH_MANIFEST.dsh.profile.bundles).toEqual([
+      "@deepseek-ai/dsh-base",
+      "@deepseek-ai/dsh-sdk-app",
+    ]);
+  });
+
+  it("锁版 dsh 实际加载包根 manifest 并合成带遥测防护的 sdk profile", async () => {
+    const { loadProfileDirectory, composeEntries } = await lockedDshAppBoot();
+    const dshManifest = JSON.parse(readFileSync(DSH_PACKAGE_JSON, "utf8"));
+    expect(dshManifest.version).toBe("0.2.2-rc.4");
+
+    const temp = mkdtempSync(join(tmpdir(), "surveys-dsh-profile-"));
+    try {
+      const profileDir = join(temp, "profile");
+      const bundleDir = join(profileDir, "node_modules", "@mango-write", "surveys");
+      mkdirSync(bundleDir, { recursive: true });
+      for (const file of ["package.json", "cordis.patch.yml"]) {
+        copyFileSync(join(PACKAGE_ROOT, file), join(bundleDir, file));
+      }
+      writeFileSync(join(profileDir, "package.json"), JSON.stringify({
+        name: "surveys-dsh-contract-test",
+        private: true,
+        dsh: {
+          profile: {
+            bundles: [
+              "@deepseek-ai/dsh-base",
+              "@deepseek-ai/dsh-sdk-app",
+              "@mango-write/surveys",
+            ],
+          },
+        },
+      }));
+
+      const profile = loadProfileDirectory("surveys-test", profileDir, DSH_PACKAGE_JSON);
+      expect(profile.skippedBundles).toEqual([]);
+      expect(profile.layers.map((layer) => layer.packageName)).toEqual([
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-sdk-app",
+        "@mango-write/surveys",
+      ]);
+      expect(profile.layers[2]!.patchPaths).toEqual([join(bundleDir, "cordis.patch.yml")]);
+
+      const warnings: string[] = [];
+      const entries = composeEntries(profile.layers.map((layer) => layer.patches), warnings.push.bind(warnings));
+      const rowById = (id: string) => entries.find((entry) => entry["id"] === id);
+      expect(warnings).toEqual([]);
+      expect(rowById("agent")).toBeDefined();
+      expect(rowById("sdk-jsonrpc-server")).toBeDefined();
+      expect(rowById("session-log-deepseek")?.["config"]).toMatchObject({ enabled: false });
+      expect(rowById("session-telemetry-otel")?.["disabled"]).toBe(true);
+      expect(rowById("otel")?.["disabled"]).toBe(true);
+    } finally {
+      rmSync(temp, { recursive: true, force: true });
+    }
   });
 
   it("toDshSurveyTools 投影四件套工具（含 output.presentationMeta 与并发分类）", async () => {
@@ -114,6 +234,42 @@ describe("@mango-write/surveys/dsh 兼容适配层", () => {
     expect(editTool.output.render({}, result)).toEqual([
       { type: "text", text: expect.stringContaining('"draftVersion":4') },
     ]);
+  });
+
+  it("四种真实成功回执均通过锁版 dsh-tools 的独立严格 schema", async () => {
+    const { assertSupportedJsonSchema, validateJsonSchemaValue } = await lockedDshTools();
+    const { tools, receipts } = await executeSuccessfulReceipts();
+    expect(new Set(tools.map((tool) => tool.output.schema)).size).toBe(4);
+    for (const tool of tools) {
+      expect(tool.output.schema["additionalProperties"]).toBe(false);
+      expect(() => assertSupportedJsonSchema(tool.output.schema)).not.toThrow();
+      const value = receipts[tool.name as keyof typeof receipts];
+      expect(validateJsonSchemaValue(tool.output.schema, value), tool.name).toEqual([]);
+    }
+  });
+
+  it("read/edit/create/review 回执字段漂移会被锁版 dsh-tools 拒绝", async () => {
+    const { validateJsonSchemaValue } = await lockedDshTools();
+    const { tools, receipts } = await executeSuccessfulReceipts();
+    const drifted = {
+      survey_read: { ...receipts.survey_read, draftVersion: "3" },
+      survey_edit: { ...receipts.survey_edit, operationId: 42 },
+      survey_create: { ...receipts.survey_create, questionCount: "1" },
+      survey_review: {
+        ...receipts.survey_review,
+        findings: [{
+          id: "f1",
+          title: "漂移诊断",
+          severity: "critical",
+          reason: "严重级别不在契约中",
+          recommendation: "重新登记",
+        }],
+      },
+    };
+    for (const tool of tools) {
+      const value = drifted[tool.name as keyof typeof drifted];
+      expect(validateJsonSchemaValue(tool.output.schema, value), tool.name).not.toEqual([]);
+    }
   });
 
   it("AbortSignal 已取消时在派发前即抛稳定大写错误码 ABORTED，不触碰存储层", async () => {

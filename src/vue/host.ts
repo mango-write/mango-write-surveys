@@ -154,6 +154,8 @@ export interface SurveysWebHost {
   transport: SurveysTransport;
   notify: SurveysNotify;
   navigate(to: SurveysRouteTarget): void;
+  /** 同步指定问卷实例的舞台标题；空标题由页面忽略，失活页面不得上报。 */
+  setStageTitle?(surveyId: string, title: string): void;
   /** 安全 Markdown 渲染（说明块/知情同意/研究说明）。宿主持唯一安全口径
    *  （html:false + 链接协议白名单），包内不自建第二套渲染器。 */
   renderMarkdown(source: string): string;

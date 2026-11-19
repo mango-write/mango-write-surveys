@@ -44,6 +44,8 @@ const templateBusy = ref(false);
 
 const pageActive = ref(true);
 const copilotOwner = Symbol("surveys-list");
+let wasDeactivated = false;
+let loadGeneration = 0;
 
 // survey_create 交付帧 → 载荷交接给工作区（落地提示卡）+ toast + 导航。
 const copilotHandlers: SurveysCopilotHandlers = {
@@ -54,7 +56,16 @@ const copilotHandlers: SurveysCopilotHandlers = {
     host.navigate({ name: "surveys.detail", surveyId: delivery.surveyId });
   },
 };
-const unregisterCopilotHandlers = host.copilot?.registerHandlers(copilotHandlers);
+let unregisterCopilotHandlers: (() => void) | undefined;
+function mountCopilotHandlers() {
+  if (unregisterCopilotHandlers) return;
+  unregisterCopilotHandlers = host.copilot?.registerHandlers(copilotHandlers);
+}
+function unmountCopilotHandlers() {
+  unregisterCopilotHandlers?.();
+  unregisterCopilotHandlers = undefined;
+}
+mountCopilotHandlers();
 
 function syncListSurfacePresentation() {
   if (!pageActive.value) return;
@@ -74,15 +85,22 @@ syncListSurfacePresentation();
 
 onActivated(() => {
   pageActive.value = true;
+  mountCopilotHandlers();
   syncListSurfacePresentation();
+  if (wasDeactivated && !loading.value) {
+    wasDeactivated = false;
+    void reconcileOnActivated();
+  }
 });
 onDeactivated(() => {
   pageActive.value = false;
+  wasDeactivated = true;
+  unmountCopilotHandlers();
   host.copilot?.releasePageState(copilotOwner);
 });
 onBeforeUnmount(() => {
   pageActive.value = false;
-  unregisterCopilotHandlers?.();
+  unmountCopilotHandlers();
   host.copilot?.releasePageState(copilotOwner);
 });
 
@@ -109,14 +127,37 @@ function errorMessage(): string {
 }
 
 async function load() {
+  const own = ++loadGeneration;
+  wasDeactivated = false;
   loading.value = true;
   error.value = "";
   try {
-    items.value = (await surveysApi.list()).items;
-  } catch (e) {
-    error.value = errorMessage();
+    const res = await surveysApi.list();
+    if (own !== loadGeneration) return;
+    items.value = res.items;
+  } catch {
+    if (own === loadGeneration) error.value = errorMessage();
   } finally {
-    loading.value = false;
+    if (own === loadGeneration) {
+      loading.value = false;
+      if (wasDeactivated && pageActive.value) {
+        wasDeactivated = false;
+        void reconcileOnActivated();
+      }
+    }
+  }
+}
+
+async function reconcileOnActivated() {
+  if (loading.value || busy.value || templateBusy.value) return;
+  const own = ++loadGeneration;
+  try {
+    const res = await surveysApi.list();
+    if (!pageActive.value || own !== loadGeneration) return;
+    items.value = res.items;
+    error.value = "";
+  } catch {
+    // KeepAlive 切回静默对账失败保留既有列表与筛选态，不打断浏览。
   }
 }
 

@@ -138,6 +138,14 @@ const history = useSurveyDraftHistory({
 });
 const definition = computed(() => history.current.value.definition);
 const responseLimit = computed(() => history.current.value.responseLimit);
+const stageTitle = computed(() => definition.value.title.trim() || survey.value?.title.trim() || "");
+watch(
+  [stageTitle, pageActive],
+  ([title, active]) => {
+    if (active && title) host.setStageTitle?.(surveyId.value, title);
+  },
+  { immediate: true },
+);
 const draftVersion = ref(1);
 function definitionForSave(value: SurveyDetail["definition"]) {
   return value.sourceRecords === undefined && survey.value?.definition.sourceRecords?.length

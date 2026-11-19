@@ -402,4 +402,60 @@ describe("SurveyListPage AI 生成交付帧（issue #217）", () => {
     expect(presentation).toHaveBeenCalledTimes(1);
     wrapper.unmount();
   });
+
+  it("KeepAlive 失活期间后台新建或改名问卷后切回列表：静默刷新最新列表且不覆盖本地搜索词", async () => {
+    mocks.list.mockResolvedValue({ items: ITEMS });
+    const { host } = makeHost();
+    const activeTab = ref<"surveys" | "other">("surveys");
+    const OtherStub = defineComponent({ render: () => h("div", "other") });
+    const Harness = defineComponent({
+      setup() {
+        return () =>
+          h(KeepAlive, null, [
+            activeTab.value === "surveys"
+              ? h(SurveyListPage, { key: "surveys" })
+              : h(OtherStub, { key: "other" }),
+          ]);
+      },
+    });
+    const wrapper = mountSurveysComponent(
+      Harness,
+      { global: { stubs: { Dialog: DialogStub } } },
+      host,
+    );
+    await flushPromises();
+    expect(wrapper.text()).toContain("Alpha 阅读习惯调查");
+
+    const searchInput = wrapper.get(`input[aria-label="${t("surveys.searchPlaceholder")}"]`);
+    await searchInput.setValue("AI");
+    await flushPromises();
+
+    activeTab.value = "other";
+    await flushPromises();
+
+    mocks.list.mockResolvedValue({
+      items: [
+        ...ITEMS,
+        {
+          id: CREATED_ID,
+          title: "AI 后台新建问卷",
+          status: "draft" as const,
+          slug: null,
+          responseLimit: null,
+          completedCount: 0,
+          questionCount: 5,
+          draftVersion: 1,
+          publishedRevision: null,
+          updatedAt: "2026-11-18T12:00:00.000Z",
+        },
+      ],
+    });
+
+    activeTab.value = "surveys";
+    await flushPromises();
+
+    expect((wrapper.get(`input[aria-label="${t("surveys.searchPlaceholder")}"]`).element as HTMLInputElement).value).toBe("AI");
+    expect(wrapper.text()).toContain("AI 后台新建问卷");
+    wrapper.unmount();
+  });
 });

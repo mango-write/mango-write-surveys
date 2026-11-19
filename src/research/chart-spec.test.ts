@@ -199,7 +199,7 @@ describe("buildResearchChartSpecs", () => {
     ).toEqual([]);
   });
 
-  it("uses only canvas-safe static colors", () => {
+  it("uses only canvas-safe static colors and supports style/header customization", () => {
     const specs = buildResearchChartSpecs(
       run({ type: "reliability", constructIds: ["c1"] }, [
         table(
@@ -210,6 +210,21 @@ describe("buildResearchChartSpecs", () => {
       ]),
     );
     expect(JSON.stringify(specs)).not.toContain("oklch");
-    expect(JSON.stringify(specs)).toContain("#D97745");
+    expect(JSON.stringify(specs)).toContain("#2F6FED");
+
+    const custom = buildResearchChartSpecs(
+      run({ type: "reliability", constructIds: ["c1"] }, [
+        table(
+          "reliability",
+          ["construct", "rawAlpha"],
+          [{ construct: "Satisfaction", rawAlpha: 0.82 }],
+        ),
+      ]),
+      { style: { theme: "okabe-ito", surface: "dark", showGrid: false, showHeader: true } },
+    );
+    expect(JSON.stringify(custom)).toContain("#E69F00");
+    expect(custom[0]?.option.backgroundColor).toBe("#181A20");
+    expect(custom[0]?.option.title).toMatchObject({ show: true });
+    expect(custom[0]?.height).toBeGreaterThan(specs[0]!.height);
   });
 });

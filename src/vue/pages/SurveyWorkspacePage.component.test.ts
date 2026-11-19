@@ -88,12 +88,14 @@ function makeHost(
   copilotSendPrompt?: ReturnType<typeof vi.fn>;
   copilotRelease?: ReturnType<typeof vi.fn>;
   copilotHandlers: Array<{ onSurveyDeliveryFrame?: (delivery: never) => void }>;
+  stageTitle: ReturnType<typeof vi.fn>;
   notifySuccess: ReturnType<typeof vi.fn>;
   notifyWarn: ReturnType<typeof vi.fn>;
 } {
   const navigate = vi.fn();
   const notifySuccess = vi.fn();
   const notifyWarn = vi.fn();
+  const stageTitle = vi.fn();
   const copilotHandlers: Array<{ onSurveyDeliveryFrame?: (delivery: never) => void }> = [];
   const copilotRegister = opts.copilot
       ? vi.fn((handlers: never) => {
@@ -105,6 +107,7 @@ function makeHost(
   const copilotSendPrompt = opts.copilot ? vi.fn(async () => {}) : undefined;
   const copilotRelease = opts.copilot ? vi.fn() : undefined;
   const host = createTestHost({
+    setStageTitle: stageTitle,
     notify: { success: notifySuccess, error: vi.fn(), info: vi.fn(), warn: notifyWarn },
     ...(opts.workbench ? { workbenchShell: { template: "<div/>" } } : {}),
     ...(opts.layoutPrefs ? { layoutPrefs: opts.layoutPrefs } : {}),
@@ -150,7 +153,7 @@ function makeHost(
     },
     navigate: navigate as never,
   });
-  return { host, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, notifySuccess, notifyWarn };
+  return { host, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, stageTitle, notifySuccess, notifyWarn };
 }
 
 const ShellStub = (activeTab: string) =>
@@ -355,7 +358,7 @@ async function mountWorkspace(
 ) {
   const router = makeRouter();
   await router.push(initialPath);
-  const { host, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, notifySuccess, notifyWarn } = makeHost(opts);
+  const { host, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, stageTitle, notifySuccess, notifyWarn } = makeHost(opts);
   const wrapper = mountSurveysComponent(
     SurveyWorkspacePage,
     { global: { plugins: [router], stubs: shellStubs(leftActiveTab) } },
@@ -363,7 +366,7 @@ async function mountWorkspace(
   );
   await router.isReady();
   await flushPromises();
-  return { router, wrapper, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, notifySuccess, notifyWarn };
+  return { router, wrapper, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, stageTitle, notifySuccess, notifyWarn };
 }
 
 // 离开保护要走 vue-router 的 in-component 守卫：页面必须是当前路由的组件实例。
@@ -459,6 +462,19 @@ async function changeResponseLimit(wrapper: ReturnType<typeof mount>) {
 }
 
 describe("SurveyWorkspacePage 生命周期轨道（issue #217）", () => {
+  it("按路由 surveyId 向宿主同步真实卷名，并跟随画布标题编辑", async () => {
+    mocks.get.mockResolvedValue({
+      ...detail({ currentRevisionId: null }),
+      definition: definition("Alpha 阅读习惯调查"),
+    });
+    const { wrapper, stageTitle } = await mountWorkspace();
+    expect(stageTitle).toHaveBeenLastCalledWith("s-1", "Alpha 阅读习惯调查");
+
+    await changeDefinition(wrapper);
+    expect(stageTitle).toHaveBeenLastCalledWith("s-1", "Alpha 阅读习惯调查!");
+    wrapper.unmount();
+  });
+
   it("设计默认显示大纲与画布，长期说明不占画布", async () => {
     mocks.get.mockResolvedValue(detail({ currentRevisionId: "00000000-0000-4000-8000-000000000002" }));
     const { wrapper } = await mountWorkspace();

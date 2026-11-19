@@ -1,0 +1,9 @@
+- id: session-log-deepseek
+  config:
+    enabled: false
+
+- id: session-telemetry-otel
+  disabled: true
+
+- id: otel
+  disabled: true

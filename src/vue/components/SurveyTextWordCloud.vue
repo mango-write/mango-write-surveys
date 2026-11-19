@@ -1,12 +1,14 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { use } from "echarts/core";
 import type { EChartsOption } from "echarts";
 
 import {
-  RESEARCH_CHART_COLORS,
+  createSurveyChartStyle,
+  resolveSurveyChartTheme,
   type ResearchChartSpec,
+  type SurveyChartViewStyle,
 } from "../../research/chart-spec.js";
 import { extractTextWords } from "../lib/text-words.js";
 import type { TextEntry } from "../lib/summary.js";
@@ -19,7 +21,30 @@ const props = defineProps<{
 const { t } = useI18n();
 
 const ready = ref(false);
+const defaultStyle = createSurveyChartStyle({
+  theme: "screen",
+  surface: "auto",
+  fontScale: "md",
+  showGrid: false,
+  showHeader: false,
+});
+const chartStyle = ref<SurveyChartViewStyle>({ ...defaultStyle });
+const isDarkTheme = ref(
+  typeof document !== "undefined" &&
+    document.documentElement.getAttribute("data-theme") === "dark",
+);
+let themeObserver: MutationObserver | null = null;
+
 onMounted(async () => {
+  if (typeof MutationObserver !== "undefined" && typeof document !== "undefined") {
+    themeObserver = new MutationObserver(() => {
+      isDarkTheme.value = document.documentElement.getAttribute("data-theme") === "dark";
+    });
+    themeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["data-theme"],
+    });
+  }
   try {
     if (!document.createElement("canvas").getContext("2d")) return;
     use((await import("@echarts-x/custom-word-cloud")).default);
@@ -29,20 +54,44 @@ onMounted(async () => {
   }
 });
 
+onBeforeUnmount(() => {
+  themeObserver?.disconnect();
+  themeObserver = null;
+});
+
 const words = computed(() =>
   extractTextWords(props.entries, { locale: props.locale }),
 );
 const spec = computed<ResearchChartSpec | null>(() => {
   if (!ready.value || !words.value.length) return null;
+  const resolved = resolveSurveyChartTheme(chartStyle.value, isDarkTheme.value);
+  const titleText = t("surveys.summary.wordCloudTitle");
   const option = {
     animation: false,
-    backgroundColor: "transparent",
+    backgroundColor: resolved.backgroundColor,
+    ...(chartStyle.value.showHeader
+      ? {
+          title: {
+            show: true,
+            text: titleText,
+            left: 16,
+            top: 12,
+            textStyle: {
+              color: resolved.textColor,
+              fontFamily: resolved.fontFamily,
+              fontSize: 15,
+              fontWeight: 600,
+            },
+          },
+        }
+      : {}),
     tooltip: { trigger: "item" },
     series: [
       {
         type: "custom",
         renderItem: "wordCloud",
         coordinateSystem: "none",
+        top: chartStyle.value.showHeader ? 44 : 8,
         itemPayload: {
           shape: "circle",
           keepAspect: false,
@@ -52,16 +101,14 @@ const spec = computed<ResearchChartSpec | null>(() => {
           drawOutOfBound: false,
         },
         label: {
-          fontFamily: "system-ui, -apple-system, sans-serif",
+          fontFamily: resolved.fontFamily,
         },
         emphasis: { label: { fontWeight: 600 } },
         data: words.value.map((word, index) => ({
           name: word.name,
           value: [word.name, word.value],
           itemStyle: {
-            color: RESEARCH_CHART_COLORS[
-              index % RESEARCH_CHART_COLORS.length
-            ],
+            color: resolved.colors[index % resolved.colors.length],
           },
         })),
       },
@@ -69,9 +116,9 @@ const spec = computed<ResearchChartSpec | null>(() => {
   } as EChartsOption;
   return {
     id: "text-word-cloud",
-    title: t("surveys.summary.wordCloudTitle"),
+    title: titleText,
     description: t("surveys.summary.wordCloudHint"),
-    height: 280,
+    height: chartStyle.value.showHeader ? 320 : 280,
     option,
   };
 });
@@ -81,7 +128,12 @@ const spec = computed<ResearchChartSpec | null>(() => {
   <section v-if="spec" class="text-word-cloud">
     <h4>{{ spec.title }}</h4>
     <p class="tw:text-muted tw:text-sm">{{ spec.description }}</p>
-    <SurveyResearchChart :spec="spec" />
+    <SurveyResearchChart
+      v-model:view-style="chartStyle"
+      :spec="spec"
+      :default-style="defaultStyle"
+      is-word-cloud
+    />
   </section>
 </template>
 

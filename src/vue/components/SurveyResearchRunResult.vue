@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import { Download, ExternalLink } from "lucide-vue-next";
 import Button from "@mango-write/ui-vue/components/Button";
@@ -10,7 +10,9 @@ import Tag from "@mango-write/ui-vue/components/Tag";
 import type { ResearchRunDetail, SurveyResearchTable } from "../../contracts/index.js";
 import {
   buildResearchChartSpecs,
+  createSurveyChartStyle,
   type ResearchChartLabels,
+  type SurveyChartViewStyle,
 } from "../../research/chart-spec.js";
 import { useSurveysApi } from "../api.js";
 import { formatResearchNumber } from "../lib/research-format.js";
@@ -81,8 +83,40 @@ const chartLabels = computed<Partial<ResearchChartLabels>>(() => ({
   confidenceInterval: t("surveys.research.chart.confidenceInterval"),
   estimate: t("surveys.research.chart.estimate"),
 }));
+const defaultChartStyle = createSurveyChartStyle({
+  theme: "screen",
+  surface: "auto",
+  fontScale: "md",
+  showGrid: true,
+  showHeader: true,
+});
+const chartStyle = ref<SurveyChartViewStyle>({ ...defaultChartStyle });
+const isDarkTheme = ref(
+  typeof document !== "undefined" &&
+    document.documentElement.getAttribute("data-theme") === "dark",
+);
+let themeObserver: MutationObserver | null = null;
+onMounted(() => {
+  if (typeof MutationObserver === "undefined" || typeof document === "undefined") return;
+  themeObserver = new MutationObserver(() => {
+    isDarkTheme.value = document.documentElement.getAttribute("data-theme") === "dark";
+  });
+  themeObserver.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["data-theme"],
+  });
+});
+onBeforeUnmount(() => {
+  themeObserver?.disconnect();
+  themeObserver = null;
+});
+
 const charts = computed(() =>
-  buildResearchChartSpecs(props.run, { labels: chartLabels.value }),
+  buildResearchChartSpecs(props.run, {
+    labels: chartLabels.value,
+    style: chartStyle.value,
+    isDark: isDarkTheme.value,
+  }),
 );
 const keyTableIds = computed(() => {
   switch (recipe.value.type) {
@@ -186,7 +220,11 @@ function tableRows(table: SurveyResearchTable) {
     <section v-for="chart in charts" :key="chart.id" class="result-chart">
       <h5>{{ chart.title }}</h5>
       <p class="chart-description tw:text-muted">{{ chart.description }}</p>
-      <SurveyResearchChart :spec="chart" />
+      <SurveyResearchChart
+        v-model:view-style="chartStyle"
+        :spec="chart"
+        :default-style="defaultChartStyle"
+      />
     </section>
     <section v-if="keyTables.length" class="result-tables">
       <h5>{{ t("surveys.research.keyTablesTitle") }}</h5>

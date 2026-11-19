@@ -1,7 +1,7 @@
 // dsh 组件兼容适配层（零 @deepseek-ai/* 运行时或类型依赖）：
 // 1) toDshSurveyTools：将 buildSurveyAiTools(service) 投影为对齐 @deepseek-ai/dsh-tools
 //    defineTool 的工具定义结构，内置 AbortSignal 预检与稳定大写错误码。
-// 2) SURVEYS_DSH_MANIFEST：对齐 @deepseek-ai/dsh-package-manifest DshPackageManifest v1 的静态清单模板。
+// 2) SURVEYS_DSH_MANIFEST：包根 DshPackageManifest v1 的同步投影，由锁版加载测试防漂移。
 import { randomUUID } from "node:crypto";
 
 import type { ToolSurveyDelivery } from "../contracts/index.js";
@@ -90,9 +90,194 @@ const TOOL_DESCRIPTIONS: Record<string, string> = {
     "基于完整问卷定义登记结构化方法学诊断建议并持久化（不直接修改问卷正文，需回传 baseDraftVersion）。",
 };
 
-const CANONICAL_OUTPUT_SCHEMA: Record<string, unknown> = {
+type DshJsonSchema = Record<string, unknown>;
+
+const stringSchema = { type: "string" } as const;
+const stringArraySchema = { type: "array", items: stringSchema } as const;
+const objectSchema = (
+  properties: Record<string, DshJsonSchema>,
+  required: readonly string[] = [],
+  additionalProperties = false,
+): DshJsonSchema => ({
   type: "object",
-  additionalProperties: true,
+  properties,
+  ...(required.length > 0 ? { required: [...required] } : {}),
+  additionalProperties,
+});
+const arraySchema = (items: DshJsonSchema): DshJsonSchema => ({ type: "array", items });
+
+const DEFINITION_OUTPUT_SCHEMA = objectSchema(
+  {
+    version: { type: "integer", const: 1 },
+    title: stringSchema,
+    description: stringSchema,
+    consent: stringSchema,
+    questions: arraySchema({ type: "object" }),
+    pages: arraySchema({ type: "object" }),
+    researchDesign: { type: "object" },
+    sourceRecords: arraySchema({ type: "object" }),
+  },
+  ["version", "title", "description", "consent", "questions", "pages"],
+  true,
+);
+const ISSUE_OUTPUT_SCHEMA = objectSchema(
+  { path: stringSchema, code: stringSchema, message: stringSchema },
+  ["path", "code", "message"],
+);
+const ISSUES_OUTPUT_SCHEMA = arraySchema(ISSUE_OUTPUT_SCHEMA);
+const OPERATION_OUTPUT_SCHEMA = { type: "object" } as const;
+const REVIEW_FINDING_OUTPUT_SCHEMA = objectSchema(
+  {
+    id: stringSchema,
+    checkId: stringSchema,
+    questionId: stringSchema,
+    title: stringSchema,
+    severity: { type: "string", enum: ["blocker", "major", "minor"] },
+    reason: stringSchema,
+    recommendation: stringSchema,
+    impact: stringSchema,
+    evidence: stringSchema,
+    suggestedOps: arraySchema(OPERATION_OUTPUT_SCHEMA),
+  },
+  ["id", "title", "severity", "reason", "recommendation"],
+);
+
+const SURVEY_TOOL_OUTPUT_SCHEMAS: Record<string, DshJsonSchema> = {
+  survey_read: objectSchema(
+    {
+      ok: { type: "boolean", const: true },
+      surveyId: stringSchema,
+      status: { type: "string", enum: ["draft", "published", "paused", "closed"] },
+      draftVersion: { type: "integer" },
+      definition: DEFINITION_OUTPUT_SCHEMA,
+      sourceContext: arraySchema(objectSchema(
+        {
+          questionId: stringSchema,
+          sourceId: stringSchema,
+          language: stringSchema,
+          state: { type: "string", enum: ["unchanged", "modified", "missing"] },
+          source: { oneOf: [{ type: "object" }, { type: "null" }] },
+          note: stringSchema,
+        },
+        ["questionId", "sourceId", "language", "state", "source", "note"],
+      )),
+      summary: stringSchema,
+      reviewSignals: arraySchema(objectSchema(
+        {
+          questionId: stringSchema,
+          kind: { type: "string", enum: ["recall_period", "frequency_anchors"] },
+          note: stringSchema,
+        },
+        ["questionId", "kind", "note"],
+      )),
+      reviewSignalsNote: stringSchema,
+      pretestFeedback: objectSchema(
+        {
+          entries: arraySchema(objectSchema(
+            {
+              questionId: stringSchema,
+              aspect: stringSchema,
+              note: stringSchema,
+              count: { type: "integer" },
+              questionTitle: stringSchema,
+              currentContent: { type: "boolean" },
+            },
+            ["questionId", "aspect", "note", "questionTitle", "currentContent"],
+          )),
+          omitted: { type: "integer" },
+          note: stringSchema,
+        },
+        ["entries", "omitted", "note"],
+      ),
+      researchDesignHint: stringSchema,
+      standards: objectSchema(
+        {
+          status: stringSchema,
+          disclaimer: stringSchema,
+          severity: arraySchema(objectSchema(
+            { id: stringSchema, name: stringSchema, definition: stringSchema },
+            ["id", "name", "definition"],
+          )),
+          checks: arraySchema(objectSchema(
+            {
+              id: stringSchema,
+              title: stringSchema,
+              dimension: stringSchema,
+              severity: stringSchema,
+              classification: stringSchema,
+              researchTypes: stringArraySchema,
+              questionTypes: stringArraySchema,
+            },
+            ["id", "title", "dimension", "severity", "classification"],
+          )),
+          matchingRule: stringSchema,
+          unmatchable: stringSchema,
+        },
+        ["status", "disclaimer", "severity", "checks", "matchingRule", "unmatchable"],
+      ),
+      standardsDetail: objectSchema(
+        { checks: arraySchema({ type: "object" }), unknownCheckIds: stringArraySchema },
+        ["checks", "unknownCheckIds"],
+      ),
+      issues: ISSUES_OUTPUT_SCHEMA,
+      issuesNote: stringSchema,
+      note: stringSchema,
+    },
+    ["ok", "surveyId", "status", "draftVersion", "definition", "summary", "standards", "note"],
+  ),
+  survey_edit: objectSchema(
+    {
+      ok: { type: "boolean", const: true },
+      surveyId: stringSchema,
+      operationId: stringSchema,
+      baseDraftVersion: { type: "integer" },
+      draftVersion: { type: "integer" },
+      definition: DEFINITION_OUTPUT_SCHEMA,
+      summary: stringSchema,
+      appliedCount: { type: "integer" },
+      appliedOps: arraySchema(OPERATION_OUTPUT_SCHEMA),
+      rejected: arraySchema(objectSchema({ reason: stringSchema }, ["reason"])),
+      issues: ISSUES_OUTPUT_SCHEMA,
+      note: stringSchema,
+    },
+    [
+      "ok", "surveyId", "operationId", "baseDraftVersion", "draftVersion",
+      "definition", "summary", "appliedCount", "appliedOps", "note",
+    ],
+  ),
+  survey_create: objectSchema(
+    {
+      ok: { type: "boolean", const: true },
+      surveyId: stringSchema,
+      operationId: stringSchema,
+      title: stringSchema,
+      questionCount: { type: "integer" },
+      pageCount: { type: "integer" },
+      issues: ISSUES_OUTPUT_SCHEMA,
+      issuesNote: stringSchema,
+      note: stringSchema,
+    },
+    ["ok", "surveyId", "operationId", "title", "questionCount", "pageCount", "note"],
+  ),
+  survey_review: objectSchema(
+    {
+      ok: { type: "boolean", const: true },
+      surveyId: stringSchema,
+      operationId: stringSchema,
+      baseDraftVersion: { type: "integer" },
+      summary: stringSchema,
+      findings: arraySchema(REVIEW_FINDING_OUTPUT_SCHEMA),
+      strippedCheckIds: stringArraySchema,
+      reanchoredQuestions: arraySchema(objectSchema(
+        { findingId: stringSchema, questionId: stringSchema },
+        ["findingId", "questionId"],
+      )),
+      droppedEvidence: stringArraySchema,
+      strippedOps: stringArraySchema,
+      note: stringSchema,
+    },
+    ["ok", "surveyId", "operationId", "baseDraftVersion", "summary", "findings", "note"],
+  ),
 };
 
 function classifyErrorResult(
@@ -141,13 +326,15 @@ function classifySurveyException(err: unknown): DshSurveyToolError {
 
 function toDshTool(spec: SurveyAiToolSpec): DshSurveyToolDefinition {
   const description = TOOL_DESCRIPTIONS[spec.name] ?? spec.argsHint;
+  const outputSchema = SURVEY_TOOL_OUTPUT_SCHEMAS[spec.name];
+  if (!outputSchema) throw new Error(`Missing dsh output schema for ${spec.name}.`);
   return {
     name: spec.name,
     description,
     parameters: spec.parameters,
     isConcurrencySafe: () => !spec.write && spec.name === "survey_read",
     output: {
-      schema: CANONICAL_OUTPUT_SCHEMA,
+      schema: outputSchema,
       render(_args, value) {
         return [{ type: "text", text: JSON.stringify(value) }];
       },
@@ -225,6 +412,9 @@ export interface SurveysDshManifest {
   };
   readonly dsh: {
     readonly manifestVersion: 1;
+    readonly profile: {
+      readonly bundles: readonly string[];
+    };
     readonly bundle: {
       readonly patch: string | readonly string[];
       readonly platforms?: readonly string[];
@@ -250,8 +440,11 @@ export const SURVEYS_DSH_MANIFEST: SurveysDshManifest = {
   },
   dsh: {
     manifestVersion: 1,
+    profile: {
+      bundles: ["@deepseek-ai/dsh-base", "@deepseek-ai/dsh-sdk-app"],
+    },
     bundle: {
-      patch: "cordis.patch.yml",
+      patch: "./cordis.patch.yml",
       listedByDefault: true,
     },
     client: {
