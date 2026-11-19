@@ -97,6 +97,7 @@ function memoryStorage() {
         latestRevisionNumber: unimplemented,
         insertRevision: unimplemented,
         boundFileIds: unimplemented,
+        countStarted: async () => 0,
         countFinishedResponses: unimplemented,
         findResponseByTokenHash: unimplemented,
         createResponse: unimplemented,

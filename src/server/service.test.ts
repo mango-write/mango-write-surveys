@@ -127,3 +127,36 @@ describe("createSurvey 幂等（AI operationId 派生）", () => {
     );
   });
 });
+
+describe("deleteSurvey 锁内同事务计数（R2-P1-11）", () => {
+  it("withSurveyLock 内优先使用 tx.countStarted，不回落全局 storage.countStarted", async () => {
+    const globalCountStarted = vi.fn(async () => 0);
+    const txCountStarted = vi.fn(async () => 1);
+    const softDelete = vi.fn(async () => undefined);
+    const ports = {
+      auth: {
+        resolveSpaceAccess: vi.fn(async () => ({ canRead: true, canWrite: true })),
+        resolveResourceAccess: vi.fn(async () => ({ canRead: true, canWrite: true, canDelete: true })),
+      },
+      storage: {
+        findById: vi.fn(async () => makeRecord()),
+        countStarted: globalCountStarted,
+        withSurveyLock: vi.fn(async (_id: string, fn: (tx: unknown) => Promise<unknown>) =>
+          fn({
+            survey: vi.fn(async () => makeRecord()),
+            latestRevisionNumber: vi.fn(async () => 0),
+            countStarted: txCountStarted,
+            updateSurvey: softDelete,
+          }),
+        ),
+      },
+    } as unknown as SurveysPorts;
+    const service = createSurveysService(ports);
+    await expect(
+      service.deleteSurvey(author.userId, surveyId, { onlyUnpublishedEmpty: true }),
+    ).rejects.toMatchObject({ code: "survey_not_deletable_by_agent", status: 409 });
+    expect(txCountStarted).toHaveBeenCalledWith(surveyId);
+    expect(globalCountStarted).not.toHaveBeenCalled();
+    expect(softDelete).not.toHaveBeenCalled();
+  });
+});

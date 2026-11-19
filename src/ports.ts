@@ -161,6 +161,8 @@ export interface SurveysLock {
   }): Promise<{ id: string }>;
   /** 发布校验：选项图 imageFileId 中已绑定在本问卷的子集。 */
   boundFileIds(surveyId: string, ids: string[]): Promise<string[]>;
+  /** 锁内同连接统计已开始答卷数（必选：禁止持锁事务内回落全局连接造成连接池自死锁）。 */
+  countStarted(surveyId: string): Promise<number>;
   countFinishedResponses(surveyId: string, revisionId: string): Promise<number>;
   findResponseByTokenHash(tokenHash: string): Promise<SurveyResponseRecord | null>;
   createResponse(input: {
