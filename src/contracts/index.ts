@@ -274,10 +274,10 @@ export type SurveyReviewFinding = z.infer<typeof SurveyReviewFindingSchema>;
 
 /**
  * 问卷交付载荷（issue #217，与主仓 @mango-write/contracts 的 ToolSurveyDelivery
- * 同构；本包持有同一定义的投影，宿主桥适配时零转换）。survey_edit 由工作区页在
- * 本地草稿上重放 ops（进撤销栈 + 自动保存 + toast）；survey_create 由列表页/
- * 工作区导航到新问卷；survey_review 把待处理诊断锚到画布并持久化，不直接改卷。
- * 交付帧只经活流发一次；刷新后的建议恢复改走 SurveyDetail.review，不回放编辑操作。
+ * 同构；本包持有同一定义的投影，宿主桥适配时零转换）。survey_edit 由服务端原子落盘
+ * 后随帧带回最新 draftVersion 与 definition，工作区页直接同步进撤销栈（失活切回则由
+ * onActivated 对账补齐）；survey_create 由列表页/工作区导航到新问卷；survey_review
+ * 把待处理诊断锚到画布并持久化，不直接改卷。
  */
 export const SurveyReviewDeliverySchema = z.object({
   type: z.literal("survey_review"),
@@ -300,13 +300,16 @@ export const ToolSurveyDeliverySchema = z.discriminatedUnion("type", [
     /** 本次 AI 操作的身份（宿主按「一次用户操作」生成、跨重试稳定）：
      *  交付去重与建卷幂等的公钥，不回灌模型。 */
     operationId: z.string().min(6).max(64),
-    /** 服务端校验 ops 时所依据的持久草稿版本。页面与本地副本对不上
-     *  （版本不一致或有未落盘编辑）时不自动应用，转人工确认。 */
+    /** 服务端校验并原子落盘前所依据的持久草稿版本。页面与本地副本对不上
+     *  （版本不一致或有未落盘编辑）时不自动覆盖，转人工确认。 */
     baseDraftVersion: z.number().int().min(1),
+    /** 服务端原子落盘后的最新草稿版本；旧持久化消息缺席时回退本地重放。 */
+    draftVersion: z.number().int().min(1).optional(),
+    /** 服务端原子落盘后的完整草稿定义快照；旧持久化消息缺席时回退 appliedOps 重放。 */
+    definition: SurveyDefinitionSchema.optional(),
     /** 模型给的一句话修改摘要（toast 与历史条目标签）。 */
     summary: z.string().max(300),
-    /** 实际应用的操作（SurveyOp 词表，含服务端生成的 id）——宿主页在本地当前
-     *  草稿上重放这批操作，与撤销栈合流。 */
+    /** 实际应用的操作（SurveyOp 词表，含服务端生成的 id）。 */
     appliedOps: z.array(SurveyOpSchema).max(200),
     /** 被拒绝的操作数与原因（宿主 toast 如实告知）。 */
     rejected: z.array(z.object({ reason: z.string().max(300) })).max(200).optional(),

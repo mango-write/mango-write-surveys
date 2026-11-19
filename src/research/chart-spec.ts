@@ -13,12 +13,127 @@ import type {
   SurveyResearchTable,
 } from "../contracts/index.js";
 
-export const RESEARCH_CHART_COLORS = [
-  "#D97745",
-  "#2A7F78",
-  "#C49A3A",
-  "#4C78A8",
-] as const;
+export type SurveyChartThemeId =
+  | "screen"
+  | "okabe-ito"
+  | "cn-journal"
+  | "journal-gray";
+export type SurveyChartSurface = "auto" | "paper" | "dark" | "transparent";
+export type SurveyChartFontScale = "sm" | "md" | "lg";
+
+export interface SurveyChartViewStyle {
+  theme: SurveyChartThemeId;
+  surface: SurveyChartSurface;
+  fontScale: SurveyChartFontScale;
+  showGrid: boolean;
+  showHeader: boolean;
+}
+
+export interface SurveyChartThemeTokens {
+  id: SurveyChartThemeId;
+  categoryColors: readonly string[];
+  sequential: readonly [string, string, string];
+  textColor: string;
+  mutedColor: string;
+  lineColor: string;
+  fontFamily: string;
+  barBorderRadius: number;
+}
+
+export const SURVEY_CHART_THEMES: Record<
+  SurveyChartThemeId,
+  SurveyChartThemeTokens
+> = {
+  screen: {
+    id: "screen",
+    categoryColors: [
+      "#2F6FED",
+      "#E66A2B",
+      "#10B981",
+      "#8B5CF6",
+      "#F59E0B",
+      "#06B6D4",
+      "#EC4899",
+      "#64748B",
+    ],
+    sequential: ["#2F6FED", "#F1F5F9", "#E66A2B"],
+    textColor: "#1E293B",
+    mutedColor: "#64748B",
+    lineColor: "#E2E8F0",
+    fontFamily:
+      "'PingFang SC', 'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif",
+    barBorderRadius: 4,
+  },
+  "okabe-ito": {
+    id: "okabe-ito",
+    categoryColors: [
+      "#E69F00",
+      "#56B4E9",
+      "#009E73",
+      "#F0E442",
+      "#0072B2",
+      "#D55E00",
+      "#CC79A7",
+      "#000000",
+    ],
+    sequential: ["#0072B2", "#F5F5F5", "#D55E00"],
+    textColor: "#1A1A1A",
+    mutedColor: "#525252",
+    lineColor: "#D9D9D9",
+    fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+    barBorderRadius: 0,
+  },
+  "cn-journal": {
+    id: "cn-journal",
+    categoryColors: [
+      "#3F5872",
+      "#8C4A3F",
+      "#5D7A4E",
+      "#7A5D8C",
+      "#B0863F",
+      "#4E7A7A",
+    ],
+    sequential: ["#3F5872", "#F4F5F7", "#8C4A3F"],
+    textColor: "#262626",
+    mutedColor: "#595959",
+    lineColor: "#D4D4D4",
+    fontFamily: "'SimSun', 'Songti SC', serif",
+    barBorderRadius: 0,
+  },
+  "journal-gray": {
+    id: "journal-gray",
+    categoryColors: [
+      "#1A1A1A",
+      "#4D4D4D",
+      "#808080",
+      "#B3B3B3",
+      "#6E6E6E",
+      "#999999",
+    ],
+    sequential: ["#D9D9D9", "#F5F5F5", "#1A1A1A"],
+    textColor: "#1A1A1A",
+    mutedColor: "#595959",
+    lineColor: "#D9D9D9",
+    fontFamily: "'Helvetica Neue', Helvetica, Arial, sans-serif",
+    barBorderRadius: 0,
+  },
+};
+
+export const DEFAULT_SURVEY_CHART_STYLE: SurveyChartViewStyle = {
+  theme: "screen",
+  surface: "auto",
+  fontScale: "md",
+  showGrid: true,
+  showHeader: false,
+};
+
+export function createSurveyChartStyle(
+  overrides: Partial<SurveyChartViewStyle> = {},
+): SurveyChartViewStyle {
+  return { ...DEFAULT_SURVEY_CHART_STYLE, ...overrides };
+}
+
+export const RESEARCH_CHART_COLORS = SURVEY_CHART_THEMES.screen.categoryColors;
 
 export interface ResearchChartLabels {
   reliabilityTitle: string;
@@ -89,9 +204,60 @@ const defaultLabels: ResearchChartLabels = {
   estimate: "估计",
 };
 
-const textColor = "#514A44";
-const mutedColor = "#7C736B";
-const lineColor = "#DED8D1";
+interface ResolvedSurveyChartStyle {
+  colors: readonly string[];
+  sequential: readonly [string, string, string];
+  textColor: string;
+  mutedColor: string;
+  lineColor: string;
+  backgroundColor: string;
+  fontFamily: string;
+  fontSizePx: number;
+  barBorderRadius: number;
+  showGrid: boolean;
+  showHeader: boolean;
+}
+
+const FONT_SCALE_PX: Record<SurveyChartFontScale, number> = {
+  sm: 11,
+  md: 12.5,
+  lg: 14,
+};
+
+export function resolveSurveyChartTheme(
+  style: Partial<SurveyChartViewStyle> = {},
+  isDark = false,
+): ResolvedSurveyChartStyle {
+  const merged = createSurveyChartStyle(style);
+  const tokens = SURVEY_CHART_THEMES[merged.theme];
+  const effectiveSurface =
+    merged.surface === "auto" ? (isDark ? "dark" : "paper") : merged.surface;
+  const darkPalette =
+    effectiveSurface === "dark" || (effectiveSurface === "transparent" && isDark);
+  return {
+    colors: tokens.categoryColors,
+    sequential: tokens.sequential,
+    textColor: darkPalette ? "#E5E7EB" : tokens.textColor,
+    mutedColor: darkPalette ? "#9CA3AF" : tokens.mutedColor,
+    lineColor: darkPalette ? "#2D323E" : tokens.lineColor,
+    backgroundColor:
+      effectiveSurface === "dark"
+        ? "#181A20"
+        : effectiveSurface === "transparent"
+          ? "transparent"
+          : "#FFFFFF",
+    fontFamily: tokens.fontFamily,
+    fontSizePx: FONT_SCALE_PX[merged.fontScale],
+    barBorderRadius: tokens.barBorderRadius,
+    showGrid: merged.showGrid,
+    showHeader: merged.showHeader,
+  };
+}
+
+const defaultResolvedStyle = resolveSurveyChartTheme();
+const textColor = defaultResolvedStyle.textColor;
+const mutedColor = defaultResolvedStyle.mutedColor;
+const lineColor = defaultResolvedStyle.lineColor;
 
 function tableById(
   run: Pick<ResearchRunDetail, "recipe" | "result">,
@@ -565,9 +731,210 @@ function simpleSlopesSpec(
   );
 }
 
+function decorateOptionWithStyle(
+  spec: ResearchChartSpec,
+  style: ResolvedSurveyChartStyle,
+): ResearchChartSpec {
+  const option: Record<string, unknown> = {
+    ...(spec.option as Record<string, unknown>),
+    backgroundColor: style.backgroundColor,
+    color: [...style.colors],
+    textStyle: {
+      color: style.textColor,
+      fontFamily: style.fontFamily,
+      fontSize: style.fontSizePx,
+    },
+  };
+
+  const recolorAxis = (raw: unknown, isY = false): unknown => {
+    if (!raw || typeof raw !== "object") return raw;
+    const axis = { ...(raw as Record<string, unknown>) };
+    const existingAxisLine = (axis.axisLine as Record<string, unknown> | undefined) ?? {};
+    axis.axisLine = {
+      ...existingAxisLine,
+      lineStyle: {
+        ...((existingAxisLine.lineStyle as Record<string, unknown> | undefined) ?? {}),
+        color: style.lineColor,
+      },
+    };
+    const existingLabel = (axis.axisLabel as Record<string, unknown> | undefined) ?? {};
+    axis.axisLabel = {
+      ...existingLabel,
+      color: axis.type === "category" ? style.textColor : style.mutedColor,
+      fontSize: Math.max(10, style.fontSizePx - 1),
+    };
+    const existingNameStyle = (axis.nameTextStyle as Record<string, unknown> | undefined) ?? {};
+    axis.nameTextStyle = {
+      ...existingNameStyle,
+      color: style.mutedColor,
+      fontSize: Math.max(10, style.fontSizePx - 1),
+      ...(isY && typeof axis.name === "string" && axis.name.trim()
+        ? { align: "left", padding: [0, 0, 2, 0] }
+        : {}),
+    };
+    if (isY && typeof axis.name === "string" && axis.name.trim()) {
+      axis.nameGap = Math.max(12, typeof axis.nameGap === "number" ? axis.nameGap : 12);
+    }
+    const existingSplit = (axis.splitLine as Record<string, unknown> | undefined) ?? {};
+    if (axis.type !== "category" || existingSplit.show) {
+      axis.splitLine = {
+        ...existingSplit,
+        show: style.showGrid,
+        lineStyle: {
+          ...((existingSplit.lineStyle as Record<string, unknown> | undefined) ?? {}),
+          color: style.lineColor,
+        },
+      };
+    }
+    return axis;
+  };
+
+  if (option.xAxis) option.xAxis = recolorAxis(option.xAxis, false);
+  if (option.yAxis) option.yAxis = recolorAxis(option.yAxis, true);
+
+  if (option.visualMap && typeof option.visualMap === "object") {
+    const vm = { ...(option.visualMap as Record<string, unknown>) };
+    vm.textStyle = { color: style.mutedColor, fontSize: Math.max(10, style.fontSizePx - 1) };
+    vm.inRange = { color: [...style.sequential] };
+    option.visualMap = vm;
+  }
+
+  if (Array.isArray(option.series)) {
+    option.series = option.series.map((raw, idx) => {
+      if (!raw || typeof raw !== "object") return raw;
+      const s = { ...(raw as Record<string, unknown>) };
+      if (s.type === "bar") {
+        const isHorizontal = spec.id === "reliability-alpha";
+        const r = style.barBorderRadius;
+        s.itemStyle = {
+          ...((s.itemStyle as Record<string, unknown> | undefined) ?? {}),
+          color: style.colors[idx % style.colors.length],
+          borderRadius: r > 0 ? (isHorizontal ? [0, r, r, 0] : [r, r, 0, 0]) : 0,
+        };
+        if (s.label && typeof s.label === "object") {
+          s.label = { ...(s.label as Record<string, unknown>), color: style.textColor };
+        }
+      } else if (s.type === "heatmap") {
+        const sep =
+          style.backgroundColor === "transparent" ? "#FFFFFF" : style.backgroundColor;
+        s.itemStyle = {
+          ...((s.itemStyle as Record<string, unknown> | undefined) ?? {}),
+          borderColor: sep,
+        };
+        if (s.label && typeof s.label === "object") {
+          s.label = { ...(s.label as Record<string, unknown>), color: "#1E293B" };
+        }
+      } else if (s.type === "custom") {
+        // 误差棒/森林图点与区间使用主题色板第 0 / 2 色，保证主题切换即时生效。
+        s.renderItem = createConfidenceIntervalRenderer(
+          style.colors[0],
+          style.colors[2] ?? style.colors[1] ?? style.colors[0],
+        );
+      } else if (s.markLine && typeof s.markLine === "object") {
+        const ml = { ...(s.markLine as Record<string, unknown>) };
+        ml.lineStyle = {
+          ...((ml.lineStyle as Record<string, unknown> | undefined) ?? {}),
+          color: style.mutedColor,
+        };
+        s.markLine = ml;
+      }
+      return s;
+    });
+  }
+
+  let height = spec.height;
+  if (option.grid && typeof option.grid === "object") {
+    const grid = { ...(option.grid as Record<string, unknown>) };
+    const baseTop = typeof grid.top === "number" ? grid.top : 44;
+    const minSafeTop = spec.id === "efa-variance" ? 54 : 44;
+    let nextTop = Math.max(baseTop, minSafeTop);
+    if (style.showHeader && spec.title.trim()) {
+      const hasSub = Boolean(spec.description.trim());
+      const headerOffset = hasSub ? 56 : 36;
+      option.title = {
+        show: true,
+        text: spec.title,
+        ...(hasSub ? { subtext: spec.description } : {}),
+        left: 16,
+        top: 12,
+        itemGap: 4,
+        textStyle: {
+          color: style.textColor,
+          fontFamily: style.fontFamily,
+          fontSize: Math.round(style.fontSizePx * 1.25),
+          fontWeight: 600,
+        },
+        ...(hasSub
+          ? {
+              subtextStyle: {
+                color: style.mutedColor,
+                fontFamily: style.fontFamily,
+                fontSize: Math.max(10.5, style.fontSizePx - 1),
+              },
+            }
+          : {}),
+      };
+      nextTop += headerOffset;
+      height += headerOffset;
+    }
+    grid.top = nextTop;
+    option.grid = grid;
+  }
+
+  return {
+    ...spec,
+    height,
+    option: option as EChartsOption,
+  };
+}
+
+function createConfidenceIntervalRenderer(
+  pointColor: string,
+  bandColor: string,
+): CustomSeriesRenderItem {
+  return (_params, api) => {
+    const low = Number(api.value(0));
+    const high = Number(api.value(1));
+    const estimate = Number(api.value(2));
+    const row = Number(api.value(3));
+    const start = api.coord([low, row]);
+    const end = api.coord([high, row]);
+    const point = api.coord([estimate, row]);
+    return {
+      type: "group",
+      children: [
+        {
+          type: "rect",
+          shape: {
+            x: Math.min(start[0], end[0]),
+            y: start[1] - 1,
+            width: Math.max(1, Math.abs(end[0] - start[0])),
+            height: 2,
+          },
+          style: { fill: bandColor },
+        },
+        ...[start, end].map((position) => ({
+          type: "rect" as const,
+          shape: { x: position[0] - 1, y: position[1] - 6, width: 2, height: 12 },
+          style: { fill: bandColor },
+        })),
+        {
+          type: "circle",
+          shape: { cx: point[0], cy: point[1], r: 5 },
+          style: { fill: pointColor },
+        },
+      ],
+    };
+  };
+}
+
 export function buildResearchChartSpecs(
   run: Pick<ResearchRunDetail, "recipe" | "result">,
-  options: { labels?: Partial<ResearchChartLabels> } = {},
+  options: {
+    labels?: Partial<ResearchChartLabels>;
+    style?: Partial<SurveyChartViewStyle>;
+    isDark?: boolean;
+  } = {},
 ): ResearchChartSpec[] {
   const labels: ResearchChartLabels = {
     ...defaultLabels,
@@ -575,24 +942,28 @@ export function buildResearchChartSpecs(
     conditionalEffects:
       options.labels?.conditionalEffects ?? defaultLabels.conditionalEffects,
   };
-  switch (run.recipe.type) {
-    case "reliability": {
-      const chart = reliabilitySpec(run, labels);
-      return chart ? [chart] : [];
+  const resolvedStyle = resolveSurveyChartTheme(options.style, options.isDark);
+  const rawSpecs = (() => {
+    switch (run.recipe.type) {
+      case "reliability": {
+        const chart = reliabilitySpec(run, labels);
+        return chart ? [chart] : [];
+      }
+      case "efa":
+        return [
+          efaVarianceSpec(run, labels),
+          efaLoadingsSpec(run, labels),
+        ].filter((chart): chart is ResearchChartSpec => chart !== null);
+      case "ols": {
+        const chart = olsSpec(run, labels);
+        return chart ? [chart] : [];
+      }
+      case "moderatedMediation":
+        return [
+          conditionalIndirectSpec(run, labels),
+          simpleSlopesSpec(run, labels),
+        ].filter((chart): chart is ResearchChartSpec => chart !== null);
     }
-    case "efa":
-      return [
-        efaVarianceSpec(run, labels),
-        efaLoadingsSpec(run, labels),
-      ].filter((chart): chart is ResearchChartSpec => chart !== null);
-    case "ols": {
-      const chart = olsSpec(run, labels);
-      return chart ? [chart] : [];
-    }
-    case "moderatedMediation":
-      return [
-        conditionalIndirectSpec(run, labels),
-        simpleSlopesSpec(run, labels),
-      ].filter((chart): chart is ResearchChartSpec => chart !== null);
-  }
+  })();
+  return rawSpecs.map((spec) => decorateOptionWithStyle(spec, resolvedStyle));
 }

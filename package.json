@@ -2,6 +2,7 @@
   "name": "@mango-write/surveys",
   "private": true,
   "version": "0.1.0",
+  "description": "Research survey authoring, collection, and statistical analysis plugin",
   "type": "module",
   "license": "AGPL-3.0-or-later",
   "packageManager": "pnpm@10.20.0",
@@ -25,6 +26,12 @@
     },
     "./ai": "./src/ai/index.ts",
     "./vue": "./src/vue/index.ts",
+    "./mount": "./src/vue/mount.ts",
+    "./dsh": {
+      "mango-source": "./src/dsh/index.ts",
+      "types": "./dist/dsh/index.d.ts",
+      "default": "./dist/dsh/index.js"
+    },
     "./adapters": "./src/adapters/index.ts",
     "./ports": "./src/ports.ts"
   },
@@ -57,6 +64,7 @@
     "vue-router": "^4.4.5"
   },
   "devDependencies": {
+    "@deepseek-ai/dsh": "0.2.2-rc.4",
     "@tiptap/starter-kit": "^3.29.2",
     "@tiptap/vue-3": "^3.29.2",
     "@types/jsdom": "^30.0.0",
@@ -81,6 +89,29 @@
     }
   },
   "sideEffects": false,
+  "engines": {
+    "dsh": ">=0.2.2-rc.4",
+    "node": ">=24.0.0"
+  },
+  "dsh": {
+    "manifestVersion": 1,
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-sdk-app"
+      ]
+    },
+    "bundle": {
+      "patch": "./cordis.patch.yml",
+      "listedByDefault": true
+    },
+    "client": {
+      "platform": "web",
+      "external": [
+        "@mango-write/surveys/mount"
+      ]
+    }
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/mango-write/mango-write-surveys.git"

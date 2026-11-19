@@ -103,7 +103,7 @@ beforeEach(() => {
 });
 
 describe("问卷 AI 工具 — 规格面", () => {
-  it("写工具都是 host-applied（编辑不落库 / 新资源直写 / 诊断保存建议）", () => {
+  it("写工具与诊断工具均在循环内直接执行并下发交付帧（不走 propose_write 停步）", () => {
     const registered: SurveyAiToolSpec[] = [];
     registerSurveyAiTools(tools, (tool) => registered.push(tool));
     expect(registered.map((tool) => tool.name)).toEqual([
@@ -234,7 +234,12 @@ it("AI 整卷替换不能伪造或覆盖来源记录", async () => {
 });
 
 describe("survey_edit run", () => {
-  it("合法 ops：应用（含生成 id）并回执，不写库", async () => {
+  it("合法 ops：校验基线后在服务端原子落库（含新增题来源记录），返回最新 draftVersion 与完整 definition", async () => {
+    service.updateSurvey.mockImplementation(async (_userId: string, _id: string, input: { expectedVersion: number; definition: unknown }) => ({
+      id: SURVEY_ID,
+      draftVersion: input.expectedVersion + 1,
+      definition: input.definition,
+    }));
     const result = await tools.surveyEdit.run(
       {
         baseDraftVersion: 3,
@@ -249,13 +254,47 @@ describe("survey_edit run", () => {
       },
       SURVEY_CTX,
     );
-    expect(service.updateSurvey).not.toHaveBeenCalled();
     expect(result.ok).toBe(true);
     expect(result.operationId).toBe(OP_ID);
     expect(result.baseDraftVersion).toBe(3);
+    expect(result.draftVersion).toBe(4);
     expect(result.appliedCount).toBe(1);
     const added = (result.appliedOps as unknown[])[0] as unknown as { question: { id: string } };
     expect(added.question.id).toBeTruthy();
+    expect(service.updateSurvey).toHaveBeenCalledWith("user-1", SURVEY_ID, {
+      expectedVersion: 3,
+      definition: expect.objectContaining({
+        sourceRecords: [
+          expect.objectContaining({
+            questionId: added.question.id,
+            sourceId: "ai-generated-unverified",
+          }),
+        ],
+      }),
+    });
+    expect(surveyDeliveryFromResult("survey_edit", result)).toMatchObject({
+      type: "survey_edit",
+      surveyId: SURVEY_ID,
+      operationId: OP_ID,
+      baseDraftVersion: 3,
+      draftVersion: 4,
+      definition: expect.objectContaining({ title: "测试问卷" }),
+    });
+  });
+
+  it("并发保存触发 version_conflict 时归一为 stale_read 错误，不产生交付", async () => {
+    service.updateSurvey.mockRejectedValueOnce(new SurveyError("version_conflict", 409));
+    const result = await tools.surveyEdit.run(
+      {
+        baseDraftVersion: 3,
+        ops: [{ op: "set_meta", title: "并发标题" }],
+        summary: "改标题",
+      },
+      SURVEY_CTX,
+    );
+    expect(result.ok).toBeUndefined();
+    expect(String(result.error)).toContain("stale_read");
+    expect(surveyDeliveryFromResult("survey_edit", result)).toBeNull();
   });
 
   it("基线落后于服务端版本（读取后用户保存过）：拒绝并要求重读，不产生交付", async () => {

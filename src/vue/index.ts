@@ -47,3 +47,9 @@ export { default as SurveyPublicPage } from "./pages/SurveyPublicPage.vue";
 export { default as SurveyPretestPage } from "./pages/SurveyPretestPage.vue";
 export { default as SurveyDataAnalysis } from "./components/SurveyDataAnalysis.vue";
 export { default as SurveyResearchPanel } from "./components/SurveyResearchPanel.vue";
+export {
+  mountSurveyWidget,
+  type MountSurveyWidgetOptions,
+  type MountedSurveyWidget,
+  type SurveysHost,
+} from "./mount.js";

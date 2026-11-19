@@ -1,6 +1,7 @@
 // 问卷交付载荷摘出：宿主在 tool_step done 帧消费（chart-tools 同一模式），
 // 只进 UI 不回灌模型。非问卷工具、失败结果或零应用返回 null。
 import type {
+  SurveyDefinition,
   SurveyIssue,
   SurveyOp,
   SurveyReviewFinding,
@@ -45,11 +46,21 @@ export function surveyDeliveryFromResult(tool: string, result: unknown): ToolSur
   const rejected = Array.isArray(r.rejected) && r.rejected.length > 0
     ? (r.rejected as { reason: string }[])
     : undefined;
+  const draftVersion =
+    typeof r.draftVersion === "number" && Number.isInteger(r.draftVersion) && r.draftVersion >= 1
+      ? r.draftVersion
+      : undefined;
+  const definition =
+    r.definition && typeof r.definition === "object" && !Array.isArray(r.definition)
+      ? (r.definition as SurveyDefinition)
+      : undefined;
   return {
     type: "survey_edit",
     surveyId: r.surveyId,
     operationId: r.operationId,
     baseDraftVersion: r.baseDraftVersion,
+    ...(draftVersion !== undefined ? { draftVersion } : {}),
+    ...(definition !== undefined ? { definition } : {}),
     summary: typeof r.summary === "string" ? r.summary : "",
     appliedOps: r.appliedOps as SurveyOp[],
     ...(rejected ? { rejected } : {}),

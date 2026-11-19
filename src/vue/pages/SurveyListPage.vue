@@ -5,7 +5,7 @@
 // 本页；导航一律走宿主 host.navigate（spaceLink 的 u./t. 前缀是宿主语义）；
 // survey_create 交付帧经 host.copilot 桥接：载荷交接给工作区 + toast + 导航，
 // 本页不感知 copilot-island 内部。
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from "vue";
 import { useI18n } from "vue-i18n";
 import Button from "@mango-write/ui-vue/components/Button";
 import Dialog from "@mango-write/ui-vue/components/Dialog";
@@ -42,30 +42,66 @@ const newTitle = ref("");
 const templateOpen = ref(false);
 const templateBusy = ref(false);
 
+const pageActive = ref(true);
+const copilotOwner = Symbol("surveys-list");
+let wasDeactivated = false;
+let loadGeneration = 0;
+
 // survey_create 交付帧 → 载荷交接给工作区（落地提示卡）+ toast + 导航。
 const copilotHandlers: SurveysCopilotHandlers = {
   onSurveyDeliveryFrame: (delivery) => {
-    if (delivery.type !== "survey_create") return;
+    if (!pageActive.value || delivery.type !== "survey_create") return;
     setAiCreatedSurveyHandoff(delivery);
     notify.success(t("surveys.copilot.created", { title: delivery.title }));
     host.navigate({ name: "surveys.detail", surveyId: delivery.surveyId });
   },
 };
-const unregisterCopilotHandlers = host.copilot?.registerHandlers(copilotHandlers);
-// Copilot 面板呈现（issue #224 M2）：列表 scope 注册建卷场景文案与动作；
-// 生成动作走既有 prompt 语义（sendAgentEdit 同一管线，工具语义不变）。
-// 卸载后的 surface 清理归 releasePageState（契约上负责页面写入桥的状态）。
-host.copilot?.setSurfacePresentation?.({
-  title: t("surveys.copilot.listTitle"),
-  description: t("surveys.copilot.listDescription"),
-  composerPlaceholder: t("surveys.copilot.listPlaceholder"),
-  actions: [
-    { id: "survey-generate", label: t("surveys.copilot.generate"), primary: true, prompt: t("surveys.copilot.generateTemplate") },
-  ],
+let unregisterCopilotHandlers: (() => void) | undefined;
+function mountCopilotHandlers() {
+  if (unregisterCopilotHandlers) return;
+  unregisterCopilotHandlers = host.copilot?.registerHandlers(copilotHandlers);
+}
+function unmountCopilotHandlers() {
+  unregisterCopilotHandlers?.();
+  unregisterCopilotHandlers = undefined;
+}
+mountCopilotHandlers();
+
+function syncListSurfacePresentation() {
+  if (!pageActive.value) return;
+  host.copilot?.setSurfacePresentation?.(
+    {
+      title: t("surveys.copilot.listTitle"),
+      description: t("surveys.copilot.listDescription"),
+      composerPlaceholder: t("surveys.copilot.listPlaceholder"),
+      actions: [
+        { id: "survey-generate", label: t("surveys.copilot.generate"), primary: true, prompt: t("surveys.copilot.generateTemplate") },
+      ],
+    },
+    copilotOwner,
+  );
+}
+syncListSurfacePresentation();
+
+onActivated(() => {
+  pageActive.value = true;
+  mountCopilotHandlers();
+  syncListSurfacePresentation();
+  if (wasDeactivated && !loading.value) {
+    wasDeactivated = false;
+    void reconcileOnActivated();
+  }
+});
+onDeactivated(() => {
+  pageActive.value = false;
+  wasDeactivated = true;
+  unmountCopilotHandlers();
+  host.copilot?.releasePageState(copilotOwner);
 });
 onBeforeUnmount(() => {
-  unregisterCopilotHandlers?.();
-  host.copilot?.releasePageState();
+  pageActive.value = false;
+  unmountCopilotHandlers();
+  host.copilot?.releasePageState(copilotOwner);
 });
 
 const statusOptions = computed(() => [
@@ -91,14 +127,37 @@ function errorMessage(): string {
 }
 
 async function load() {
+  const own = ++loadGeneration;
+  wasDeactivated = false;
   loading.value = true;
   error.value = "";
   try {
-    items.value = (await surveysApi.list()).items;
-  } catch (e) {
-    error.value = errorMessage();
+    const res = await surveysApi.list();
+    if (own !== loadGeneration) return;
+    items.value = res.items;
+  } catch {
+    if (own === loadGeneration) error.value = errorMessage();
   } finally {
-    loading.value = false;
+    if (own === loadGeneration) {
+      loading.value = false;
+      if (wasDeactivated && pageActive.value) {
+        wasDeactivated = false;
+        void reconcileOnActivated();
+      }
+    }
+  }
+}
+
+async function reconcileOnActivated() {
+  if (loading.value || busy.value || templateBusy.value) return;
+  const own = ++loadGeneration;
+  try {
+    const res = await surveysApi.list();
+    if (!pageActive.value || own !== loadGeneration) return;
+    items.value = res.items;
+    error.value = "";
+  } catch {
+    // KeepAlive 切回静默对账失败保留既有列表与筛选态，不打断浏览。
   }
 }
 

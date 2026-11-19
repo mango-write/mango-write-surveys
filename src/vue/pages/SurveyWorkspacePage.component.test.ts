@@ -88,12 +88,14 @@ function makeHost(
   copilotSendPrompt?: ReturnType<typeof vi.fn>;
   copilotRelease?: ReturnType<typeof vi.fn>;
   copilotHandlers: Array<{ onSurveyDeliveryFrame?: (delivery: never) => void }>;
+  stageTitle: ReturnType<typeof vi.fn>;
   notifySuccess: ReturnType<typeof vi.fn>;
   notifyWarn: ReturnType<typeof vi.fn>;
 } {
   const navigate = vi.fn();
   const notifySuccess = vi.fn();
   const notifyWarn = vi.fn();
+  const stageTitle = vi.fn();
   const copilotHandlers: Array<{ onSurveyDeliveryFrame?: (delivery: never) => void }> = [];
   const copilotRegister = opts.copilot
       ? vi.fn((handlers: never) => {
@@ -105,6 +107,7 @@ function makeHost(
   const copilotSendPrompt = opts.copilot ? vi.fn(async () => {}) : undefined;
   const copilotRelease = opts.copilot ? vi.fn() : undefined;
   const host = createTestHost({
+    setStageTitle: stageTitle,
     notify: { success: notifySuccess, error: vi.fn(), info: vi.fn(), warn: notifyWarn },
     ...(opts.workbench ? { workbenchShell: { template: "<div/>" } } : {}),
     ...(opts.layoutPrefs ? { layoutPrefs: opts.layoutPrefs } : {}),
@@ -150,7 +153,7 @@ function makeHost(
     },
     navigate: navigate as never,
   });
-  return { host, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, notifySuccess, notifyWarn };
+  return { host, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, stageTitle, notifySuccess, notifyWarn };
 }
 
 const ShellStub = (activeTab: string) =>
@@ -207,6 +210,8 @@ const CanvasStub = defineComponent({
     },
   },
   template: `<div class="canvas-stub" @click="appendTitle()">
+    <textarea class="stem-textarea" :value="modelValue.questions[0]?.title ?? ''" @click.stop @input="editQuestion('q1', $event.target.value)" />
+    <div class="rich-editable" contenteditable="true" @click.stop />
     <button class="edit-q1" @click.stop="editQuestion('q1', 'Q1改')" />
     <button class="edit-q2" @click.stop="editQuestion('q2', 'Q2改')" />
     <button class="edit-desc" @click.stop="editPageDescription()" />
@@ -353,7 +358,7 @@ async function mountWorkspace(
 ) {
   const router = makeRouter();
   await router.push(initialPath);
-  const { host, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, notifySuccess, notifyWarn } = makeHost(opts);
+  const { host, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, stageTitle, notifySuccess, notifyWarn } = makeHost(opts);
   const wrapper = mountSurveysComponent(
     SurveyWorkspacePage,
     { global: { plugins: [router], stubs: shellStubs(leftActiveTab) } },
@@ -361,7 +366,7 @@ async function mountWorkspace(
   );
   await router.isReady();
   await flushPromises();
-  return { router, wrapper, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, notifySuccess, notifyWarn };
+  return { router, wrapper, navigate, copilotRegister, copilotPresentation, copilotSendPrompt, copilotRelease, copilotHandlers, stageTitle, notifySuccess, notifyWarn };
 }
 
 // 离开保护要走 vue-router 的 in-component 守卫：页面必须是当前路由的组件实例。
@@ -457,6 +462,19 @@ async function changeResponseLimit(wrapper: ReturnType<typeof mount>) {
 }
 
 describe("SurveyWorkspacePage 生命周期轨道（issue #217）", () => {
+  it("按路由 surveyId 向宿主同步真实卷名，并跟随画布标题编辑", async () => {
+    mocks.get.mockResolvedValue({
+      ...detail({ currentRevisionId: null }),
+      definition: definition("Alpha 阅读习惯调查"),
+    });
+    const { wrapper, stageTitle } = await mountWorkspace();
+    expect(stageTitle).toHaveBeenLastCalledWith("s-1", "Alpha 阅读习惯调查");
+
+    await changeDefinition(wrapper);
+    expect(stageTitle).toHaveBeenLastCalledWith("s-1", "Alpha 阅读习惯调查!");
+    wrapper.unmount();
+  });
+
   it("设计默认显示大纲与画布，长期说明不占画布", async () => {
     mocks.get.mockResolvedValue(detail({ currentRevisionId: "00000000-0000-4000-8000-000000000002" }));
     const { wrapper } = await mountWorkspace();
@@ -1604,6 +1622,159 @@ describe("SurveyWorkspacePage AI 交付新鲜度（#223）", () => {
       onSurveyDeliveryFrame: (delivery: unknown) => void | Promise<void>;
     };
   }
+
+  it("服务端权威快照交付：基线一致且无未保存编辑时直接对齐快照与 draftVersion，不重复发 PATCH，撤销以新版本写回", async () => {
+    mocks.save.mockResolvedValue({ ...detail({ currentRevisionId: null }), draftVersion: 4 });
+    const { wrapper, copilotRegister } = await mountWorkspace(
+      "/u/surveys/s-1",
+      "outline",
+      { copilot: true },
+    );
+    vi.useFakeTimers();
+    const handlers = await deliveryHandlers(copilotRegister!);
+    const serverDefinition: SurveyDefinition = {
+      ...definition("AI 服务端标题"),
+      questions: [
+        ...definition().questions,
+        { id: "ai-q", type: "text", title: "服务端新增题", required: false },
+      ],
+      pages: [{ id: "p1", title: "第一页", questionIds: ["q1", "ai-q"] }],
+      sourceRecords: [
+        {
+          sourceId: "ai-generated-unverified",
+          questionId: "ai-q",
+          language: "und",
+          baselineQuestion: "{}",
+        },
+      ],
+    };
+
+    await handlers.onSurveyDeliveryFrame({
+      ...editDelivery(2),
+      draftVersion: 3,
+      definition: serverDefinition,
+      appliedOps: [
+        { op: "set_meta", title: "AI 服务端标题" },
+        { op: "add_question", pageId: "p1", question: { id: "ai-q", type: "text", title: "服务端新增题", required: false } },
+      ],
+    });
+    await flushPromises();
+    await vi.advanceTimersByTimeAsync(2000);
+    // 服务端已原子落盘，激活态直接 settled 不重发 PATCH
+    expect(mocks.save).not.toHaveBeenCalled();
+    expect(wrapper.findComponent(CanvasStub).props("modelValue")).toEqual(serverDefinition);
+
+    // 按撤销回退到修改前快照，并按新版本 expectedVersion=3 发 PATCH（同时清除新增题来源记录）
+    const undoButton = wrapper.findAll("button").find((button) => button.attributes("aria-label") === t("surveys.undo"))!;
+    expect(undoButton.attributes("disabled")).toBeUndefined();
+    await undoButton.trigger("click");
+    await vi.advanceTimersByTimeAsync(1600);
+    expect(mocks.save).toHaveBeenCalledTimes(1);
+    expect(mocks.save.mock.calls[0]![1]).toBe(3);
+    expect(mocks.save.mock.calls[0]![2]).toEqual({ ...definition(), sourceRecords: [] });
+    wrapper.unmount();
+  });
+
+  it("画布受控 textarea 内按 Cmd+Z / Ctrl+Z 触发历史撤销与重做，且保护 IME composing、富文本与画布外输入框", async () => {
+    mocks.save.mockImplementation(async (_id: string, expectedVersion: number) => ({
+      ...detail({ currentRevisionId: null }),
+      draftVersion: expectedVersion + 1,
+    }));
+    const { wrapper } = await mountWorkspace();
+    vi.useFakeTimers();
+
+    const textarea = wrapper.find("textarea.stem-textarea");
+    const undoButton = wrapper.findAll("button").find((b) => b.attributes("aria-label") === t("surveys.undo"))!;
+    const redoButton = wrapper.findAll("button").find((b) => b.attributes("aria-label") === t("surveys.redo"))!;
+
+    // 第 1 段输入 → 停顿 >900ms（跨过 800ms 合并窗口）→ 第 2 段追加输入
+    await textarea.setValue("第一段题干");
+    await vi.advanceTimersByTimeAsync(950);
+    await textarea.setValue("第一段题干（追加）");
+    expect((textarea.element as HTMLTextAreaElement).value).toBe("第一段题干（追加）");
+    expect(undoButton.attributes("disabled")).toBeUndefined();
+
+    // 1) IME 输入法组合态（isComposing: true）一律放行，不触发撤销
+    const composingEvent = new KeyboardEvent("keydown", {
+      key: "z",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+    });
+    Object.defineProperty(composingEvent, "isComposing", { value: true });
+    textarea.element.dispatchEvent(composingEvent);
+    await flushPromises();
+    expect(composingEvent.defaultPrevented).toBe(false);
+    expect((textarea.element as HTMLTextAreaElement).value).toBe("第一段题干（追加）");
+
+    // 2) 富文本 contenteditable 与弹窗/画布外输入框放行原生栈，不劫持
+    const rich = wrapper.find(".rich-editable");
+    const richEvent = new KeyboardEvent("keydown", {
+      key: "z",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    rich.element.dispatchEvent(richEvent);
+    expect(richEvent.defaultPrevented).toBe(false);
+
+    const externalInput = document.createElement("textarea");
+    document.body.appendChild(externalInput);
+    try {
+      const externalEvent = new KeyboardEvent("keydown", {
+        key: "z",
+        ctrlKey: true,
+        bubbles: true,
+        cancelable: true,
+      });
+      externalInput.dispatchEvent(externalEvent);
+      expect(externalEvent.defaultPrevented).toBe(false);
+    } finally {
+      externalInput.remove();
+    }
+    expect((textarea.element as HTMLTextAreaElement).value).toBe("第一段题干（追加）");
+
+    // 3) 焦点保持在画布受控 textarea 内按 Meta+z → 回退到「第一段题干」
+    const metaUndo = new KeyboardEvent("keydown", {
+      key: "z",
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    textarea.element.dispatchEvent(metaUndo);
+    await flushPromises();
+    expect(metaUndo.defaultPrevented).toBe(true);
+    expect((textarea.element as HTMLTextAreaElement).value).toBe("第一段题干");
+    expect(redoButton.attributes("disabled")).toBeUndefined();
+
+    // 4) 再按 Control+z → 回退到初始「备注」，此时 undo 按钮变为禁用
+    const ctrlUndo = new KeyboardEvent("keydown", {
+      key: "z",
+      ctrlKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    textarea.element.dispatchEvent(ctrlUndo);
+    await flushPromises();
+    expect(ctrlUndo.defaultPrevented).toBe(true);
+    expect((textarea.element as HTMLTextAreaElement).value).toBe("备注");
+    expect(undoButton.attributes("disabled")).toBeDefined();
+
+    // 5) 按 Meta+Shift+Z 重做 → 恢复「第一段题干」
+    const metaRedo = new KeyboardEvent("keydown", {
+      key: "Z",
+      metaKey: true,
+      shiftKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    textarea.element.dispatchEvent(metaRedo);
+    await flushPromises();
+    expect(metaRedo.defaultPrevented).toBe(true);
+    expect((textarea.element as HTMLTextAreaElement).value).toBe("第一段题干");
+    wrapper.unmount();
+  });
 
   it("AI 新增题目的来源随题目保存，撤销同时移除", async () => {
     mocks.save.mockResolvedValue(detail({ currentRevisionId: null }));

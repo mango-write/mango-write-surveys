@@ -8,7 +8,7 @@
 // 宿主按路由 scope（survey:{surveyId}）常驻：survey_edit 交付帧在本地当前
 // 草稿上重放 ops（与手工编辑同一历史栈，撤销同源），survey_create 帧导航。
 // 导航出口一律 host.navigate；vue-router 只用于读路由参数与离开守卫。
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, watch } from "vue";
 import { vScrollFade } from "@mango-write/ui-vue/lib/scroll-fade";
 import { onBeforeRouteLeave, onBeforeRouteUpdate, useRoute, useRouter, type RouteLocationNormalized } from "vue-router";
 import { useI18n } from "vue-i18n";
@@ -102,9 +102,13 @@ const canvasRef = ref<InstanceType<typeof SurveyDesignCanvas> | null>(null);
 const dataAnalysisRef = ref<InstanceType<typeof SurveyDataAnalysis> | null>(null);
 const stageNavigation = ref<SurveyStageNavigationModel | null>(null);
 
-const surveyId = computed(() =>
+const pageActive = ref(true);
+// KeepAlive 多标签按 surveyId 分实例缓存时，失活实例不得跟随全局 route.params.surveyId
+// 漂移重载；仅当同一激活实例在无 KeepAlive 宿主内原地切参时才更新绑定 id。
+const boundSurveyId = ref(
   typeof route.params.surveyId === "string" ? route.params.surveyId : "",
 );
+const surveyId = computed(() => boundSurveyId.value);
 
 const leftTabs = computed<SurveyShellTab[]>(() => {
   if (stage.value === "data") return [{ id: "data", label: t("surveys.dataViewLabel"), icon: List }];
@@ -116,6 +120,7 @@ const leftTabs = computed<SurveyShellTab[]>(() => {
   ];
 });
 function updateWorkspaceQuery(patch: Record<string, string | undefined>) {
+  if (!pageActive.value || route.params.surveyId !== boundSurveyId.value) return;
   void router.replace({ query: { ...route.query, ...patch } });
 }
 
@@ -133,6 +138,14 @@ const history = useSurveyDraftHistory({
 });
 const definition = computed(() => history.current.value.definition);
 const responseLimit = computed(() => history.current.value.responseLimit);
+const stageTitle = computed(() => definition.value.title.trim() || survey.value?.title.trim() || "");
+watch(
+  [stageTitle, pageActive],
+  ([title, active]) => {
+    if (active && title) host.setStageTitle?.(surveyId.value, title);
+  },
+  { immediate: true },
+);
 const draftVersion = ref(1);
 function definitionForSave(value: SurveyDetail["definition"]) {
   return value.sourceRecords === undefined && survey.value?.definition.sourceRecords?.length
@@ -299,16 +312,52 @@ const reviewAdditions = computed(() => (reviewReport.value?.findings ?? []).flat
 // 空的，这张卡补上「AI 刚建了什么」。取走即清，刷新不重复。
 const aiCreatedCard = ref<AiCreatedSurveyHandoff | null>(null);
 
-function applyEditDelivery(delivery: SurveyEditDelivery) {
+function applyEditDelivery(delivery: SurveyEditDelivery, persisted: boolean) {
   const before = history.current.value.definition;
+  if (persisted && delivery.definition && delivery.draftVersion !== undefined) {
+    const nextDefinition = delivery.definition;
+    if (canonicalSurveyJson(nextDefinition) !== canonicalSurveyJson(before)) {
+      history.commit(
+        { ...history.current.value, definition: nextDefinition },
+        { source: "assistant", label: delivery.summary },
+      );
+    }
+    if (survey.value) {
+      survey.value = {
+        ...survey.value,
+        title: nextDefinition.title,
+        definition: nextDefinition,
+        draftVersion: delivery.draftVersion,
+      };
+    }
+    draftVersion.value = delivery.draftVersion;
+    autosave.settled();
+    notify.success(t("surveys.copilot.applied", { n: delivery.appliedOps.length }));
+    if (delivery.rejected?.length) {
+      notify.warn(t("surveys.copilot.rejected", { n: delivery.rejected.length }));
+    }
+    return;
+  }
   const result = applySurveyOps(before, delivery.appliedOps);
   if (!canRecordAiAddedQuestions(before, result.definition)) {
     notify.warn(t("surveys.copilot.sourceCapacity"));
     return;
   }
   if (result.definition !== history.current.value.definition) {
+    const nextDefinition = recordAiAddedQuestions(before, result.definition);
+    if (delivery.draftVersion !== undefined && delivery.draftVersion > draftVersion.value) {
+      draftVersion.value = delivery.draftVersion;
+      if (survey.value) {
+        survey.value = {
+          ...survey.value,
+          title: nextDefinition.title,
+          definition: nextDefinition,
+          draftVersion: delivery.draftVersion,
+        };
+      }
+    }
     history.commit(
-      { ...history.current.value, definition: recordAiAddedQuestions(before, result.definition) },
+      { ...history.current.value, definition: nextDefinition },
       { source: "assistant", label: delivery.summary },
     );
     autosave.schedule();
@@ -320,7 +369,9 @@ function applyEditDelivery(delivery: SurveyEditDelivery) {
 }
 
 async function applySurveyDelivery(delivery: ToolSurveyDelivery) {
+  if (!pageActive.value) return;
   if (delivery.type === "survey_review") {
+    if (delivery.surveyId && delivery.surveyId !== surveyId.value) return;
     receiveReview(delivery);
     return;
   }
@@ -337,25 +388,44 @@ async function applySurveyDelivery(delivery: ToolSurveyDelivery) {
   }
   if (autosave.status.value === "saving") await autosave.flush();
   const settled = autosave.status.value === "idle" || autosave.status.value === "saved";
+  if (
+    settled &&
+    delivery.draftVersion !== undefined &&
+    delivery.draftVersion <= draftVersion.value &&
+    delivery.definition &&
+    canonicalSurveyJson(delivery.definition) === canonicalSurveyJson(definition.value)
+  ) {
+    return;
+  }
   if (!settled || delivery.baseDraftVersion !== draftVersion.value) {
     aiStaleDelivery.value = delivery;
     return;
   }
-  applyEditDelivery(delivery);
+  applyEditDelivery(
+    delivery,
+    delivery.definition !== undefined && delivery.draftVersion !== undefined,
+  );
 }
 
 function confirmStaleDelivery() {
   const delivery = aiStaleDelivery.value;
   aiStaleDelivery.value = null;
-  if (delivery) applyEditDelivery(delivery);
+  if (delivery) applyEditDelivery(delivery, false);
 }
+
+const copilotOwner = Symbol("survey-workspace");
 
 const copilotSurface = (): SurveysCopilotSurface | null =>
   surveyId.value ? { kind: "survey", id: surveyId.value } : null;
-const unregisterCopilotHandlers = host.copilot?.registerHandlers(
-  { onSurveyDeliveryFrame: (delivery) => void applySurveyDelivery(delivery) },
-  { surface: copilotSurface },
-);
+let unregisterCopilotHandlers: (() => void) | undefined;
+function mountCopilotHandlers() {
+  unregisterCopilotHandlers?.();
+  unregisterCopilotHandlers = host.copilot?.registerHandlers(
+    { onSurveyDeliveryFrame: (delivery) => void applySurveyDelivery(delivery) },
+    { surface: copilotSurface },
+  );
+}
+mountCopilotHandlers();
 
 // 上下文引用：当前选中题目（id + 题干摘要）与所在页——「把这道题改成多选」
 // 的可解析锚点。ambient refs（非选区形态），随每轮消息注入 ephemeral 上下文。
@@ -389,7 +459,8 @@ const copilotContextRefs = computed(() => {
 watch(
   copilotContextRefs,
   (refs) => {
-    host.copilot?.setContextRefs(refs);
+    if (!pageActive.value) return;
+    host.copilot?.setContextRefs(refs, copilotOwner);
   },
   { immediate: true },
 );
@@ -433,7 +504,8 @@ const copilotPresentation = computed<SurveysCopilotSurfacePresentation | null>((
 watch(
   copilotPresentation,
   (value) => {
-    host.copilot?.setSurfacePresentation?.(value ?? undefined);
+    if (!pageActive.value) return;
+    host.copilot?.setSurfacePresentation?.(value ?? undefined, copilotOwner);
   },
   { immediate: true },
 );
@@ -445,10 +517,15 @@ const canRedo = computed(
   () => history.canRedo.value && stage.value === "design" && !!survey.value?.canWrite,
 );
 
-// Cmd/Ctrl+Z / Shift+Z：焦点在输入框/contenteditable 内时让原生（含 tiptap
-// 自身撤销）生效，不劫持。
+// Cmd/Ctrl+Z / Shift+Z：IME 组合输入、TipTap 富文本与弹窗/搜索框内放行原生栈；
+// 设计画布内的受控 INPUT/TEXTAREA（题干、选项、分页标题等）与顶栏撤销/重做同源。
 function onKeydown(event: KeyboardEvent) {
   if (
+    event.defaultPrevented ||
+    !pageActive.value ||
+    event.isComposing ||
+    event.keyCode === 229 ||
+    event.altKey ||
     !(event.metaKey || event.ctrlKey) ||
     event.key.toLowerCase() !== "z" ||
     stage.value !== "design" ||
@@ -456,15 +533,23 @@ function onKeydown(event: KeyboardEvent) {
   )
     return;
   const target = event.target as HTMLElement | null;
-  if (
-    target &&
-    (target.isContentEditable ||
-      ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
-  )
-    return;
+  if (target && typeof target.closest === "function") {
+    if (
+      target.isContentEditable ||
+      target.closest('[contenteditable="true"], [contenteditable=""]') ||
+      target.closest('.p-dialog, .mw-dialog, [role="dialog"], .survey-switcher, .switcher-panel') ||
+      target.tagName === "SELECT"
+    )
+      return;
+    if (
+      (target.tagName === "INPUT" || target.tagName === "TEXTAREA") &&
+      !target.closest(".survey-canvas, .canvas-stub")
+    )
+      return;
+  }
   event.preventDefault();
-  if (event.shiftKey) redo();
-  else undo();
+  if (event.shiftKey) void redo();
+  else void undo();
 }
 
 const hasRevision = computed(() => !!survey.value?.currentRevisionId);
@@ -525,8 +610,10 @@ function errorMessage(cause: unknown) {
 }
 
 let generation = 0;
+let wasDeactivated = false;
 async function load() {
   const own = ++generation;
+  wasDeactivated = false;
   forceLeave = false;
   discardReview();
   loading.value = true;
@@ -547,7 +634,47 @@ async function load() {
   } catch (e) {
     if (own === generation) error.value = errorMessage(e);
   } finally {
-    if (own === generation) loading.value = false;
+    if (own === generation) {
+      loading.value = false;
+      if (wasDeactivated && pageActive.value) {
+        wasDeactivated = false;
+        void reconcileOnActivated();
+      }
+    }
+  }
+}
+
+// KeepAlive 切回对账：失活期间服务端已落盘的 AI 修订在切回时自动同步进历史栈。
+const canReconcileAutosave = () =>
+  !autosave.hasUnsaved() && autosave.status.value !== "conflict";
+async function reconcileOnActivated() {
+  const targetId = surveyId.value;
+  if (!targetId || loading.value || !survey.value || !canReconcileAutosave()) return;
+  const own = generation;
+  try {
+    const remote = await surveysApi.get(targetId);
+    if (!pageActive.value || own !== generation || surveyId.value !== targetId || !survey.value) return;
+    if (!canReconcileAutosave()) return;
+    if (remote.draftVersion > draftVersion.value) {
+      if (
+        canonicalSurveyJson(remote.definition) !== canonicalSurveyJson(definition.value) ||
+        remote.responseLimit !== responseLimit.value
+      ) {
+        history.commit(
+          { definition: remote.definition, responseLimit: remote.responseLimit },
+          { source: "assistant" },
+        );
+      }
+      survey.value = remote;
+      draftVersion.value = remote.draftVersion;
+      aiStaleDelivery.value = null;
+      autosave.settled();
+    }
+    if (remote.review && remote.review.operationId !== reviewReport.value?.operationId) {
+      receiveReview(remote.review);
+    }
+  } catch {
+    // 后台静默对账失败不打断当前画布。
   }
 }
 
@@ -917,25 +1044,62 @@ onMounted(() => {
   window.addEventListener("beforeunload", onBeforeUnload);
   window.addEventListener("pagehide", onPageHide);
 });
+onActivated(() => {
+  pageActive.value = true;
+  mountCopilotHandlers();
+  window.addEventListener("keydown", onKeydown);
+  host.copilot?.setContextRefs(copilotContextRefs.value, copilotOwner);
+  host.copilot?.setSurfacePresentation?.(copilotPresentation.value ?? undefined, copilotOwner);
+  if (route.params.surveyId === boundSurveyId.value) {
+    const nextStage = stageFromRoute();
+    if (stage.value !== nextStage) stage.value = nextStage;
+    workspaceRevisionId.value = typeof route.query.revisionId === "string" ? route.query.revisionId : "";
+  }
+  if (wasDeactivated && !loading.value) {
+    wasDeactivated = false;
+    void reconcileOnActivated();
+  }
+});
+onDeactivated(() => {
+  pageActive.value = false;
+  wasDeactivated = true;
+  window.removeEventListener("keydown", onKeydown);
+  unregisterCopilotHandlers?.();
+  unregisterCopilotHandlers = undefined;
+  void autosave.flush();
+  host.copilot?.releasePageState(copilotOwner);
+});
 onBeforeUnmount(() => {
+  pageActive.value = false;
   window.removeEventListener("keydown", onKeydown);
   window.removeEventListener("beforeunload", onBeforeUnload);
   window.removeEventListener("pagehide", onPageHide);
   unregisterCopilotHandlers?.();
-  host.copilot?.releasePageState();
+  unregisterCopilotHandlers = undefined;
+  host.copilot?.releasePageState(copilotOwner);
 });
 // pagehide 覆盖 beforeunload 管不到的卸载路径（bfcache、移动端切走）：
 // keepalive 发出即返回，不等响应。
 function onPageHide() {
   autosave.flushBeacon();
 }
-watch(surveyId, () => {
-  mobileNavigationOpen.value = false;
-  stage.value = stageFromRoute();
-  workspaceRevisionId.value = typeof route.query.revisionId === "string" ? route.query.revisionId : "";
-  selectedQuestionId.value = "";
-  void load();
-});
+watch(
+  () => route.params.surveyId,
+  async (nextParam) => {
+    await nextTick();
+    if (!pageActive.value || host.workbenchShell) return;
+    const nextId = typeof nextParam === "string" ? nextParam : "";
+    if (!nextId || nextId === boundSurveyId.value) return;
+    boundSurveyId.value = nextId;
+    pretestInvitationUrl.value = "";
+    pretestInvitations.value = [];
+    mobileNavigationOpen.value = false;
+    stage.value = stageFromRoute();
+    workspaceRevisionId.value = typeof route.query.revisionId === "string" ? route.query.revisionId : "";
+    selectedQuestionId.value = "";
+    void load();
+  },
+);
 
 watch(stage, (value, previous) => {
   if (value !== "data" && value !== "analysis") dataBadgeCount.value = null;
@@ -949,7 +1113,9 @@ watch(stage, (value, previous) => {
 });
 watch(
   () => [route.query.stage, route.query.run, route.query.revisionId],
-  () => {
+  async () => {
+    await nextTick();
+    if (!pageActive.value || route.params.surveyId !== boundSurveyId.value) return;
     const next = stageFromRoute();
     if (stage.value !== next) stage.value = next;
     workspaceRevisionId.value = typeof route.query.revisionId === "string" ? route.query.revisionId : "";
@@ -959,6 +1125,7 @@ watch(
 // ── 离开保护：有未落盘内容先落盘后放行；落不了盘（失败/冲突）才拦 ────────
 let forceLeave = false;
 async function guardNavigation(to: RouteLocationNormalized) {
+  if (!pageActive.value) return true;
   if (forceLeave || (!autosave.hasUnsaved() && autosave.status.value !== "saving")) return true;
   const flushed = await autosave.flush();
   if (flushed) return true;
@@ -973,7 +1140,9 @@ async function guardNavigation(to: RouteLocationNormalized) {
   return false;
 }
 onBeforeRouteLeave(guardNavigation);
-onBeforeRouteUpdate((to, from) => to.params.surveyId === from.params.surveyId ? true : guardNavigation(to));
+onBeforeRouteUpdate((to, from) =>
+  !pageActive.value || to.params.surveyId === from.params.surveyId ? true : guardNavigation(to),
+);
 function onBeforeUnload(event: BeforeUnloadEvent) {
   if (!autosave.hasUnsaved() && autosave.status.value !== "saving") return;
   event.preventDefault();
@@ -981,7 +1150,7 @@ function onBeforeUnload(event: BeforeUnloadEvent) {
 }
 </script>
 <template>
-  <div class="survey-workbench">
+  <div class="survey-workbench" @keydown="onKeydown">
     <SurveyWorkbenchShell :tabs="leftTabs">
       <template #left="{ activeTab }">
         <Button v-if="!host.workbenchShell" class="mobile-survey-toggle" :label="t('surveys.leftPanel')" :icon="mobileNavigationOpen ? ChevronUp : MenuIcon" :aria-expanded="mobileNavigationOpen" text severity="secondary" @click="mobileNavigationOpen = !mobileNavigationOpen" />

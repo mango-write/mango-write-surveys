@@ -1,7 +1,8 @@
 // 问卷 AI 工具四件套（issue #217/#224）：survey_read（完整定义 + 标准索引）/
-// survey_edit（ops 批量改卷，host-applied：服务端只校验不落库，宿主页面应用并
-// 走撤销栈与自动保存）/ survey_create（新资源直写：建行 + 存草稿定义）/
-// survey_review（模型阅读后登记并持久化待处理诊断，不改问卷正文、不冒充真人验证）。
+// survey_edit（ops 批量改卷：服务端校验 baseDraftVersion 后原子落库，并返回最新
+// draftVersion 与 definition 快照供宿主同步画布与撤销栈）/ survey_create（新资源
+// 直写：建行 + 存草稿定义）/ survey_review（模型阅读后登记并持久化待处理诊断，
+// 不改问卷正文、不冒充真人验证）。
 // AI 永不触碰发布与状态机——模块里没有这类工具，描述里也明说。工具契约是包自
 // 有的 SurveyAiToolSpec；宿主（主站 copilot、独立站）各自映射到自己的声明格式。
 // 交付载荷经 surveyDeliveryFromResult 摘出 UI 面：随 tool_step done 帧下发、
@@ -17,6 +18,7 @@ import { surveyReviewSignals } from "./review-signals.js";
 import {
   applySurveyOps,
   canRecordAiAddedQuestions,
+  recordAiAddedQuestions,
   unresolvedReviewChoice,
   validateSurveyDefinition,
   validateSurveyDesign,
@@ -76,7 +78,7 @@ export interface SurveyAiToolSpec {
   /** JSON Schema（宿主原样透传给自己的参数声明面）。 */
   parameters: Record<string, unknown>;
   write: boolean;
-  /** 交付由宿主处理：工具桩完成不证明提交。 */
+  /** 循环内直接执行并经交付帧通知宿主页面（不走 propose_write 审批停步）。 */
   hostApplied: boolean;
   run(args: Record<string, unknown>, ctx: SurveyAiContext): Promise<Record<string, unknown>>;
 }
@@ -401,8 +403,8 @@ export function createSurveyAiTools(service: SurveysService, pretest?: ReturnTyp
       additionalProperties: false,
     },
     write: true,
-    // host-applied：服务端不落库——应用发生在用户页面（本地重放 ops + 撤销栈 +
-    // 自动保存）。工具桩完成不证明提交，页面应用结果经下一轮对话或用户可见。
+    // 循环内直接原子落库（对齐 survey_create / research_analyze），结果随交付帧
+    // 同步画布与撤销栈；页面失活期间修改已真实持久化，切回时经版本对账呈现。
     hostApplied: true,
     async run(args, ctx) {
       const surveyId = ctx.scopeSurveyId;
@@ -451,27 +453,41 @@ export function createSurveyAiTools(service: SurveysService, pretest?: ReturnTyp
             hint: "先用 survey_read 拿到真实的页/题 id，再按词表重试。",
           };
         }
+        const nextDefinition = recordAiAddedQuestions(definition, result.definition);
+        const updated = await service.updateSurvey(ctx.actor.userId, surveyId, {
+          expectedVersion: baseDraftVersion,
+          definition:
+            nextDefinition.sourceRecords === undefined && definition.sourceRecords?.length
+              ? { ...nextDefinition, sourceRecords: [] }
+              : nextDefinition,
+        });
+        const draftVersion = updated?.draftVersion ?? baseDraftVersion + 1;
+        const persistedDefinition = updated?.definition ?? nextDefinition;
         return {
           ok: true,
           surveyId,
           operationId: ctx.operationId,
-          // 基线 = 模型观察并回传的版本（上面已校验与当前一致）；页面拿它与
-          // 本地副本比对，不新鲜不自动应用。
           baseDraftVersion,
+          draftVersion,
+          definition: persistedDefinition,
           summary: summary.slice(0, 300),
           appliedCount: result.applied.length,
-          // 已应用操作（含服务端生成的 id）：页面在本地草稿上重放这批操作。
           appliedOps: result.applied,
           ...(result.rejected.length > 0
             ? { rejected: result.rejected.map((entry) => ({ reason: entry.reason })) }
             : {}),
           ...(result.issues.length > 0 ? { issues: result.issues } : {}),
           note:
-            "操作已生成，画布能否应用及保存取决于页面的版本检查与保存结果；未收到页面回执时不要声称已保存。" +
-            "不要复述 appliedOps JSON。拒绝项与剩余 issue 请如实转述。",
+            "问卷修改已在服务端保存（draftVersion 已更新），打开中的工作区画布将自动同步并支持撤销；发布仍由用户手动操作。" +
+            "不要复述 appliedOps 或 definition JSON。拒绝项与剩余 issue 请如实转述。",
         };
       } catch (err) {
         if (err instanceof SurveyError) {
+          if (err.code === "version_conflict") {
+            return {
+              error: "stale_read：问卷在读取后已被修改。重新 survey_read 后基于新版本重试。",
+            };
+          }
           return { error: err.code === "forbidden" ? "对该问卷没有写权限。" : `问卷不可读（${err.code}）` };
         }
         throw err;
@@ -866,6 +882,8 @@ export function createSurveyAiTools(service: SurveysService, pretest?: ReturnTyp
 
   return { surveyRead, surveyEdit, surveyCreate, surveyReview };
 }
+
+export const buildSurveyAiTools = createSurveyAiTools;
 
 /** 行为注册入口：宿主把四件套交给自己的工具注册面（1:1 注册，宿主治理目录
  *  仍以 name 为键核对）。 */

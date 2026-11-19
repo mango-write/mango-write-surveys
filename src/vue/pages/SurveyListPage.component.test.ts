@@ -2,7 +2,7 @@
 // 宿主能力全部经 createTestHost 注入：transport 按 path/method 分发到 api mocks，
 // navigate/copilot 用 spy——导航断言面向宿主契约而非具体路由表。
 // Dialog 以内联 stub 渲染 footer 槽，避免 PrimeVue 弹层 teleport 到 body 后无法断言。
-import { defineComponent, h } from "vue";
+import { KeepAlive, defineComponent, h, ref } from "vue";
 import { beforeEach, describe, expect, it, vi, afterEach } from "vitest";
 import { flushPromises } from "@vue/test-utils";
 
@@ -355,6 +355,107 @@ describe("SurveyListPage AI 生成交付帧（issue #217）", () => {
     });
     await flushPromises();
     expect(navigate).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it("KeepAlive 失活时释放页面状态并屏蔽后台 survey_create 帧，重新激活时恢复呈现", async () => {
+    mocks.list.mockResolvedValue({ items: ITEMS });
+    const { host, navigate, copilot, presentation, release } = makeHost();
+    const activeTab = ref<"surveys" | "other">("surveys");
+    const OtherStub = defineComponent({ render: () => h("div", "other") });
+    const Harness = defineComponent({
+      setup() {
+        return () =>
+          h(KeepAlive, null, [
+            activeTab.value === "surveys"
+              ? h(SurveyListPage, { key: "surveys" })
+              : h(OtherStub, { key: "other" }),
+          ]);
+      },
+    });
+    const wrapper = mountSurveysComponent(
+      Harness,
+      { global: { stubs: { Dialog: DialogStub } } },
+      host,
+    );
+    await flushPromises();
+    expect(presentation).toHaveBeenCalled();
+    const ownerToken = presentation.mock.calls[0]![1];
+    expect(typeof ownerToken).toBe("symbol");
+
+    activeTab.value = "other";
+    await flushPromises();
+    expect(release).toHaveBeenCalledWith(ownerToken);
+
+    emitSurveyFrame(copilot, {
+      type: "survey_create",
+      surveyId: CREATED_ID,
+      operationId: "op-inactive-create",
+      title: "后台忽略问卷",
+    });
+    await flushPromises();
+    expect(navigate).not.toHaveBeenCalled();
+
+    presentation.mockClear();
+    activeTab.value = "surveys";
+    await flushPromises();
+    expect(presentation).toHaveBeenCalledTimes(1);
+    wrapper.unmount();
+  });
+
+  it("KeepAlive 失活期间后台新建或改名问卷后切回列表：静默刷新最新列表且不覆盖本地搜索词", async () => {
+    mocks.list.mockResolvedValue({ items: ITEMS });
+    const { host } = makeHost();
+    const activeTab = ref<"surveys" | "other">("surveys");
+    const OtherStub = defineComponent({ render: () => h("div", "other") });
+    const Harness = defineComponent({
+      setup() {
+        return () =>
+          h(KeepAlive, null, [
+            activeTab.value === "surveys"
+              ? h(SurveyListPage, { key: "surveys" })
+              : h(OtherStub, { key: "other" }),
+          ]);
+      },
+    });
+    const wrapper = mountSurveysComponent(
+      Harness,
+      { global: { stubs: { Dialog: DialogStub } } },
+      host,
+    );
+    await flushPromises();
+    expect(wrapper.text()).toContain("Alpha 阅读习惯调查");
+
+    const searchInput = wrapper.get(`input[aria-label="${t("surveys.searchPlaceholder")}"]`);
+    await searchInput.setValue("AI");
+    await flushPromises();
+
+    activeTab.value = "other";
+    await flushPromises();
+
+    mocks.list.mockResolvedValue({
+      items: [
+        ...ITEMS,
+        {
+          id: CREATED_ID,
+          title: "AI 后台新建问卷",
+          status: "draft" as const,
+          slug: null,
+          responseLimit: null,
+          completedCount: 0,
+          questionCount: 5,
+          draftVersion: 1,
+          publishedRevision: null,
+          updatedAt: "2026-11-18T12:00:00.000Z",
+        },
+      ],
+    });
+
+    activeTab.value = "surveys";
+    await flushPromises();
+
+    expect((wrapper.get(`input[aria-label="${t("surveys.searchPlaceholder")}"]`).element as HTMLInputElement).value).toBe("AI");
+    expect(wrapper.text()).toContain("AI 后台新建问卷");
     wrapper.unmount();
   });
 });
