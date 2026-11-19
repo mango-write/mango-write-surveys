@@ -183,7 +183,9 @@ describe("@mango-write/surveys/dsh 兼容适配层", () => {
         "@deepseek-ai/dsh-sdk-app",
         "@mango-write/surveys",
       ]);
-      expect(profile.layers[2]!.patchPaths).toEqual([join(bundleDir, "cordis.patch.yml")]);
+      expect(profile.layers[2]!.patchPaths).toHaveLength(1);
+      expect(readFileSync(profile.layers[2]!.patchPaths[0]!, "utf8"))
+        .toBe(readFileSync(join(PACKAGE_ROOT, "cordis.patch.yml"), "utf8"));
 
       const warnings: string[] = [];
       const entries = composeEntries(profile.layers.map((layer) => layer.patches), warnings.push.bind(warnings));
