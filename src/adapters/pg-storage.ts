@@ -264,6 +264,11 @@ function makeLock(tx: postgres.TransactionSql, surveyId: string): SurveysLock {
         SELECT id FROM survey_files WHERE survey_id = ${sid} AND id IN ${tx(ids)}`;
       return rows.map((row) => row.id);
     },
+    countStarted: async (sid) => {
+      const rows = await tx<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM survey_responses WHERE survey_id = ${sid}`;
+      return rows[0]?.n ?? 0;
+    },
     countFinishedResponses: async (sid, rid) => {
       const rows = await tx<{ n: number }[]>`
         SELECT count(*)::int AS n FROM survey_responses

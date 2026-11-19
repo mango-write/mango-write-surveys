@@ -702,9 +702,34 @@ export function createSurveysService(ports: SurveysPorts) {
       return getSurveyDetail(userId, surveyId);
     },
 
-    async deleteSurvey(userId: string, surveyId: string): Promise<void> {
+    async deleteSurvey(
+      userId: string,
+      surveyId: string,
+      opts?: { onlyUnpublishedEmpty?: boolean },
+    ): Promise<void> {
       await loadSurveyAccess(ports, userId, surveyId, "delete");
       const released = await storage.withSurveyLock(surveyId, async (tx) => {
+        const row = await tx.survey();
+        if (!row || row.deletedAt) throw new SurveyError("not_found", 404);
+        if (opts?.onlyUnpublishedEmpty) {
+          const [latestRev, startedCount] = await Promise.all([
+            tx.latestRevisionNumber(surveyId),
+            tx.countStarted(surveyId),
+          ]);
+          if (
+            row.status !== "draft" ||
+            Boolean(row.currentRevisionId) ||
+            latestRev > 0 ||
+            row.completedCount > 0 ||
+            startedCount > 0
+          ) {
+            throw new SurveyError(
+              "survey_not_deletable_by_agent",
+              409,
+              "该问卷已发布或已有答卷，安全铁律禁止 AI 删除，请用户在问卷页面自行处理。",
+            );
+          }
+        }
         await tx.updateSurvey({ deletedAt: new Date() });
         await tx.deleteReview(surveyId);
         await tx.deletePretests?.(surveyId);

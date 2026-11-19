@@ -82,6 +82,7 @@ function setup() {
     latestRevisionNumber: async () => 0,
     insertRevision: async () => ({ id: "revision-1" }),
     boundFileIds: async () => [],
+    countStarted: async () => 0,
     countFinishedResponses: async () => 0,
     findResponseByTokenHash: async () => null,
     createResponse: async () => {},
