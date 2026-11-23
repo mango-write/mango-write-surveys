@@ -45,15 +45,15 @@
     "@echarts-x/custom-word-cloud": "1.0.1",
     "@mango-write/ui-core": "git+https://github.com/mango-write/mango-write-ui.git#d8dc5673ffa41f40c9fe330b18be8c6e77f05db2&path:packages/core",
     "@mango-write/ui-vue": "git+https://github.com/mango-write/mango-write-ui.git#d8dc5673ffa41f40c9fe330b18be8c6e77f05db2&path:packages/vue",
-    "dompurify": "^3.4.17",
+    "dompurify": "^3.5.0",
     "echarts": "^6.1.0",
-    "hono": "^4.13.13",
-    "jsdom": "^30.0.1",
+    "hono": "^4.13.21",
+    "jsdom": "^31.0.1",
     "ml-matrix": "6.15.1",
     "postgres": "^3.4.5",
     "qrcode": "^1.5.4",
     "reka-ui": "^2.11.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "peerDependencies": {
     "@tiptap/starter-kit": "^3.29.2",
@@ -65,22 +65,22 @@
   },
   "devDependencies": {
     "@deepseek-ai/dsh": "0.2.2-rc.4",
-    "@tiptap/starter-kit": "^3.29.2",
-    "@tiptap/vue-3": "^3.29.2",
+    "@tiptap/starter-kit": "^3.35.0",
+    "@tiptap/vue-3": "^3.35.0",
     "@types/jsdom": "^30.0.0",
-    "@types/node": "^24.13.3",
+    "@types/node": "^24.19.2",
     "@types/qrcode": "^1.5.6",
-    "@vitejs/plugin-vue": "^6.0.8",
-    "@vue/test-utils": "^2.4.11",
+    "@vitejs/plugin-vue": "^6.0.11",
+    "@vue/test-utils": "^2.6.0",
     "happy-dom": "^21.0.4",
     "lucide-vue-next": "^1.0.0",
     "typescript": "npm:@typescript/typescript6@^6.0.2",
-    "vite": "^8.3.5",
+    "vite": "^8.3.8",
     "vitest": "^4.1.12",
-    "vue": "^3.5.34",
-    "vue-i18n": "^11.4.18",
-    "vue-router": "^4.4.5",
-    "vue-tsc": "^3.3.11"
+    "vue": "^3.5.46",
+    "vue-i18n": "^11.4.23",
+    "vue-router": "^4.6.5",
+    "vue-tsc": "3.3.13"
   },
   "pnpm": {
     "overrides": {
