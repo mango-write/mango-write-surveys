@@ -470,6 +470,7 @@ describe("SurveyWorkspacePage 生命周期轨道（issue #217）", () => {
     const { wrapper, stageTitle } = await mountWorkspace();
     expect(stageTitle).toHaveBeenLastCalledWith("s-1", "Alpha 阅读习惯调查");
 
+    vi.useFakeTimers();
     await changeDefinition(wrapper);
     expect(stageTitle).toHaveBeenLastCalledWith("s-1", "Alpha 阅读习惯调查!");
     wrapper.unmount();
@@ -1004,6 +1005,7 @@ describe("SurveyWorkspacePage 发布确认与离开保护（issue #217）", () =
       .trigger("click");
     const panel = wrapper.findComponent(SurveyPretestPanel);
     expect(panel.props("visible")).toBe(true);
+    vi.useFakeTimers();
     // 记录提交走面板事件（表单交互在面板组件测试里覆盖）。
     panel.vm.$emit("save", {
       participantCount: 3,
@@ -1018,7 +1020,6 @@ describe("SurveyWorkspacePage 发布确认与离开保护（issue #217）", () =
     expect(publishDialog(wrapper).exists()).toBe(false);
     expect(notifySuccess).toHaveBeenCalledWith(t("surveys.pretestPanel.saved"));
 
-    vi.useFakeTimers();
     await publishButton(wrapper).trigger("click");
     await vi.advanceTimersByTimeAsync(100);
     // 确认视图打开前已 flush：版本与记录一起落盘。
